@@ -19,6 +19,7 @@ end
 --|                    Checks                    |--
 ----------------------------------------------------
 
+--[[
 if not FileExist(COMMON_PATH .. "GamsteronPrediction.lua") then
 	DownloadFileAsync("https://raw.githubusercontent.com/gamsteron/GOS-EXT/master/Common/GamsteronPrediction.lua", COMMON_PATH .. "GamsteronPrediction.lua", function() end)
 	print("gamsteronPred. installed Press 2x F6")
@@ -36,7 +37,7 @@ if not FileExist(COMMON_PATH .. "GGPrediction.lua") then
 	print("GGPrediction installed Press 2x F6")
 	return
 end
-
+--]]
 
 -- [ AutoUpdate ]
 --[[ 
