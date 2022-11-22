@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -20,6 +20,7 @@ end
 ----------------------------------------------------
 
 --[[
+
 if not FileExist(COMMON_PATH .. "GamsteronPrediction.lua") then
 	DownloadFileAsync("https://raw.githubusercontent.com/gamsteron/GOS-EXT/master/Common/GamsteronPrediction.lua", COMMON_PATH .. "GamsteronPrediction.lua", function() end)
 	print("gamsteronPred. installed Press 2x F6")
@@ -765,7 +766,7 @@ end
 function Karthus:LastHit()
 	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
 	
-	if(self:CanQ() and (myHero.mana / myHero.maxMana) >= (self.Menu.LastHit.QMana:Value() / 100)) then
+	if(self:CanQ() and self.Menu.LastHit.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.LastHit.QMana:Value() / 100)) then
 	    local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range)
 		for i = 1, #minions do
 			local minion = minions[i]
