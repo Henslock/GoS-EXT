@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -750,7 +750,7 @@ function Karthus:Harass()
 	-- Q
 	local target = GetTarget(Q.Range + 25) --Extend out of the Q range a little bit
 	if(target ~= nil and IsValid(target)) then
-		if(self:CanQ() and self.Menu.Combo.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
+		if(self:CanQ() and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
 			local QPrediction = GGPrediction:SpellPrediction(Q)
 			QPrediction:GetPrediction(target, myHero)
 			if QPrediction.CastPosition and QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
