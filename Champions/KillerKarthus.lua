@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.03
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -763,6 +763,7 @@ function Karthus:Harass()
 	
 end
 
+
 function Karthus:LastHit()
 	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
 	
@@ -782,29 +783,50 @@ function Karthus:LastHit()
 				end
 				
 				local prediction = _G.PremiumPrediction:GetPrediction(myHero, minion, QPremium)
-				if prediction.CastPos and prediction.HitChance >= 0.25 and ShouldAA == false then
+				if prediction.CastPos and prediction.HitChance >= 0.15 and ShouldAA == false then
+					
 					local QDam = getdmg("Q", minion, myHero, 2, myHero:GetSpellData(_Q).level)
 					local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
-					
-					local clusterMinions = GetMinionsAroundMinion((Q.Range + Q.Radius + 25), Q.Radius + 20, minion)
-					if(#clusterMinions == 1) then
-						ShouldAngleQ = true
-					end
-					
-					if(GetMinionCount(Q.Range + Q.Radius, Q.Radius + 25, minion.pos) == 1) or ShouldAngleQ and (GetEnemyCountAtPos(Q.Range + Q.Radius, Q.Radius + 200, minion.pos) == 0) then
-						QDam = QDam * 1.75 -- Your Q does double damage, but were giving ourselves a buffer window to make sure the minion is properly executed
-					end
-					
-					if (hp + (minion.health*0.1) < QDam) or (minion.health + 10 < QDam) then
-						if(ShouldAngleQ) then
-							local angledPos = self:AngleQPos(minion, clusterMinions[1], Q.Radius + 20)
-							Control.CastSpell(HK_Q, angledPos)
-							gameTick = GameTimer() + 0.1
-							return
+					local IsolatedQDam = QDam * 1.75 -- It normally is double the damage, but we are giving ourselves a window to operate within for consistency
+				
+					if (hp + (minion.health*0.1) < IsolatedQDam) or (minion.health + 10 < IsolatedQDam) then -- First check to see if the minions health can be killed by isolated Q
+						
+						local shouldUseIsolated = false
+						local onComingMinionCheck = false
+						
+						local clusterMinions = GetMinionsAroundMinion((Q.Range + Q.Radius + 25), Q.Radius + 30, minion)
+						if(#clusterMinions == 1) then
+							ShouldAngleQ = true
+						end
+						
+						--On coming minion check
+						local nearbyMinions = GetMinionsAroundMinion((Q.Range + Q.Radius + 25), 450, minion)
+						if(#nearbyMinions >= 1) then
+							onComingMinionCheck = self:OnComingMinionCheck(minion, nearbyMinions)
+						end
+						
+						if(GetMinionCount(Q.Range + Q.Radius, Q.Radius + 30, minion.pos) == 1) or ShouldAngleQ and not onComingMinionCheck and (GetEnemyCountAtPos(Q.Range + Q.Radius, Q.Radius + 250, minion.pos) == 0) then
+							shouldUseIsolated = true
+						end
+						
+						
+						if(shouldUseIsolated) and not onComingMinionCheck then
+							if(ShouldAngleQ) then
+								local angledPos = self:AngleQPos(minion, clusterMinions[1], Q.Radius)
+								Control.CastSpell(HK_Q, angledPos)
+								gameTick = GameTimer() + 0.1
+								return
+							else
+								Control.CastSpell(HK_Q, prediction.CastPos)
+								gameTick = GameTimer() + 0.1
+								return
+							end
 						else
-							Control.CastSpell(HK_Q, prediction.CastPos)
-							gameTick = GameTimer() + 0.1
-							return
+							if (hp + (minion.health*0.12) < QDam) or (minion.health + 12 < QDam) then
+								Control.CastSpell(HK_Q, prediction.CastPos)
+								gameTick = GameTimer() + 0.1
+								return
+							end
 						end
 					end
 					
@@ -816,13 +838,25 @@ function Karthus:LastHit()
 end
 
 function Karthus:AngleQPos(minion1, minion2, radius)
-	local dist = math.abs(math.sqrt(math.pow(minion1.pos.x - minion2.pos.x, 2) + math.pow(minion1.pos.y - minion2.pos.y, 2)))
-	local offset = dist - radius
-	local newPos = minion1.pos:Extended(minion2.pos, offset - 8)
+	local dirVec = (minion1.pos - minion2.pos):Normalized()
+	local newPos = minion1.pos + (dirVec * radius)
 	--DrawLine(minion1.pos:To2D(), minion2.pos:To2D(), 10, DrawColor(255, 255, 255, 255))
 	--DrawCircle(newPos, radius, 4, DrawColor(255, 255, 255, 255)) --(Alpha, R, G, B)
 	
 	return newPos
+end
+
+function Karthus:OnComingMinionCheck(minion, minions)
+	for k, _nearbyMinion in pairs(minions) do
+		local pred = _G.PremiumPrediction:GetPrediction(myHero, _nearbyMinion, QPremium)
+		if(pred.CastPos) then
+			local dist =  minion.pos.DistanceTo(Vector(pred.CastPos))
+			if dist <= Q.Radius then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 function Karthus:Clear()
@@ -1015,8 +1049,19 @@ function Karthus:SemiManualW()
 			local WPrediction = GGPrediction:SpellPrediction(W)
 			WPrediction:GetPrediction(target, myHero)
 			if WPrediction.CastPosition and WPrediction:CanHit(2) then
-				Control.CastSpell(HK_W, WPrediction.CastPosition)
-				gameTick = GameTimer() + 0.2
+				
+				local tarHpRatio = target.health / math.floor(target.maxHealth)
+				local myHpRatio = myHero.health / math.floor(myHero.maxHealth)
+				local hpPercentLeadCheck = (myHpRatio- tarHpRatio > 0.2) -- If you have a health lead on the target, try positioning the wall slightly behind them
+				if hpPercentLeadCheck then
+					local castPos = Vector(WPrediction.CastPosition):Extended(myHero.pos, -target.boundingRadius)
+					Control.CastSpell(HK_W, castPos)
+					gameTick = GameTimer() + 0.2
+				else
+					Control.CastSpell(HK_W, WPrediction.CastPosition)
+					gameTick = GameTimer() + 0.2
+				end
+				
 			end
 		end
 	end
@@ -1185,17 +1230,14 @@ function Karthus:CantKill(unit, kill, ss, aa)
 	for i = 0, unit.buffCount do
 	
 		local buff = unit:GetBuff(i)
-		if buff.name:lower():find("kayler") and buff.count==1 then
-			return true
-		end
 	
-		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
+		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 and buff.duration>3.2 then
 			return true
 		end
-		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
+		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1 and buff.duration>3.2   then
 			return true
 		end	
-		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
+		if buff.name:lower():find("chronoshift") and kill and buff.count==1 and buff.duration>3.2   then
 			return true
 		end			
 		
@@ -1203,19 +1245,7 @@ function Karthus:CantKill(unit, kill, ss, aa)
 			return true
 		end
 
-		if  buff.name:lower():find("morganae") and ss and not aa and buff.count==1 then
-			return true
-		end
-		
-		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
+		if  buff.name:lower():find("morganae") and ss and not aa and buff.count==1 and buff.duration>3.2  then
 			return true
 		end
 		
