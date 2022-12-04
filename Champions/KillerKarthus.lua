@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -487,6 +487,41 @@ local function MyHeroNotReady()
     return myHero.dead or Game.IsChatOpen() or (_G.JustEvade and _G.JustEvade:Evading()) or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or IsRecalling(myHero)
 end
 
+local function CheckDmgItems(itemID)
+    assert(type(itemID) == "number", "GetInventorySlotItem: wrong argument types (<number> expected)")
+    for _, j in pairs({ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}) do
+        if myHero:GetItemData(j).itemID == itemID then return j end
+    end
+    return nil
+end
+
+
+
+function CalcMagicalDamage(source, target, amount, time)
+    local passiveMod = 0
+    
+    local totalMR = target.magicResist + target.bonusMagicResist
+    if totalMR < 0 then
+        passiveMod = 2 - 100 / (100 - totalMR)
+    elseif totalMR * source.magicPenPercent - source.magicPen < 0 then
+        passiveMod = 1
+    else
+        passiveMod = 100 / (100 + totalMR * source.magicPenPercent - source.magicPen)
+    end
+    local dmg = math.max(math.floor(passiveMod * amount), 0)
+    
+    if target.charName == "Kassadin" then
+        dmg = dmg * 0.85
+	elseif target.charName == "Malzahar" and HasBuff(t, "malzaharpassiveshield") then
+		dmg = dmg * 0.1
+    end
+    
+    if HasBuff(target, "cursedtouch") then
+        dmg = dmg + amount * 0.1
+    end
+    return dmg
+end
+
 ----------------------------------------------------
 --|                Champion               		|--
 ----------------------------------------------------
@@ -680,15 +715,16 @@ end
 local gameTick = GameTimer()
 
 function Karthus:CanQ()
-	return myHero:GetSpellData(_Q).ammo == 2
+	return myHero:GetSpellData(_Q).ammo == 2 and myHero.mana > myHero:GetSpellData(_Q).mana
 end
 
 function Karthus:Combo()
 	
 	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
+	if(myHero.isChanneling) then return end
 	
 	-- Q
-	local target = GetTarget(Q.Range + 50) --Extend out of the Q range a little bit
+	local target = GetTarget(Q.Range) --Extend out of the Q range a little bit
 	if(target ~= nil and IsValid(target)) then
 		if(self:CanQ() and self.Menu.Combo.UseQ:Value()) then
 			local QPrediction = GGPrediction:SpellPrediction(Q)
@@ -744,6 +780,7 @@ function Karthus:Combo()
 	end
 end
 
+
 function Karthus:Harass()
 	
 	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
@@ -762,7 +799,6 @@ function Karthus:Harass()
 	end
 	
 end
-
 
 function Karthus:LastHit()
 	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
@@ -789,7 +825,7 @@ function Karthus:LastHit()
 					local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 					local IsolatedQDam = QDam * 1.75 -- It normally is double the damage, but we are giving ourselves a window to operate within for consistency
 				
-					if (hp + (minion.health*0.1) < IsolatedQDam) or (minion.health + 10 < IsolatedQDam) then -- First check to see if the minions health can be killed by isolated Q
+					if (hp > 0) and (hp + (minion.health*0.1) < IsolatedQDam) or (minion.health + 10 < IsolatedQDam) then -- First check to see if the minions health can be killed by isolated Q
 						
 						local shouldUseIsolated = false
 						local onComingMinionCheck = false
@@ -822,7 +858,7 @@ function Karthus:LastHit()
 								return
 							end
 						else
-							if (hp + (minion.health*0.12) < QDam) or (minion.health + 12 < QDam) then
+							if (hp > 0) and (hp + (minion.health*0.12) < QDam) or (minion.health + 12 < QDam) then
 								Control.CastSpell(HK_Q, prediction.CastPos)
 								gameTick = GameTimer() + 0.1
 								return
@@ -935,9 +971,11 @@ function Karthus:AABlock()
 		end
 	end
 	
-	if(level >= self.Menu.LastHit.DisableAALevel:Value()) then
-		if(mode == "LastHit") and (myHero.mana / myHero.maxMana) >= 0.05 then
-			_G.SDK.Orbwalker:SetAttack(false)
+	if self.Menu.LastHit.UseQ:Value() then
+		if(level >= self.Menu.LastHit.DisableAALevel:Value()) then
+			if(mode == "LastHit") and (myHero.mana / myHero.maxMana) >= 0.05 then
+				_G.SDK.Orbwalker:SetAttack(false)
+			end
 		end
 	end
 	
