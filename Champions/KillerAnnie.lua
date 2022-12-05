@@ -1052,7 +1052,7 @@ function Annie:Combo()
 		end
 		
 		--Use R in spam mode if it can kill / stun
-		if(self.Menu.Combo.UseR:Value() and Ready(_R) and myHero.pos:DistanceTo(target.pos) < R.Range and ignoreChamp == false) then
+		if(self.Menu.Combo.UseR:Value() and Ready(_R) and self:HasTibbers()==false and myHero.pos:DistanceTo(target.pos) < R.Range and ignoreChamp == false) then
 			if(self:IsKillable(target)) then
 				Control.CastSpell(HK_R, target)
 			end
