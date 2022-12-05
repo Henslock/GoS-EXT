@@ -7,7 +7,7 @@ require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 
-scriptVersion = 1.06
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -702,11 +702,19 @@ function Annie:LoadMenu()
 	self.Menu.Combo:MenuElement({id = "UseW", name = "Use W in Combo", value = true})
 	self.Menu.Combo:MenuElement({id = "UseR", name = "Use R in Combo", value = true})
 	self.Menu.Combo:MenuElement({name = " ", drop = {"-----------------------------"}})	
-	self.Menu.Combo:MenuElement({id = "RAoECheck", name = "Min Enemies to Auto R", value = 3, min = 2, max = 5, step = 1})
 	self.Menu.Combo:MenuElement({id = "AABlock", name = "Smart AA Block in Combo", value = true})
-	self.Menu.Combo:MenuElement({id = "RStunCheck", name = "Only Use R if it can Stun", value = true, tooltip = "Disable this if you want to combo with Tibbers without requiring your passive"})
-	self.Menu.Combo:MenuElement({id = "RKillCheck", name = "Use R to Kill", value = true, tooltip = "Goomba stomp"})
+	self.Menu.Combo:MenuElement({id = "RSettings", name = "Ult Settings", type = MENU})
 	self.Menu.Combo:MenuElement({id = "NinjaCombo", name = "Ninja Burst Combo", type = MENU})
+	
+	--Ult Settings
+	self.Menu.Combo.RSettings:MenuElement({id = "RStunCheck", name = "Initiate R on killable target ONLY if it Stuns", value = true, tooltip = "Disable this if you want to initiate a combo with Tibbers without requiring your passive"})
+	self.Menu.Combo.RSettings:MenuElement({id = "RAoEKillCheck", name = "Use R in Enemy Cluster if one is Killable", value = true, tooltip = "A cluster is two or enemies stacked within R's radius"})
+	self.Menu.Combo.RSettings:MenuElement({id = "RAoECheckStun", name = "Min Enemies to Auto R with Stun", value = 3, min = 2, max = 5, step = 1})
+	self.Menu.Combo.RSettings:MenuElement({id = "RAoECheck", name = "Min Enemies to Auto R without Stun", value = 4, min = 2, max = 5, step = 1})
+	self.Menu.Combo.RSettings:MenuElement({id = "DontSoloUlt", name = "Don't Use Solo R on...", type = MENU})
+	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
+		self.Menu.Combo.RSettings.DontSoloUlt:MenuElement({id = args.charName, name = args.charName, value = false})
+	end)
 	
 	--Ninja Combo
 	self.Menu.Combo.NinjaCombo:MenuElement({id = "UseFlash", name = "Use Smart Flash", value = true})
@@ -759,6 +767,7 @@ function Annie:LoadMenu()
 	self.Menu:MenuElement({id = "KillSteal", name = "Kill Steal", type = MENU})
 	self.Menu.KillSteal:MenuElement({id = "UseQ", name = "Use Q", value = true})
 	self.Menu.KillSteal:MenuElement({id = "UseW", name = "Use W", value = true})
+	self.Menu.KillSteal:MenuElement({id = "UseR", name = "Use R if Q & W on CD", value = true, tooltip = "Goomba stomp"})
 	
 	-- Draws
 	self.Menu:MenuElement({id = "Drawings", name = "Draws", type = MENU})
@@ -832,7 +841,7 @@ function Annie:DebugCluster()
 	if(target and IsValid(target) and target ~= nil) then
 		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius +300, R.Radius*2 -RBuffer, target.pos)
 		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
-		if(count >= self.Menu.Combo.RAoECheck:Value()) then
+		if(count >= self.Menu.Combo.RSettings.RAoECheckStun:Value()) then
 			if(myHero.pos:DistanceTo(bestPos) < R.Range + RBuffer) then
 				DrawCircle(bestPos, R.Radius -RBuffer, 1, DrawColor(85, 255, 255, 255)) --(Alpha, R, G, B)
 			end
@@ -884,11 +893,11 @@ function Annie:CalculateBestCirclePosition(targets, range, edgeDetect)
 		end
 		
 		if hitAllCheck then 
-			return checkPos, #newCluster
+			return checkPos, #newCluster, newCluster
 		end
 	end
 	
-	return avgCastPos, #targets
+	return avgCastPos, #targets, targets
 end
 
 function Annie:AutoLevel()
@@ -958,61 +967,73 @@ function Annie:Combo()
 		UseIgnite(target)
 	end
 	
+	--Ignore using R on champions that are isolated
+	local ignoreChamp = false
+	if(self.Menu.Combo.RSettings.DontSoloUlt[target.charName]:Value()) then
+		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius, R.Radius*2, target.pos)
+		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
+		if(count == 1) then
+			ignoreChamp = true
+		end
+	end
+	
 	--Auto R Check
-	if(Ready(_R) and self:HasTibbers() == false and self.Menu.Combo.UseR:Value()) then
+	if(Ready(_R) and self:HasTibbers() == false and self.Menu.Combo.UseR:Value() and ignoreChamp == false) then
 		local RBuffer = 30
 		
-		--R Auto Kill Check
-		if(self.Menu.Combo.RKillCheck:Value()) then
-			if(target and target.valid and IsValid(target)) then
-				local dmg = getdmg("R", target, myHero)
-				
-				if((target.health - dmg <= 0) or self:IsKillable(target)) and (myHero.pos:DistanceTo(target.pos) < R.Range + R.Radius - RBuffer) then
-					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
-						local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-						local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
-						if(count >= 2) then
-							Control.CastSpell(HK_R, bestPos)
-						else
-							Control.CastSpell(HK_R, target.pos)
+		if(target and IsValid(target) and target ~= nil) then
+			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+			local bestPos, count, targets = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
+			
+			--Cluster AoE kill check
+			if(self.Menu.Combo.RSettings.RAoEKillCheck:Value()) then
+				if(count >= 2) then
+					for _, target in pairs(targets) do
+						if(self:IsKillable(target)) then
+							if(self.Menu.Combo.RSettings.RStunCheck:Value() and self:IsHoldingPassiveMode()) then
+								Control.CastSpell(HK_R, bestPos)
+								return
+							elseif(self.Menu.Combo.RSettings.RStunCheck:Value() == false) then
+								Control.CastSpell(HK_R, bestPos)
+								return
+							end
 						end
-					else --If the target is killable but outside of our R Range, we can clip them at the edge of our R Radius
-						Control.CastSpell(HK_R, target.pos:Extended(myHero.pos, R.Radius - RBuffer))
 					end
 				end
 			end
-		end
-		
-		
-		--R Stun Check
-		local shouldR = true
-		if(self.Menu.Combo.RStunCheck:Value() and self:IsHoldingPassiveMode() == false) then
-			shouldR = false
-		end
-		
-		if(target and IsValid(target) and target ~= nil) and shouldR then
-			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-			local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
-			if(count >= self.Menu.Combo.RAoECheck:Value()) then
+			
+			--Stun check
+			if(count >= self.Menu.Combo.RSettings.RAoECheckStun:Value()) and self:IsHoldingPassiveMode() then
 				if(passiveMode == 2) then
 					if(myHero.pos:DistanceTo(bestPos) < R.Range) then
 						Control.CastSpell(HK_E)
 						Control.CastSpell(HK_R, bestPos)
+						return
 					end
 				else
 					if(myHero.pos:DistanceTo(bestPos) < R.Range) then
 						Control.CastSpell(HK_R, bestPos)
+						return
 					end
 				end
+			elseif(count >= self.Menu.Combo.RSettings.RAoECheck:Value()) then
+				if(myHero.pos:DistanceTo(bestPos) < R.Range) then
+					Control.CastSpell(HK_R, bestPos)
+					return
+				end	
 			end
 		end
-		
-		
 	end
 	
 	-- Change how we combo based on our dynamic combo mode
-	if(Ready(_Q) and Ready(_W) and Ready(_R) and self:HasTibbers() == false and self:IsKillable(target) and self:IsHoldingPassiveMode() and self.Menu.Combo.UseR:Value()) then
-		currComboMode = COMBO_MODE_ALLIN
+	if(Ready(_Q) and Ready(_W) and Ready(_R) and self:HasTibbers() == false and self:IsKillable(target) and self.Menu.Combo.UseR:Value()) then
+		if(self.Menu.Combo.RSettings.RStunCheck:Value() and self:IsHoldingPassiveMode()) and ignoreChamp == false then
+			currComboMode = COMBO_MODE_ALLIN
+		elseif(self.Menu.Combo.RSettings.RStunCheck:Value() == false) and ignoreChamp == false then --If we have the setting to not require a stun then we can still all in
+			currComboMode = COMBO_MODE_ALLIN
+		else
+			currComboMode = COMBO_MODE_SPAM
+		end
 	else
 		currComboMode = COMBO_MODE_SPAM
 	end
@@ -1027,7 +1048,15 @@ function Annie:Combo()
 		
 		if(self.Menu.Combo.UseW:Value() and Ready(_W) and myHero.pos:DistanceTo(target.pos) < W.Range) then
 			Control.CastSpell(HK_W, target)
+			return
 		end
+		
+		--Use R in spam mode if it can kill / stun
+		if(self.Menu.Combo.UseR:Value() and Ready(_R) and myHero.pos:DistanceTo(target.pos) < R.Range and ignoreChamp == false) then
+			if(self:IsKillable(target)) then
+				Control.CastSpell(HK_R, target)
+			end
+		end	
 		
 	elseif(currComboMode == COMBO_MODE_ALLIN) then -- Engage with Tibbers and Ignite if we can full combo
 		
@@ -1054,12 +1083,10 @@ function Annie:IsHoldingPassiveMode() -- Check to see if we meet our passive mod
 	local passiveMode = self.Menu.PassiveLogic:Value()
 	local isHolding = false
 
-	if(self.Menu.Combo.RStunCheck:Value()) then
-		if(passiveMode == 1) then --Hold on Passive
-			if self:HasStunBuff() then isHolding = true end
-		else
-			if (self:HasStunBuff() or self:GetPassiveStacks() >= 3) then isHolding = true end
-		end
+	if(passiveMode == 1) then --Hold on Passive
+		if self:HasStunBuff() then isHolding = true end
+	else
+		if (self:HasStunBuff() or self:GetPassiveStacks() >= 3) then isHolding = true end
 	end
 	
 	return isHolding
@@ -1359,23 +1386,63 @@ end
 function Annie:KillSteal()
 	if(gameTick > GameTimer()) then return end
 	
-	if(not self.Menu.KillSteal.UseQ:Value() or not self.Menu.KillSteal.UseW:Value()) then return end
-	
-	local target = GetTarget(Q.Range) --Extend out of the Q range a little bit
+	if(self.Menu.KillSteal.UseQ:Value() == false and self.Menu.KillSteal.UseW:Value() == false and self.Menu.KillSteal.UseR:Value() == false) then return end
+	if(myHero.isChanneling) then return end
+	local target = GetTarget(R.Range + R.Radius)
 	if(target ~= nil and IsValid(target)) then
+		
+		--Q KS
 		if(Ready(_Q) and self.Menu.KillSteal.UseQ:Value()) then
-			local QDam = getdmg("Q", target, myHero)
-			if(QDam > target.health) then
-				Control.CastSpell(HK_Q, target)
+			if(myHero.pos:DistanceTo(target.pos) < Q.Range) then
+				local QDam = getdmg("Q", target, myHero)
+				if(QDam > target.health) then
+					Control.CastSpell(HK_Q, target)
+				end
 			end
 		end
 		
+		--W KS
 		if(Ready(_W) and self.Menu.KillSteal.UseW:Value()) then
-			local WDam = getdmg("W", target, myHero)
-			if(WDam > target.health) then
-				Control.CastSpell(HK_W, target)
+			if(myHero.pos:DistanceTo(target.pos) < W.Range) then
+				local WDam = getdmg("W", target, myHero)
+				if(WDam > target.health) then
+					Control.CastSpell(HK_W, target)
+				end
 			end
 		end
+		
+		local ignoreChamp = false
+		if(self.Menu.Combo.RSettings.DontSoloUlt[target.charName] ~= nil) then
+			if(self.Menu.Combo.RSettings.DontSoloUlt[target.charName]:Value()) then
+				local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius, R.Radius *2, target.pos)
+				local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
+				if(count == 1) then
+					ignoreChamp = true
+				end
+			end
+		end
+		
+		--R KS
+		if(Ready(_R) and self:HasTibbers()== false and self.Menu.KillSteal.UseR:Value()) and ignoreChamp == false then
+			if (Ready(_Q) == false and Ready(_W) == false) then
+				local RBuffer = 30
+				local RDam = getdmg("R", target, myHero)
+				if(target.health - RDam <= 0) and (myHero.pos:DistanceTo(target.pos) < R.Range + R.Radius - RBuffer) then
+					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+						local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+						local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
+						if(count >= 2) then
+							Control.CastSpell(HK_R, bestPos)
+						else
+							Control.CastSpell(HK_R, target.pos)
+						end
+					else --If the target is killable but outside of our R Range, we can clip them at the edge of our R Radius
+						Control.CastSpell(HK_R, target.pos:Extended(myHero.pos, R.Radius - RBuffer))
+					end
+				end
+			end
+		end
+		
 	end
 end
 
@@ -1482,6 +1549,7 @@ end
 
 function Annie:AutoStack()
 	if not (self.Menu.AutoStacks:Value()) then return end
+	if not (Game.IsOnTop()) then return end
 	if(IsInFountain()) then
 		local enemiesNearby = GetEnemyCount(3000, myHero)
 		if(enemiesNearby == 0) then
