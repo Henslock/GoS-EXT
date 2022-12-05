@@ -7,7 +7,7 @@ require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -913,6 +913,8 @@ function Annie:Combo()
 	--Auto R Check
 	if(Ready(_R) and not self:HasTibbers() and self.Menu.Combo.UseR:Value()) then
 		local RBuffer = 30
+		
+		--R Auto Kill Check
 		if(self.Menu.Combo.RKillCheck:Value()) then
 			if(target and target.valid and IsValid(target)) then
 				local dmg = getdmg("R", target, myHero)
@@ -929,9 +931,14 @@ function Annie:Combo()
 			end
 		end
 		
-		if self:IsHoldingPassiveMode() == false then return end
 		
-		if(target and IsValid(target) and target ~= nil) then
+		--R Stun Check
+		local shouldR = true
+		if(self.Menu.Combo.RStunCheck:Value() and self:IsHoldingPassiveMode() == false) then
+			shouldR = false
+		end
+		
+		if(target and IsValid(target) and target ~= nil) and shouldR then
 			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
 			local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
 			if(count >= self.Menu.Combo.RAoECheck:Value()) then
@@ -947,6 +954,8 @@ function Annie:Combo()
 				end
 			end
 		end
+		
+		
 	end
 	
 	-- Change how we combo based on our dynamic combo mode
