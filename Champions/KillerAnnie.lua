@@ -7,7 +7,7 @@ require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 
-scriptVersion = 1.03
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -673,7 +673,8 @@ function Annie:LoadMenu()
 	self.Menu.Combo:MenuElement({name = " ", drop = {"-----------------------------"}})	
 	self.Menu.Combo:MenuElement({id = "RAoECheck", name = "Min Enemies to Auto R", value = 3, min = 2, max = 5, step = 1})
 	self.Menu.Combo:MenuElement({id = "AABlock", name = "Smart AA Block in Combo", value = true})
-	self.Menu.Combo:MenuElement({id = "RStunCheck", name = "Only Use R if it can Stun or Kill", value = true, tooltip = "Disable this if you want to combo with Tibbers without requiring your passive"})
+	self.Menu.Combo:MenuElement({id = "RStunCheck", name = "Only Use R if it can Stun", value = true, tooltip = "Disable this if you want to combo with Tibbers without requiring your passive"})
+	self.Menu.Combo:MenuElement({id = "RKillCheck", name = "Use R to Kill", value = true, tooltip = "Goomba stomp"})
 	self.Menu.Combo:MenuElement({id = "NinjaCombo", name = "Ninja Burst Combo", type = MENU})
 	
 	--Ninja Combo
@@ -894,6 +895,7 @@ function Annie:Combo()
 	
 	local currComboMode = nil
 	local target = GetTarget(R.Range + R.Radius)
+	local passiveMode = self.Menu.PassiveLogic:Value()
 	
 	if(target == nil or not target.valid or not IsValid(target)) then return end
 	if(myHero.isChanneling) then return end
@@ -906,6 +908,45 @@ function Annie:Combo()
 	
 	if(isKillable and Ready(_Q) == false and Ready(_W) == false and Ready(_R) == false) then --A stunned killable target will be ignited
 		UseIgnite(target)
+	end
+	
+	--Auto R Check
+	if(Ready(_R) and not self:HasTibbers() and self.Menu.Combo.UseR:Value()) then
+		local RBuffer = 30
+		if(self.Menu.Combo.RKillCheck:Value()) then
+			if(target and target.valid and IsValid(target)) then
+				local dmg = getdmg("R", target, myHero)
+				
+				if((target.health - dmg <= 0) or self:IsKillable(target)) and (myHero.pos:DistanceTo(target.pos) < R.Range) then
+					local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+					local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
+					if(count >= 1) then
+						Control.CastSpell(HK_R, bestPos)
+					else
+						Control.CastSpell(HK_R, target.pos)
+					end
+				end
+			end
+		end
+		
+		if self:IsHoldingPassiveMode() == false then return end
+		
+		if(target and IsValid(target) and target ~= nil) then
+			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+			local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
+			if(count >= self.Menu.Combo.RAoECheck:Value()) then
+				if(passiveMode == 2) then
+					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+						Control.CastSpell(HK_E)
+						Control.CastSpell(HK_R, bestPos)
+					end
+				else
+					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+						Control.CastSpell(HK_R, bestPos)
+					end
+				end
+			end
+		end
 	end
 	
 	-- Change how we combo based on our dynamic combo mode
@@ -944,40 +985,6 @@ function Annie:Combo()
 			end
 		end
 		
-	end
-	
-	--Auto R Check
-	if(Ready(_R) and not self:HasTibbers() and self.Menu.Combo.UseR:Value()) then
-		
-		if(self.Menu.Combo.RStunCheck:Value()) then
-			if(target and target.valid and IsValid(target)) then
-				local dmg = getdmg("R", target, myHero)
-				
-				if((target.health - dmg <= 0) or self:IsKillable(target)) and (myHero.pos:DistanceTo(target.pos) < R.Range) then 
-					Control.CastSpell(HK_R, target.pos)
-				end
-			end
-		end
-		
-		if self:IsHoldingPassiveMode() == false then return end
-		
-		local RBuffer = 30
-		if(target and IsValid(target) and target ~= nil) then
-			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-			local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
-			if(count >= self.Menu.Combo.RAoECheck:Value()) then
-				if(passiveMode == 2) then
-					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
-						Control.CastSpell(HK_E)
-						Control.CastSpell(HK_R, bestPos)
-					end
-				else
-					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
-						Control.CastSpell(HK_R, bestPos)
-					end
-				end
-			end
-		end
 	end
 	
 end
@@ -1573,7 +1580,14 @@ function Annie:NinjaCombo()
 			end
 			
 			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
-				Control.CastSpell(HK_R, target.pos)
+				local RBuffer = 30
+				local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+				local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
+				if(count >= 1) and myHero.pos:DistanceTo(bestPos) < R.Range then
+					Control.CastSpell(HK_R, bestPos)
+				else
+					Control.CastSpell(HK_R, target.pos)
+				end
 			end
 		end
 		
@@ -1612,7 +1626,7 @@ function Annie:Draw()
 		DrawCircle(myHero, R.Range + 400, 1, DrawColor(20, 255, 255, 255)) --(Alpha, R, G, B)
 		local heroPos = myHero.pos:To2D()
 		
-		if((self:HasStunBuff() or self:GetPassiveStacks() ==3) and Ready(_R) and self:HasTibbers() == false) then
+		if (self:HasStunBuff() or (self:GetPassiveStacks() ==3 and Ready(_E))) and Ready(_R) and self:HasTibbers() == false then
 			DrawText("Ninja: [READY]", 18, heroPos + Vector(-35, 50, 0), DrawColor(255, 55, 250, 110))
 		else
 			DrawText("Ninja: [NOT READY]", 18, heroPos + Vector(-55, 50, 0), DrawColor(255, 255, 100, 120))
