@@ -7,7 +7,7 @@ require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -1006,7 +1006,7 @@ function Annie:IsHoldingPassiveMode() -- Check to see if we meet our passive mod
 		if(passiveMode == 1) then --Hold on Passive
 			if self:HasStunBuff() then isHolding = true end
 		else
-			if (self:HasStunBuff() or (self:GetPassiveStacks() >= 3 and Ready(_E))) then isHolding = true end
+			if (self:HasStunBuff() or self:GetPassiveStacks() >= 3) then isHolding = true end
 		end
 	end
 	
@@ -1568,12 +1568,12 @@ function Annie:NinjaCombo()
 	end
 	
 	if(Ready(_R) and self:HasTibbers() == false and Ready(_Q) and Ready(_W)) then
-		if self:HasStunBuff() or (self:GetPassiveStacks() >= 3 and Ready(_E)) then
+		if self:HasStunBuff() or self:GetPassiveStacks() >= 3 then
 			shouldNinja = true
 		end
 	end
 	
-	local target = GetTarget(R.Range + flashRange)
+	local target = GetTarget(R.Range + flashRange - 10)
 	if(target and target.valid and IsValid(target)) then
 	
 		if(shouldNinja) then
@@ -1592,7 +1592,7 @@ function Annie:NinjaCombo()
 				local RBuffer = 30
 				local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
 				local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
-				if(count >= 1) and myHero.pos:DistanceTo(bestPos) < R.Range then
+				if(count >= 2) and myHero.pos:DistanceTo(bestPos) < R.Range then
 					Control.CastSpell(HK_R, bestPos)
 				else
 					Control.CastSpell(HK_R, target.pos)
@@ -1605,12 +1605,12 @@ function Annie:NinjaCombo()
 				UseIgnite(target)
 			end
 			
-			if(self.Menu.Combo.UseQ:Value() and Ready(_Q) and myHero.pos:DistanceTo(target.pos) < Q.Range) then
-				Control.CastSpell(HK_Q, target)
-			end
-			
 			if(self.Menu.Combo.UseW:Value() and Ready(_W) and myHero.pos:DistanceTo(target.pos) < W.Range) then
 				Control.CastSpell(HK_W, target)
+			end
+			
+			if(self.Menu.Combo.UseQ:Value() and Ready(_Q) and myHero.pos:DistanceTo(target.pos) < Q.Range) then
+				Control.CastSpell(HK_Q, target)
 			end
 		end
 		
