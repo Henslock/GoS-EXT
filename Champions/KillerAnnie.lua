@@ -7,7 +7,7 @@ require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 
-scriptVersion = 1.00
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -610,6 +610,16 @@ local function UseIgnite(unit)
 	end
 end
 
+local function CanUseSummoner(unit, name)
+	if myHero:GetSpellData(SUMMONER_1).name == name and Ready(SUMMONER_1) then
+		return true
+	elseif myHero:GetSpellData(SUMMONER_2).name == name and Ready(SUMMONER_2) then
+		return true
+	end
+	
+	return false
+end
+
 
 ----------------------------------------------------
 --|                Champion               		|--
@@ -682,6 +692,7 @@ function Annie:LoadMenu()
 	-- Last Hit
 	self.Menu:MenuElement({id = "LastHit", name = "Last Hit", type = MENU})
 	self.Menu.LastHit:MenuElement({id = "UseQ", name = "Use Q in Last Hit", value = true})
+	self.Menu.LastHit:MenuElement({id = "HoldQ", name = "Hold Q if in Passive Mode if Champs Nearby", value = true})
 	self.Menu.LastHit:MenuElement({id = "UseW", name = "Use W in if Q or AA cant kill", value = true})
 	self.Menu.LastHit:MenuElement({id = "WMana", name = "W Last Hit Min Mana", value = 40, min = 0, max = 100, step = 5, identifier = "%"})
 	
@@ -723,6 +734,7 @@ function Annie:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawKillable", name = "Draw Killable Enemies", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawNinjaComboStatus", name = "Draw Ninja Combo Status", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawUltClusters", name = "Draw Ult Clusters", value = false})
+	self.Menu.Drawings:MenuElement({id = "DrawChampTracker", name = "Draw Proximity Champion Tracker", value = false})
 	
 	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - W - E)", value = false})
 	
@@ -886,11 +898,13 @@ function Annie:Combo()
 	if(target == nil or not target.valid or not IsValid(target)) then return end
 	if(myHero.isChanneling) then return end
 	
-	if(self:IsKillable(target) and IsImmobile(target) >= 0.5) then --A stunned killable target will be ignited
+	local isKillable, igniteOverkillCheck = self:IsKillable(target)
+	
+	if(isKillable and IsImmobile(target) >= 0.5) and not igniteOverkillCheck then --A stunned killable target will be ignited
 		UseIgnite(target)
 	end
 	
-	if(self:IsKillable(target) and Ready(_Q) == false and Ready(_W) == false and Ready(_R) == false) then --A stunned killable target will be ignited
+	if(isKillable and Ready(_Q) == false and Ready(_W) == false and Ready(_R) == false) then --A stunned killable target will be ignited
 		UseIgnite(target)
 	end
 	
@@ -1050,17 +1064,37 @@ function Annie:LastHit()
 
 	local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) -- Q range is the same as W range
 	local canonMinion = GetCanonMinion(minions)
+	local passiveMode = self.Menu.PassiveLogic:Value()
 	
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
 	
 	if(Ready(_Q) and self.Menu.LastHit.UseQ:Value()) then
+		
+		--Passive mode check
+		local shouldLastHit = true
+		
+		if(self.Menu.LastHit.HoldQ:Value()) then
+			if(passiveMode == 1) then
+				if(self:HasStunBuff()) then
+					shouldLastHit = false
+				end
+			else
+				if(self:GetPassiveStacks() == 3) or (self:HasStunBuff()) then
+					shouldLastHit = false
+				end
+			end
+			
+			--If we are under tower, we can use our abilities
+			if(IsUnderFriendlyTurret(myHero)) then shouldLastHit = true end
+			if(GetEnemyCount(2000, myHero) == 0) then shouldLastHit= true end
+		end
 		
 		--Prioritize the canon minion if its low
 		if(canonMinion ~= nil) and IsValid(canonMinion) then
 			local QDam = getdmg("Q", canonMinion, myHero)
 			local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
 			
-			if (hp > 0) and (hp + (canonMinion.health*0.05) < QDam) or (canonMinion.health + 5 < QDam) then
+			if ((hp > 0) and (hp + (canonMinion.health*0.05) < QDam) or (canonMinion.health + 5 < QDam)) and shouldLastHit then
 				Control.CastSpell(HK_Q, canonMinion)
 			end
 		end
@@ -1071,7 +1105,7 @@ function Annie:LastHit()
 				local QDam = getdmg("Q", minion, myHero)
 				local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 				
-				if (hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 5 < QDam) then
+				if ((hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 5 < QDam)) and shouldLastHit then
 					Control.CastSpell(HK_Q, minion)
 				end
 			end
@@ -1435,18 +1469,28 @@ function Annie:AABlock()
 end
 
 function Annie:IsKillable(unit)
+	local isKillable = false
+	local igniteOverkill = false
+	local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+	
 	if(comboDamageData[unit.name] ~= nil) then	
 		local dmg = comboDamageData[unit.name]
 		if(unit.health - dmg <= 0) then
-			return true
+			isKillable = true
+		end
+		
+		if(unit.health - dmg <= 0) and (unit.health - (dmg - igniteDmg) <= 0) then
+			if(CanUseSummoner(myHero, "SummonerDot")) then
+				igniteOverkill = true
+			end
 		end
 	end
-	
-	return false
+	return isKillable, igniteOverkill
 end
 
 function Annie:GetTotalDamage(unit)
 	local totalDmg = 0
+	
 	if(Ready(_Q)) then
 		totalDmg = totalDmg + getdmg("Q", unit, myHero)
 	end
@@ -1480,6 +1524,10 @@ function Annie:GetTotalDamage(unit)
 		
 		totalDmg = totalDmg + ludensCalcDmg
 	end
+	
+	local AAdmg = getdmg("AA", unit, myHero)
+	
+	totalDmg = totalDmg + AAdmg
 	
 	return totalDmg
 end
@@ -1518,6 +1566,10 @@ function Annie:NinjaCombo()
 					_G.Control.CastSpell(flashSlot, target.pos)
 					Control.CastSpell(HK_E)
 				end
+			end
+			
+			if self:GetPassiveStacks() == 3 then
+				Control.CastSpell(HK_E)
 			end
 			
 			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
@@ -1560,10 +1612,22 @@ function Annie:Draw()
 		DrawCircle(myHero, R.Range + 400, 1, DrawColor(20, 255, 255, 255)) --(Alpha, R, G, B)
 		local heroPos = myHero.pos:To2D()
 		
-		if(self:HasStunBuff() and Ready(_R) and self:HasTibbers() == false) then
+		if((self:HasStunBuff() or self:GetPassiveStacks() ==3) and Ready(_R) and self:HasTibbers() == false) then
 			DrawText("Ninja: [READY]", 18, heroPos + Vector(-35, 50, 0), DrawColor(255, 55, 250, 110))
 		else
 			DrawText("Ninja: [NOT READY]", 18, heroPos + Vector(-55, 50, 0), DrawColor(255, 255, 100, 120))
+		end
+	end
+	
+	if(self.Menu.Drawings.DrawChampTracker:Value()) then
+		-- Draw lines connecting to enemy champions
+		for k, v in pairs(Enemies) do
+			local distMax = 3000
+			local distMin = R.Range + R.Radius
+			if(v and IsValid(v) and myHero.pos.DistanceTo(v.pos) <= distMax and myHero.pos.DistanceTo(v.pos) > distMin) then
+				local lineAlphaVal = ((myHero.pos.DistanceTo(v.pos) - distMin) / (distMax - distMin)) * 0.9
+				DrawLine(myHero.pos:To2D(), v.pos:To2D(), 1, DrawColor(300 * lineAlphaVal, 255, 0, 0))
+			end
 		end
 	end
 	
