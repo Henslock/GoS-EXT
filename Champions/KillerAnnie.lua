@@ -563,6 +563,37 @@ local function AverageClusterPosition(targets)
 	return point
 end
 
+local function CalculateBoundingBoxAvg(targets)
+	local highestX, lowestX, highestZ, lowestZ = 0, math.huge, 0, math.huge
+	local avg = {x = 0, y = 0, z = 0}
+	for k, v in pairs(targets) do
+		if(v.pos.x >= highestX) then
+			highestX = v.pos.x
+		end
+		
+		if(v.pos.z >= highestZ) then
+			highestZ = v.pos.z
+		end
+		
+		if(v.pos.x < lowestX) then
+			lowestX = v.pos.x
+		end
+		
+		if(v.pos.z < lowestZ) then
+			lowestZ = v.pos.z
+		end
+	end
+	
+	local vec1 = Vector(highestX, myHero.pos.y, highestZ)
+	local vec2 = Vector(highestX, myHero.pos.y, lowestZ)
+	local vec3 = Vector(lowestX, myHero.pos.y, highestZ)
+	local vec4 = Vector(lowestX, myHero.pos.y, lowestZ)
+	
+	avg = (vec1 + vec2 + vec3 + vec4) /4
+	
+	return avg
+end
+
 local function MyHeroNotReady()
     return myHero.dead or Game.IsChatOpen() or (_G.JustEvade and _G.JustEvade:Evading()) or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or IsRecalling(myHero)
 end
@@ -796,22 +827,25 @@ end
 
 function Annie:DebugCluster()
 	local RBuffer = 30
-	local target = GetTarget(R.Range)
+	local target = GetTarget(R.Range + R.Radius)
 	
 	if(target and IsValid(target) and target ~= nil) then
-		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-		local bestPos = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
-		if(#nearbyEnemies > self.Menu.Combo.RAoECheck:Value()) then
-			DrawCircle(bestPos, R.Radius -RBuffer, 1, DrawColor(85, 255, 255, 255)) --(Alpha, R, G, B)
+		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius +300, R.Radius*2 -RBuffer, target.pos)
+		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
+		if(count >= self.Menu.Combo.RAoECheck:Value()) then
+			if(myHero.pos:DistanceTo(bestPos) < R.Range + RBuffer) then
+				DrawCircle(bestPos, R.Radius -RBuffer, 1, DrawColor(85, 255, 255, 255)) --(Alpha, R, G, B)
+			end
 		end
 	end
 end
 
-function Annie:CalculateBestCirclePosition(target, targets, range)
+function Annie:CalculateBestCirclePosition(targets, range, edgeDetect)
 
-	local avgCastPos = AverageClusterPosition(targets)
+	local avgCastPos = CalculateBoundingBoxAvg(targets)
 	local newCluster = {}
 	local distantEnemies = {}
+
 	for _, enemy in pairs(targets) do
 		if(enemy.pos:DistanceTo(avgCastPos) > range) then
 			table.insert(distantEnemies, enemy)
@@ -836,10 +870,24 @@ function Annie:CalculateBestCirclePosition(target, targets, range)
 		
 		--Recursion, we are discarding the furthest target and recalculating the best position
 		if(#newCluster ~= #targets) then
-			return self:CalculateBestCirclePosition(target, newCluster, range)
+			return self:CalculateBestCirclePosition(newCluster, range)
 		end
 	end
-
+	
+	if(edgeDetect) and myHero.pos:DistanceTo(avgCastPos) > R.Range then
+		local checkPos = myHero.pos:Extended(avgCastPos, R.Range)
+		local hitAllCheck = true
+		for _, v in pairs(newCluster) do
+			if(v.pos:DistanceTo(checkPos) > range) then
+				hitAllCheck = false
+			end
+		end
+		
+		if hitAllCheck then 
+			return checkPos, #newCluster
+		end
+	end
+	
 	return avgCastPos, #targets
 end
 
@@ -911,7 +959,7 @@ function Annie:Combo()
 	end
 	
 	--Auto R Check
-	if(Ready(_R) and not self:HasTibbers() and self.Menu.Combo.UseR:Value()) then
+	if(Ready(_R) and self:HasTibbers() == false and self.Menu.Combo.UseR:Value()) then
 		local RBuffer = 30
 		
 		--R Auto Kill Check
@@ -919,13 +967,17 @@ function Annie:Combo()
 			if(target and target.valid and IsValid(target)) then
 				local dmg = getdmg("R", target, myHero)
 				
-				if((target.health - dmg <= 0) or self:IsKillable(target)) and (myHero.pos:DistanceTo(target.pos) < R.Range) then
-					local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-					local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
-					if(count >= 1) then
-						Control.CastSpell(HK_R, bestPos)
-					else
-						Control.CastSpell(HK_R, target.pos)
+				if((target.health - dmg <= 0) or self:IsKillable(target)) and (myHero.pos:DistanceTo(target.pos) < R.Range + R.Radius - RBuffer) then
+					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+						local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+						local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
+						if(count >= 2) then
+							Control.CastSpell(HK_R, bestPos)
+						else
+							Control.CastSpell(HK_R, target.pos)
+						end
+					else --If the target is killable but outside of our R Range, we can clip them at the edge of our R Radius
+						Control.CastSpell(HK_R, target.pos:Extended(myHero.pos, R.Radius - RBuffer))
 					end
 				end
 			end
@@ -940,15 +992,15 @@ function Annie:Combo()
 		
 		if(target and IsValid(target) and target ~= nil) and shouldR then
 			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-			local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
+			local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
 			if(count >= self.Menu.Combo.RAoECheck:Value()) then
 				if(passiveMode == 2) then
-					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+					if(myHero.pos:DistanceTo(bestPos) < R.Range) then
 						Control.CastSpell(HK_E)
 						Control.CastSpell(HK_R, bestPos)
 					end
 				else
-					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+					if(myHero.pos:DistanceTo(bestPos) < R.Range) then
 						Control.CastSpell(HK_R, bestPos)
 					end
 				end
@@ -959,7 +1011,7 @@ function Annie:Combo()
 	end
 	
 	-- Change how we combo based on our dynamic combo mode
-	if(Ready(_Q) and Ready(_W) and Ready(_R) and not self:HasTibbers() and self:IsKillable(target) and self:IsHoldingPassiveMode() and self.Menu.Combo.UseR:Value()) then
+	if(Ready(_Q) and Ready(_W) and Ready(_R) and self:HasTibbers() == false and self:IsKillable(target) and self:IsHoldingPassiveMode() and self.Menu.Combo.UseR:Value()) then
 		currComboMode = COMBO_MODE_ALLIN
 	else
 		currComboMode = COMBO_MODE_SPAM
@@ -981,7 +1033,7 @@ function Annie:Combo()
 		
 		local RBuffer = 30
 		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-		local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
+		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
 
 		if(passiveMode == 2) then
 			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
@@ -1591,7 +1643,7 @@ function Annie:NinjaCombo()
 			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
 				local RBuffer = 30
 				local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-				local bestPos, count = self:CalculateBestCirclePosition(target, nearbyEnemies, R.Radius)
+				local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
 				if(count >= 2) and myHero.pos:DistanceTo(bestPos) < R.Range then
 					Control.CastSpell(HK_R, bestPos)
 				else
