@@ -7,7 +7,7 @@ require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 
-scriptVersion = 1.09
+scriptVersion = 1.10
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -594,6 +594,20 @@ local function CalculateBoundingBoxAvg(targets)
 	return avg
 end
 
+local function FindFurthestTargetFromMe(targets)	
+	local furthestTarget = targets[1]
+	local furthestDist = 0
+	for _, target in pairs(targets) do
+		local dist = myHero.pos:DistanceTo(target.pos)
+		if(dist >= furthestDist) then
+			furthestTarget = target
+			furthestDist = dist
+		end
+	end
+	
+	return furthestTarget
+end
+
 local function MyHeroNotReady()
     return myHero.dead or Game.IsChatOpen() or (_G.JustEvade and _G.JustEvade:Evading()) or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or IsRecalling(myHero)
 end
@@ -836,27 +850,27 @@ end
 
 function Annie:DebugCluster()
 	local RBuffer = 30
-	local target = GetTarget(R.Range + R.Radius)
+	local target = GetTarget(R.Range + R.Radius + 3000)
 	
 	if(target and IsValid(target) and target ~= nil) then
-		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius +300, R.Radius*2 -RBuffer, target.pos)
+		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius +400 - RBuffer + 1000, R.Radius*2 -RBuffer, target.pos)
 		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
-		if(count >= self.Menu.Combo.RSettings.RAoECheckStun:Value()) then
-			if(myHero.pos:DistanceTo(bestPos) < R.Range + RBuffer) then
+		if(count >= 1) then
+			if(myHero.pos:DistanceTo(bestPos) < R.Range + RBuffer + 400 + R.Radius + 1000) then
 				DrawCircle(bestPos, R.Radius -RBuffer, 1, DrawColor(85, 255, 255, 255)) --(Alpha, R, G, B)
 			end
 		end
 	end
 end
 
-function Annie:CalculateBestCirclePosition(targets, range, edgeDetect)
+function Annie:CalculateBestCirclePosition(targets, radius, edgeDetect)
 
 	local avgCastPos = CalculateBoundingBoxAvg(targets)
 	local newCluster = {}
 	local distantEnemies = {}
 
 	for _, enemy in pairs(targets) do
-		if(enemy.pos:DistanceTo(avgCastPos) > range) then
+		if(enemy.pos:DistanceTo(avgCastPos) > radius) then
 			table.insert(distantEnemies, enemy)
 		else
 			table.insert(newCluster, enemy)
@@ -879,15 +893,26 @@ function Annie:CalculateBestCirclePosition(targets, range, edgeDetect)
 		
 		--Recursion, we are discarding the furthest target and recalculating the best position
 		if(#newCluster ~= #targets) then
-			return self:CalculateBestCirclePosition(newCluster, range)
+			return self:CalculateBestCirclePosition(newCluster, radius)
 		end
 	end
 	
 	if(edgeDetect) and myHero.pos:DistanceTo(avgCastPos) > R.Range then
+
 		local checkPos = myHero.pos:Extended(avgCastPos, R.Range)
+		local furthestTarget = FindFurthestTargetFromMe(newCluster)
+		local fakeMyHeroPos = avgCastPos:Extended(myHero.pos, R.Range + radius - 50)
+		if(furthestTarget ~= nil) then
+			fakeMyHeroPos = avgCastPos:Extended(myHero.pos, R.Range + radius - furthestTarget.pos:DistanceTo(avgCastPos))
+		end
+
+		if(myHero.pos:DistanceTo(avgCastPos) >= fakeMyHeroPos:DistanceTo(avgCastPos)) then
+			checkPos = fakeMyHeroPos:Extended(avgCastPos, R.Range)
+		end
+		
 		local hitAllCheck = true
 		for _, v in pairs(newCluster) do
-			if(v.pos:DistanceTo(checkPos) > range) then
+			if(v.pos:DistanceTo(checkPos) > radius) then
 				hitAllCheck = false
 			end
 		end
@@ -1693,14 +1718,22 @@ function Annie:NinjaCombo()
 		end
 	end
 	
-	local target = GetTarget(R.Range + flashRange - 10)
+	local target = GetTarget(R.Range + flashRange + R.Radius + 1000)
 	if(target and target.valid and IsValid(target)) then
 	
 		if(shouldNinja) then
+		
+			local RBuffer = 30
+			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius + flashRange + 1000, R.Radius*2 -RBuffer, target.pos)
+			local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
 			if(flashSlot ~= nil and canFlash) then
-				if(myHero.pos:DistanceTo(target.pos) < R.Range + flashRange) and (myHero.pos:DistanceTo(target.pos) > R.Range + 100) then
-					_G.Control.CastSpell(flashSlot, target.pos)
+				if(myHero.pos:DistanceTo(bestPos) < R.Range + flashRange -40) and (myHero.pos:DistanceTo(target.pos) > R.Range) then
+					
+					_G.SDK.Orbwalker:SetMovement(false)
+					_G.Control.CastSpell(HK_R, bestPos)
+					_G.Control.CastSpell(flashSlot)
 					Control.CastSpell(HK_E)
+					_G.SDK.Orbwalker:SetMovement(true)
 				end
 			end
 			
@@ -1708,16 +1741,13 @@ function Annie:NinjaCombo()
 				Control.CastSpell(HK_E)
 			end
 			
-			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
-				local RBuffer = 30
-				local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
-				local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
-				if(count >= 2) and myHero.pos:DistanceTo(bestPos) < R.Range then
+			
+			if(myHero.pos:DistanceTo(bestPos) < R.Range) then
+				if myHero.pos:DistanceTo(bestPos) < R.Range then
 					Control.CastSpell(HK_R, bestPos)
-				else
-					Control.CastSpell(HK_R, target.pos)
 				end
 			end
+			
 		end
 		
 		if(self:HasTibbers()) then
@@ -1766,7 +1796,7 @@ function Annie:Draw()
 		-- Draw lines connecting to enemy champions
 		for k, v in pairs(Enemies) do
 			local distMax = 3000
-			local distMin = R.Range + R.Radius
+			local distMin = R.Range
 			if(v and IsValid(v) and myHero.pos.DistanceTo(v.pos) <= distMax and myHero.pos.DistanceTo(v.pos) > distMin) then
 				local lineAlphaVal = ((myHero.pos.DistanceTo(v.pos) - distMin) / (distMax - distMin)) * 0.9
 				DrawLine(myHero.pos:To2D(), v.pos:To2D(), 1, DrawColor(300 * lineAlphaVal, 255, 0, 0))
@@ -1780,7 +1810,7 @@ function Annie:Draw()
 			for _, enemy in pairs(enemies) do
 				if(enemy and enemy.valid and IsValid(enemy)) then
 					if(self:IsKillable(enemy)) then
-						DrawCircle(enemy, 100, 15, DrawColor(180, 255, 0, 155)) --(Alpha, R, G, B)
+						DrawCircle(enemy, 100, 10, DrawColor(180, 255, 0, 155)) --(Alpha, R, G, B)
 					end
 				end
 			end
