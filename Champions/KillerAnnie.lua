@@ -1174,7 +1174,7 @@ function Annie:Harass()
 				if(self:GetPassiveStacks() == 3) and Ready(_E) then
 					Control.CastSpell(HK_Q, target)
 					Control.CastSpell(HK_E)
-				else
+				elseif(self:HasStunBuff()) then
 					Control.CastSpell(HK_Q, target)
 				end
 			else
