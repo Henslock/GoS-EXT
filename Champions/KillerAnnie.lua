@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.14
+scriptVersion = 1.15
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -747,7 +747,7 @@ function Annie:LoadMenu()
 	self.Menu.Harass:MenuElement({id = "UseQ", name = "Use Q in Harass", value = true})
 	self.Menu.Harass:MenuElement({id = "UseW", name = "Follow up W on Stunned Target", value = true})
 	self.Menu.Harass:MenuElement({id = "LastHit", name = "Last Hit with Q until you have Passive", value = true})
-	self.Menu.Harass:MenuElement({id = "HoldQ", name = "Dont Last Hit with Q if holding Passive", value = true})
+	self.Menu.Harass:MenuElement({id = "HoldQ", name = "Only Q enemy if you have Passive", value = false})
 	self.Menu.Harass:MenuElement({id = "QMana", name = "Q Min Mana", value = 15, min = 0, max = 100, step = 5, identifier = "%"})
 	self.Menu.Harass:MenuElement({id = "WMana", name = "W Min Mana", value = 30, min = 0, max = 100, step = 5, identifier = "%"})
 	
@@ -1142,12 +1142,10 @@ function Annie:Harass()
 		
 		local shouldQLastHit = true
 		
-		if(self.Menu.Harass.HoldQ:Value()) then
-			if(self:HasStunBuff()) then
-				shouldQLastHit = false
-			else
-				shouldQLastHit = true
-			end
+		if(self:HasStunBuff()) then
+			shouldQLastHit = false
+		else
+			shouldQLastHit = true
 		end
 		
 		if(shouldQLastHit) then
@@ -1172,9 +1170,13 @@ function Annie:Harass()
 	if(target ~= nil and IsValid(target)) then
 		
 		if(Ready(_Q) and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
-			if(self:GetPassiveStacks() == 3) and Ready(_E) then
-				Control.CastSpell(HK_Q, target)
-				Control.CastSpell(HK_E)
+			if(self.Menu.Harass.HoldQ:Value()) then
+				if(self:GetPassiveStacks() == 3) and Ready(_E) then
+					Control.CastSpell(HK_Q, target)
+					Control.CastSpell(HK_E)
+				else
+					Control.CastSpell(HK_Q, target)
+				end
 			else
 				Control.CastSpell(HK_Q, target)
 			end
