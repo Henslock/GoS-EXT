@@ -6,8 +6,9 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
+require "PremiumPrediction"
 
-scriptVersion = 1.13
+scriptVersion = 1.14
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -497,7 +498,7 @@ local function GetEnemyCountAtPos(checkrange, range, pos)
     return count
 end
 
-local function GetEnemiesAtPos(checkrange, range, pos)
+local function GetEnemiesAtPos(checkrange, range, pos,target)
     local enemies = _G.SDK.ObjectManager:GetEnemyHeroes(checkrange)
 	local results = {}
     for i = 1, #enemies do 
@@ -563,23 +564,28 @@ local function AverageClusterPosition(targets)
 	return point
 end
 
-local function CalculateBoundingBoxAvg(targets)
+local function CalculateBoundingBoxAvg(targets, predDelay)
 	local highestX, lowestX, highestZ, lowestZ = 0, math.huge, 0, math.huge
 	local avg = {x = 0, y = 0, z = 0}
 	for k, v in pairs(targets) do
-		if(v.pos.x >= highestX) then
+		local vPos = v.pos
+		if(predDelay > 0) then
+			vPos = v:GetPrediction(math.huge, predDelay)
+		end
+		
+		if(vPos.x >= highestX) then
 			highestX = v.pos.x
 		end
 		
-		if(v.pos.z >= highestZ) then
+		if(vPos.z >= highestZ) then
 			highestZ = v.pos.z
 		end
 		
-		if(v.pos.x < lowestX) then
+		if(vPos.x < lowestX) then
 			lowestX = v.pos.x
 		end
 		
-		if(v.pos.z < lowestZ) then
+		if(vPos.z < lowestZ) then
 			lowestZ = v.pos.z
 		end
 	end
@@ -720,7 +726,7 @@ function Annie:LoadMenu()
 	--Ult Settings
 	self.Menu.Combo.RSettings:MenuElement({id = "RStunCheck", name = "Initiate R on killable target ONLY if it Stuns", value = true, tooltip = "Disable this if you want to initiate a combo with Tibbers without requiring your passive"})
 	self.Menu.Combo.RSettings:MenuElement({id = "RAoEKillCheck", name = "Use R in Enemy Cluster if one is Killable", value = true, tooltip = "A cluster is two or enemies stacked within R's radius"})
-	self.Menu.Combo.RSettings:MenuElement({id = "RAoECheckStun", name = "Min Enemies to Auto R with Stun", value = 3, min = 2, max = 5, step = 1})
+	self.Menu.Combo.RSettings:MenuElement({id = "RAoECheckStun", name = "Min Enemies to Auto R with Stun", value = 2, min = 2, max = 5, step = 1})
 	self.Menu.Combo.RSettings:MenuElement({id = "RAoECheck", name = "Min Enemies to Auto R without Stun", value = 4, min = 2, max = 5, step = 1})
 	self.Menu.Combo.RSettings:MenuElement({id = "DontSoloUlt", name = "Don't Use Solo R on...", type = MENU})
 	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
@@ -852,19 +858,33 @@ function Annie:DebugCluster()
 	local target = GetTarget(R.Range + R.Radius + 3000)
 	
 	if(target and IsValid(target) and target ~= nil) then
-		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius +400 - RBuffer + 1000, R.Radius*2 -RBuffer, target.pos)
-		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
-		if(count >= 1) then
-			if(myHero.pos:DistanceTo(bestPos) < R.Range + RBuffer + 400 + R.Radius + 1000) then
-				DrawCircle(bestPos, R.Radius -RBuffer, 1, DrawColor(85, 255, 255, 255)) --(Alpha, R, G, B)
+		local searchrange = R.Range + R.Radius - RBuffer
+		local canFlash = false
+		if self.Menu.Combo.NinjaCombo.UseFlash:Value()  then--and self.Menu.Combo.NinjaCombo.Key:Value() then
+			
+			if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" and Ready(SUMMONER_1) then
+				canFlash = true
+				flashSlot = HK_SUMMONER_1
+			elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" and Ready(SUMMONER_2) then
+				canFlash = true
+				flashSlot = HK_SUMMONER_2
 			end
 		end
+		if canFlash == true then
+			searchrange = R.Range + R.Radius +400 - RBuffer
+		end
+		local nearbyEnemies = GetEnemiesAtPos(searchrange, R.Radius*2 -RBuffer, target.pos, target)
+		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius - RBuffer, true)
+		if(myHero.pos:DistanceTo(bestPos) < R.Range + RBuffer + 400 + R.Radius + 1000) then
+			DrawCircle(bestPos, R.Radius -RBuffer, 1, DrawColor(85, 255, 255, 255)) --(Alpha, R, G, B)
+		end
+
 	end
 end
 
 function Annie:CalculateBestCirclePosition(targets, radius, edgeDetect)
 
-	local avgCastPos = CalculateBoundingBoxAvg(targets)
+	local avgCastPos = CalculateBoundingBoxAvg(targets, 0.25)
 	local newCluster = {}
 	local distantEnemies = {}
 
@@ -911,7 +931,7 @@ function Annie:CalculateBestCirclePosition(targets, radius, edgeDetect)
 		
 		local hitAllCheck = true
 		for _, v in pairs(newCluster) do
-			if(v.pos:DistanceTo(checkPos) > radius) then
+			if(v:GetPrediction(math.huge, 0.25):DistanceTo(checkPos) >= radius + 5) then -- the +5 is to fix a precision issue
 				hitAllCheck = false
 			end
 		end
@@ -919,6 +939,7 @@ function Annie:CalculateBestCirclePosition(targets, radius, edgeDetect)
 		if hitAllCheck then 
 			return checkPos, #newCluster, newCluster
 		end
+
 	end
 	
 	return avgCastPos, #targets, targets
@@ -993,7 +1014,7 @@ function Annie:Combo()
 	--Ignore using R on champions that are isolated
 	local ignoreChamp = false
 	if(self.Menu.Combo.RSettings.DontSoloUlt[target.charName]:Value()) then
-		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius, R.Radius*2, target.pos)
+		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius, R.Radius*2, target.pos,target)
 		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
 		if(count == 1) then
 			ignoreChamp = true
@@ -1005,7 +1026,7 @@ function Annie:Combo()
 		local RBuffer = 30
 		
 		if(target and IsValid(target) and target ~= nil) then
-			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos, target)
 			local bestPos, count, targets = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
 			
 			--Cluster AoE kill check
@@ -1084,7 +1105,7 @@ function Annie:Combo()
 	elseif(currComboMode == COMBO_MODE_ALLIN) then -- Engage with Tibbers and Ignite if we can full combo
 		
 		local RBuffer = 30
-		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos, target)
 		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
 
 		if(self:GetPassiveStacks() == 3) then
@@ -1191,7 +1212,7 @@ function Annie:LastHit()
 		--Prioritize the canon minion if its low
 		if(canonMinion ~= nil) and IsValid(canonMinion) then
 			local QDam = getdmg("Q", canonMinion, myHero)
-			local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
+			local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay+(myHero.pos:DistanceTo(canonMinion.pos)/1400))
 			
 			if ((hp > 0) and (hp + (canonMinion.health*0.05) < QDam) or (canonMinion.health + 5 < QDam)) and shouldLastHit then
 				Control.CastSpell(HK_Q, canonMinion)
@@ -1202,7 +1223,7 @@ function Annie:LastHit()
 			local minion = minions[i]
 			if IsValid(minion) then
 				local QDam = getdmg("Q", minion, myHero)
-				local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
+				local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay+(myHero.pos:DistanceTo(minion.pos)/1400))
 				
 				if ((hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 5 < QDam)) and shouldLastHit then
 					Control.CastSpell(HK_Q, minion)
@@ -1353,7 +1374,7 @@ function Annie:Clear()
 			--Prioritize the canon minion if its low
 			if(canonMinion ~= nil) and IsValid(canonMinion) then
 				local QDam = getdmg("Q", canonMinion, myHero)
-				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
+				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay+(myHero.pos:DistanceTo(canonMinion.pos)/1400))
 				
 				if (hp > 0) and (hp + (canonMinion.health*0.05) < QDam) or (canonMinion.health + 5 < QDam) then
 					Control.CastSpell(HK_Q, canonMinion)
@@ -1365,7 +1386,7 @@ function Annie:Clear()
 				local minion = minions[i]
 				if IsValid(minion) then
 					local QDam = getdmg("Q", minion, myHero)
-					local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
+					local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay+(myHero.pos:DistanceTo(minion.pos)/1400))
 					local AAdmg = _G.SDK.Damage:GetAutoAttackDamage(myHero, minion)
 					if (hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 5 < QDam) then
 						minionTarget = minion
@@ -1419,7 +1440,7 @@ function Annie:KillSteal()
 		local ignoreChamp = false
 		if(self.Menu.Combo.RSettings.DontSoloUlt[target.charName] ~= nil) then
 			if(self.Menu.Combo.RSettings.DontSoloUlt[target.charName]:Value()) then
-				local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius, R.Radius *2, target.pos)
+				local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius, R.Radius *2, target.pos,target)
 				local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
 				if(count == 1) then
 					ignoreChamp = true
@@ -1434,7 +1455,7 @@ function Annie:KillSteal()
 				local RDam = getdmg("R", target, myHero)
 				if(target.health - RDam <= 0) and (myHero.pos:DistanceTo(target.pos) < R.Range + R.Radius - RBuffer) then
 					if(myHero.pos:DistanceTo(target.pos) < R.Range) then
-						local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
+						local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos,target)
 						local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
 						if(count >= 2) then
 							Control.CastSpell(HK_R, bestPos)
@@ -1716,10 +1737,15 @@ function Annie:NinjaCombo()
 	if(target and target.valid and IsValid(target)) then
 	
 		if(shouldNinja) then
-		
 			local RBuffer = 30
-			local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius + flashRange + 1000, R.Radius*2 -RBuffer, target.pos)
-			local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
+			local searchrange=(R.Range + R.Radius -RBuffer)
+			if canFlash then
+				searchrange=(R.Range + R.Radius +flashRange - RBuffer)
+			end		
+
+			local nearbyEnemies = GetEnemiesAtPos(searchrange, R.Radius*2 -RBuffer, target.pos,target)
+			local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius-RBuffer, true)
+
 			if(flashSlot ~= nil and canFlash) then
 				if(myHero.pos:DistanceTo(bestPos) < R.Range + flashRange -40) and (myHero.pos:DistanceTo(target.pos) > R.Range) then
 					
