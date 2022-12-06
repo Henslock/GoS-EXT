@@ -7,7 +7,7 @@ require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 
-scriptVersion = 1.10
+scriptVersion = 1.12
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -702,9 +702,6 @@ function Annie:LoadMenu()
 	self.Menu = MenuElement({type = MENU, id = "KillerAnnie", name = "Killer Annie", leftIcon = AnnieIcon})
 	self.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 	
-	-- Passive Logic
-	self.Menu:MenuElement({id = "PassiveLogic", name = "Passive Mode",  value = 2, drop = {"Hold on Passive", "3 Stacks and Use Surprise E"}})
-	
 	-- Combo
 	self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
 	if(myHero:GetSpellData(SUMMONER_1).name == "SummonerDot") or (myHero:GetSpellData(SUMMONER_2).name == "SummonerDot") then
@@ -732,21 +729,23 @@ function Annie:LoadMenu()
 	
 	--Ninja Combo
 	self.Menu.Combo.NinjaCombo:MenuElement({id = "UseFlash", name = "Use Smart Flash", value = true})
+	self.Menu.Combo.NinjaCombo:MenuElement({id = "RequireStun", name = "Require Stun to Ninja", value = true})
 	self.Menu.Combo.NinjaCombo:MenuElement({id = "Key", name = "Semi-manual Key", key = string.byte("Z")})
 	
 	-- Harass
 	self.Menu:MenuElement({id = "Harass", name = "Harass", type = MENU})
 	self.Menu.Harass:MenuElement({id = "UseQ", name = "Use Q in Harass", value = true})
 	self.Menu.Harass:MenuElement({id = "UseW", name = "Follow up W on Stunned Target", value = true})
-	self.Menu.Harass:MenuElement({id = "LastHit", name = "Last Hit with Q until in Passive Mode", value = true})
-	self.Menu.Harass:MenuElement({id = "HoldQ", name = "Dont Last Hit with Q if in Passive Mode", value = true})
+	self.Menu.Harass:MenuElement({id = "LastHit", name = "Last Hit with Q until you have Passive", value = true})
+	self.Menu.Harass:MenuElement({id = "HoldQ", name = "Dont Last Hit with Q if holding Passive", value = true})
 	self.Menu.Harass:MenuElement({id = "QMana", name = "Q Min Mana", value = 15, min = 0, max = 100, step = 5, identifier = "%"})
 	self.Menu.Harass:MenuElement({id = "WMana", name = "W Min Mana", value = 30, min = 0, max = 100, step = 5, identifier = "%"})
 	
 	-- Last Hit
 	self.Menu:MenuElement({id = "LastHit", name = "Last Hit", type = MENU})
 	self.Menu.LastHit:MenuElement({id = "UseQ", name = "Use Q in Last Hit", value = true})
-	self.Menu.LastHit:MenuElement({id = "HoldQ", name = "Hold Q if in Passive Mode if Champs Nearby", value = true})
+	self.Menu.LastHit:MenuElement({id = "HoldQ", name = "Hold Q if has Passive and if Champs Nearby", value = true})
+	self.Menu.LastHit:MenuElement({id = "TowerFarm", name = "Last Hit under tower regardless of Passive", value = true})
 	self.Menu.LastHit:MenuElement({id = "UseW", name = "Use W in if Q or AA cant kill", value = true})
 	self.Menu.LastHit:MenuElement({id = "WMana", name = "W Last Hit Min Mana", value = 40, min = 0, max = 100, step = 5, identifier = "%"})
 	
@@ -977,7 +976,6 @@ function Annie:Combo()
 	
 	local currComboMode = nil
 	local target = GetTarget(R.Range + R.Radius)
-	local passiveMode = self.Menu.PassiveLogic:Value()
 	
 	if(target == nil or not target.valid or not IsValid(target)) then return end
 	if(myHero.isChanneling) then return end
@@ -1029,7 +1027,7 @@ function Annie:Combo()
 			
 			--Stun check
 			if(count >= self.Menu.Combo.RSettings.RAoECheckStun:Value()) and self:IsHoldingPassiveMode() then
-				if(passiveMode == 2) then
+				if(self:GetPassiveStacks() == 3) then
 					if(myHero.pos:DistanceTo(bestPos) < R.Range) then
 						Control.CastSpell(HK_E)
 						Control.CastSpell(HK_R, bestPos)
@@ -1089,7 +1087,7 @@ function Annie:Combo()
 		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos)
 		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
 
-		if(passiveMode == 2) then
+		if(self:GetPassiveStacks() == 3) then
 			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
 				Control.CastSpell(HK_E)
 				Control.CastSpell(HK_R, bestPos)
@@ -1104,36 +1102,30 @@ function Annie:Combo()
 	
 end
 
-function Annie:IsHoldingPassiveMode() -- Check to see if we meet our passive mode conditions
-	local passiveMode = self.Menu.PassiveLogic:Value()
+function Annie:IsHoldingPassiveMode() -- Check to see if we meet our passive mode conditions; either you have your stun, or you have 3 stacks and an E
 	local isHolding = false
 
-	if(passiveMode == 1) then --Hold on Passive
-		if self:HasStunBuff() then isHolding = true end
-	else
-		if (self:HasStunBuff() or self:GetPassiveStacks() >= 3) then isHolding = true end
-	end
+	if self:HasStunBuff() or (self:GetPassiveStacks() >= 3 and Ready(_E)) then isHolding = true end
 	
 	return isHolding
 end
 
 function Annie:Harass()
-	local passiveMode = self.Menu.PassiveLogic:Value()
 	
 	if(self.Menu.Harass.LastHit:Value() and Ready(_Q)) then
 		if(gameTick > GameTimer()) then return end
-		local shouldLastHit = true
-		if(passiveMode == 1) then
+		
+		local shouldQLastHit = true
+		
+		if(self.Menu.Harass.HoldQ:Value()) then
 			if(self:HasStunBuff()) then
-				shouldLastHit = false
-			end
-		else
-			if(self:GetPassiveStacks() == 3) or (self:HasStunBuff()) then
-				shouldLastHit = false
+				shouldQLastHit = false
+			else
+				shouldQLastHit = true
 			end
 		end
 		
-		if(shouldLastHit) then
+		if(shouldQLastHit) then
 			local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range)
 			for i = 1, #minions do
 				local minion = minions[i]
@@ -1147,26 +1139,17 @@ function Annie:Harass()
 				end
 			end
 		end
+		
 	end
 	
 	-- Q
-	local target = GetTarget(Q.Range) --Extend out of the Q range a little bit
+	local target = GetTarget(Q.Range)
 	if(target ~= nil and IsValid(target)) then
 		
 		if(Ready(_Q) and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
-			if(self.Menu.Harass.HoldQ:Value()) then				
-				if(passiveMode == 1) then --Hold for passive
-					if(self:HasStunBuff()) then
-						Control.CastSpell(HK_Q, target)
-					end
-				else	-- Surpirse E
-					if(self:GetPassiveStacks() == 3) and Ready(_E) then
-						Control.CastSpell(HK_Q, target)
-						Control.CastSpell(HK_E)
-					elseif (self:HasStunBuff()) then
-						Control.CastSpell(HK_Q, target)
-					end
-				end
+			if(self:GetPassiveStacks() == 3) and Ready(_E) then
+				Control.CastSpell(HK_Q, target)
+				Control.CastSpell(HK_E)
 			else
 				Control.CastSpell(HK_Q, target)
 			end
@@ -1184,7 +1167,6 @@ function Annie:LastHit()
 
 	local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) -- Q range is the same as W range
 	local canonMinion = GetCanonMinion(minions)
-	local passiveMode = self.Menu.PassiveLogic:Value()
 	
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
 	
@@ -1194,19 +1176,16 @@ function Annie:LastHit()
 		local shouldLastHit = true
 		
 		if(self.Menu.LastHit.HoldQ:Value()) then
-			if(passiveMode == 1) then
-				if(self:HasStunBuff()) then
-					shouldLastHit = false
-				end
-			else
-				if(self:GetPassiveStacks() == 3) or (self:HasStunBuff()) then
-					shouldLastHit = false
-				end
+		
+			if(self:HasStunBuff()) then
+				shouldLastHit = false
 			end
-			
+	
 			--If we are under tower, we can use our abilities
-			if(IsUnderFriendlyTurret(myHero)) then shouldLastHit = true end
-			if(GetEnemyCount(2000, myHero) == 0) then shouldLastHit= true end
+			if(self.Menu.LastHit.TowerFarm:Value()) then
+				if(IsUnderFriendlyTurret(myHero)) then shouldLastHit = true end
+				if(GetEnemyCount(2000, myHero) == 0) then shouldLastHit= true end
+			end
 		end
 		
 		--Prioritize the canon minion if its low
@@ -1247,6 +1226,7 @@ function Annie:LastHit()
 			end
 		end
 	end
+	
 end
 
 function Annie:Clear()
@@ -1473,7 +1453,7 @@ end
 
 function Annie:AutoE()
 	local mana = (self.Menu.AutoE.EMana:Value() / 100)
-	if not (self.Menu.AutoE.Self:Value() and self.Menu.AutoE.Allies:Value()) then return end
+	if self.Menu.AutoE.Self:Value() == false and self.Menu.AutoE.Allies:Value()==false then return end
 	if not ((myHero.mana / myHero.maxMana) >= (self.Menu.AutoE.EMana:Value() / 100)) then return end
 	if not Ready(_E) then return end
 	
@@ -1484,7 +1464,6 @@ function Annie:AutoE()
 		local eSpell = unit.activeSpell
 		if(eSpell and eSpell.valid and unit.isChanneling) then
 			local delayAmnt = 0
-			
 			if(self.Menu.AutoE.Ignore[unit.charName][eSpell.name]) then
 				if(self.Menu.AutoE.Ignore[unit.charName][eSpell.name]:Value()) then return end --If the enemy is casting a spell we have set to ignore, then don't shield
 			end
@@ -1578,17 +1557,10 @@ function Annie:AutoStack()
 	if(IsInFountain()) then
 		local enemiesNearby = GetEnemyCount(3000, myHero)
 		if(enemiesNearby == 0) then
-			local passiveMode = self.Menu.PassiveLogic:Value()
 			local shouldCast = true
-			
-			if(passiveMode == 1) then
-				if(self:HasStunBuff()) then
-					shouldCast = false
-				end
-			else
-				if(self:GetPassiveStacks() == 3) or (self:HasStunBuff()) then
-					shouldCast = false
-				end
+
+			if(self:HasStunBuff()) then
+				shouldCast = false
 			end
 			
 			if(myHero.mana / myHero.maxMana) >= 0.5 then
@@ -1649,6 +1621,16 @@ function Annie:IsKillable(unit)
 	return isKillable, igniteOverkill
 end
 
+function Annie:HasElectrocute(unit)
+    for i = 0, unit.buffCount do
+        local buff = unit:GetBuff(i)
+        if buff and buff.count>0 and buff.name:lower():find("electrocute.lua") then
+			return true
+        end
+    end
+    return false
+end
+
 function Annie:GetTotalDamage(unit)
 	local totalDmg = 0
 	
@@ -1675,6 +1657,14 @@ function Annie:GetTotalDamage(unit)
 	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerDot" and Ready(SUMMONER_2) then
 		local igniteDmg = 50 + (20 * myHero.levelData.lvl)
 		totalDmg = totalDmg + igniteDmg
+	end
+	
+	if self:HasElectrocute(myHero) then
+		local baseDmg = 30+(150/(17*(myHero.levelData.lvl)))
+		local bonusDmg = (myHero.ap * 0.25)+(myHero.bonusDamage*0.4)
+		local value = baseDmg + bonusDmg 
+		local ElecDmg=_G.SDK.Damage:CalculateDamage(myHero, unit, _G.SDK.DAMAGE_TYPE_MAGICAL , value )
+		totalDmg= totalDmg + ElecDmg
 	end
 	
 	--6655 = Ludens
@@ -1713,7 +1703,11 @@ function Annie:NinjaCombo()
 	end
 	
 	if(Ready(_R) and self:HasTibbers() == false and Ready(_Q) and Ready(_W)) then
-		if self:HasStunBuff() or self:GetPassiveStacks() >= 3 then
+		if(self.Menu.Combo.NinjaCombo.RequireStun:Value()) then
+			if self:HasStunBuff() or (self:GetPassiveStacks() >= 3 and Ready(_E)) then
+				shouldNinja = true
+			end
+		else
 			shouldNinja = true
 		end
 	end
@@ -1730,22 +1724,20 @@ function Annie:NinjaCombo()
 				if(myHero.pos:DistanceTo(bestPos) < R.Range + flashRange -40) and (myHero.pos:DistanceTo(target.pos) > R.Range) then
 					
 					_G.SDK.Orbwalker:SetMovement(false)
+					_G.Control.CastSpell(HK_E)
 					_G.Control.CastSpell(HK_R, bestPos)
 					_G.Control.CastSpell(flashSlot)
-					Control.CastSpell(HK_E)
 					_G.SDK.Orbwalker:SetMovement(true)
 				end
 			end
-			
-			if self:GetPassiveStacks() == 3 then
+		
+			if self:GetPassiveStacks() == 3 and Ready(_E) then
 				Control.CastSpell(HK_E)
 			end
 			
 			
-			if(myHero.pos:DistanceTo(bestPos) < R.Range) then
-				if myHero.pos:DistanceTo(bestPos) < R.Range then
-					Control.CastSpell(HK_R, bestPos)
-				end
+			if(myHero.pos:DistanceTo(bestPos) < R.Range) and Ready(_R) then
+				Control.CastSpell(HK_R, bestPos)
 			end
 			
 		end
@@ -1769,6 +1761,56 @@ function Annie:NinjaCombo()
 	
 end
 
+function Annie:CantKill(unit, kill, ss, aa)
+	--set kill to true if you dont want to waste on undying/revive targets
+	--set ss to true if you dont want to cast on spellshield
+	--set aa to true if ability applies onhit (yone q, ez q etc)
+	
+	for i = 0, unit.buffCount do
+	
+		local buff = unit:GetBuff(i)
+		if buff.name:lower():find("kayler") and buff.count==1 then
+			return true
+		end
+	
+		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
+			return true
+		end
+		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
+			return true
+		end	
+		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
+			return true
+		end			
+		
+		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
+			return true
+		end
+		
+		if (buff.name:lower():find("fioraw") or buff.name:lower():find("pantheone")) and buff.count==1 then
+			return true
+		end
+		
+		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
+			return true
+		end
+		
+		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
+			return true
+		end
+		
+		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
+			return true
+		end	
+	end
+	
+	if HasBuffType(unit, 4) and ss then
+		return true
+	end
+	
+	return false
+end
+
 function Annie:Draw()
 	if myHero.dead then return end
 	
@@ -1782,11 +1824,19 @@ function Annie:Draw()
 	
 	if(self.Menu.Combo.NinjaCombo.Key:Value() and self.Menu.Drawings.DrawNinjaComboStatus:Value()) then
 		if(self:HasTibbers()) then return end
-		DrawCircle(myHero, R.Range + 400, 1, DrawColor(20, 255, 255, 255)) --(Alpha, R, G, B)
+		DrawCircle(myHero, R.Range + R.Radius + 400, 1, DrawColor(20, 255, 255, 255)) --(Alpha, R, G, B)
 		local heroPos = myHero.pos:To2D()
 		
-		if (self:HasStunBuff() or (self:GetPassiveStacks() ==3 and Ready(_E))) and Ready(_R) and self:HasTibbers() == false then
-			DrawText("Ninja: [READY]", 18, heroPos + Vector(-35, 50, 0), DrawColor(255, 55, 250, 110))
+		if Ready(_R) and self:HasTibbers() == false and Ready(_Q) and Ready(_W) then
+			if (self.Menu.Combo.NinjaCombo.RequireStun:Value()) then 
+				if(self:HasStunBuff() or (self:GetPassiveStacks() ==3 and Ready(_E))) then
+					DrawText("Ninja: [READY]", 18, heroPos + Vector(-35, 50, 0), DrawColor(255, 55, 250, 110))
+				else
+					DrawText("Ninja: [NOT READY]", 18, heroPos + Vector(-55, 50, 0), DrawColor(255, 255, 100, 120))
+				end
+			else
+				DrawText("Ninja: [READY]", 18, heroPos + Vector(-35, 50, 0), DrawColor(255, 55, 250, 110))
+			end
 		else
 			DrawText("Ninja: [NOT READY]", 18, heroPos + Vector(-55, 50, 0), DrawColor(255, 255, 100, 120))
 		end
