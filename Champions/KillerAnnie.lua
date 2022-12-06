@@ -504,9 +504,13 @@ local function GetEnemiesAtPos(checkrange, range, pos,target)
     for i = 1, #enemies do 
         local enemy = enemies[i]
         local Range = range * range
-        if GetDistanceSqr(pos, enemy.pos) < Range and IsValid(enemy) then
+        if GetDistanceSqr(pos, enemy.pos) < Range and IsValid(enemy) and enemy ~= target then
 			table.insert(results, enemy)
         end
+		
+		if target then
+			table.insert(results, target)
+		end
     end
     return results
 end
