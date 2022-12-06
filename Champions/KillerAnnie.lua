@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.15
+scriptVersion = 1.16
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -1238,7 +1238,7 @@ function Annie:LastHit()
 		end
 	end
 	
-	if(not Ready(_Q) and Ready(_W) and self.Menu.LastHit.UseW:Value()) or (Ready(_W) and not self.Menu.LastHit.UseQ:Value()) then
+	if(Ready(_Q)==false and Ready(_W) and self.Menu.LastHit.UseW:Value()) then
 		if((myHero.mana / myHero.maxMana) >= (self.Menu.LastHit.WMana:Value() / 100)) then
 			for i = 1, #minions do
 				local minion = minions[i]
@@ -1258,7 +1258,7 @@ end
 
 function Annie:Clear()
 	
-	if(not self.Menu.Clear.UseQ:Value() and not self.Menu.LastHit.UseW:Value()) then return end
+	if(self.Menu.Clear.UseQ:Value() == false and self.Menu.Clear.UseW:Value() == false) then return end
 	if(not Ready(_Q) and not Ready(_W)) then return end
 	
 	local SMART_CLEAR = 1
@@ -1399,7 +1399,7 @@ function Annie:Clear()
 						break
 					end
 					
-					if(hp - QDam >= AAdmg) then
+					if(hp - QDam >= AAdmg) and minion.team == 300 then
 						minionTarget = minion
 					end
 				end
