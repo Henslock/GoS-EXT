@@ -1753,7 +1753,7 @@ function Annie:NinjaCombo()
 			local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius-RBuffer, true)
 
 			if(flashSlot ~= nil and canFlash) then
-				if(myHero.pos:DistanceTo(bestPos) < R.Range + flashRange -40) and (myHero.pos:DistanceTo(target.pos) > R.Range) then
+				if(myHero.pos:DistanceTo(bestPos) < R.Range + flashRange -50) and (myHero.pos:DistanceTo(target.pos) > R.Range) then
 					
 					_G.SDK.Orbwalker:SetMovement(false)
 					_G.Control.CastSpell(HK_E)
@@ -1768,7 +1768,7 @@ function Annie:NinjaCombo()
 			end
 			
 			
-			if(myHero.pos:DistanceTo(bestPos) < R.Range) and Ready(_R) then
+			if(myHero.pos:DistanceTo(bestPos) < R.Range - RBuffer) and Ready(_R) then
 				Control.CastSpell(HK_R, bestPos)
 			end
 			
