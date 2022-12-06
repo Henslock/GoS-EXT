@@ -7,7 +7,7 @@ require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 
-scriptVersion = 1.12
+scriptVersion = 1.13
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -1049,7 +1049,7 @@ function Annie:Combo()
 	end
 	
 	-- Change how we combo based on our dynamic combo mode
-	if(Ready(_Q) and Ready(_W) and Ready(_R) and self:HasTibbers() == false and self:IsKillable(target) and self.Menu.Combo.UseR:Value()) then
+	if(Ready(_Q) and Ready(_W) and Ready(_R) and self:HasTibbers() == false and self:IsKillable(target) and self.Menu.Combo.UseR:Value()) and (self:CantKill(target, true, true, false))==false then
 		if(self.Menu.Combo.RSettings.RStunCheck:Value() and self:IsHoldingPassiveMode()) and ignoreChamp == false then
 			currComboMode = COMBO_MODE_ALLIN
 		elseif(self.Menu.Combo.RSettings.RStunCheck:Value() == false) and ignoreChamp == false then --If we have the setting to not require a stun then we can still all in
@@ -1076,7 +1076,7 @@ function Annie:Combo()
 		
 		--Use R in spam mode if it can kill / stun
 		if(self.Menu.Combo.UseR:Value() and Ready(_R) and self:HasTibbers()==false and myHero.pos:DistanceTo(target.pos) < R.Range and ignoreChamp == false) then
-			if(self:IsKillable(target)) then
+			if(self:IsKillable(target)) and (self:CantKill(target, true, true, false))==false then
 				Control.CastSpell(HK_R, target)
 			end
 		end	
@@ -1428,7 +1428,7 @@ function Annie:KillSteal()
 		end
 		
 		--R KS
-		if(Ready(_R) and self:HasTibbers()== false and self.Menu.KillSteal.UseR:Value()) and ignoreChamp == false then
+		if(Ready(_R) and self:HasTibbers()== false and self.Menu.KillSteal.UseR:Value()) and ignoreChamp == false and (self:CantKill(target, true, true, false))==false then
 			if (Ready(_Q) == false and Ready(_W) == false) then
 				local RBuffer = 30
 				local RDam = getdmg("R", target, myHero)
@@ -1784,6 +1784,10 @@ function Annie:CantKill(unit, kill, ss, aa)
 		end			
 		
 		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
+			return true
+		end
+
+		if  buff.name:lower():find("morganae") and ss and buff.count==1 then
 			return true
 		end
 		
