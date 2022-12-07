@@ -35,11 +35,12 @@ end
 --]]
 
 -- [ AutoUpdate ]
+--[[
+--]]
 
 
 do
     local Version = scriptVersion
-    
     local Files = {
         Lua = {
             Path = SCRIPT_PATH,
@@ -54,7 +55,6 @@ do
     }
     
     local function AutoUpdate()
-
         local function DownloadFile(url, path, fileName)
             DownloadFileAsync(url, path .. fileName, function() end)
             while not FileExist(path .. fileName) do end
@@ -76,11 +76,14 @@ do
         else
             print("| KILLER | Annie Loaded! Enjoy :)")
         end
-    
     end
+	
    AutoUpdate()
 end
 
+
+--[[
+--]]
 ----------------------------------------------------
 --|                   		UTILITY					             |--
 ----------------------------------------------------
