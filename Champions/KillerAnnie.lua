@@ -36,20 +36,20 @@ end
 
 -- [ AutoUpdate ]
 
+
 do
-    
     local Version = scriptVersion
     
     local Files = {
         Lua = {
             Path = SCRIPT_PATH,
             Name = "KillerAnnie.lua",
-            Url = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champions/KillerAnnie.lua"
+            Url = ""
         },
         Version = {
             Path = SCRIPT_PATH,
             Name = "KillerAnnie.version",
-            Url = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champions/KillerAnnie.version"
+            Url = ""
         }
     }
     
@@ -78,11 +78,8 @@ do
         end
     
     end
-    
    AutoUpdate()
-
 end
-
 
 ----------------------------------------------------
 --|                   		UTILITY					             |--
