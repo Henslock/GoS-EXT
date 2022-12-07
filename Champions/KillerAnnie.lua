@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.18
+scriptVersion = 1.19
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -810,7 +810,7 @@ function Annie:Tick()
 	if(MyHeroNotReady()) then return end
 	
 	self:AABlock()
-	
+	self:QStatusUpdate()
 	local mode = GetMode()
 	if(mode == "Combo") then
 		self:Combo()
@@ -853,6 +853,31 @@ function Annie:UpdateComboDamage()
 		
 		dataTick = GameTimer() + 0.5
 	end
+end
+
+local QTick = GameTimer()
+local AnnieQTarg = nil
+local AnnieQActive = false
+
+function Annie:QStatusUpdate()
+
+	local spell = nil
+	if(myHero.activeSpell.name == "AnnieQ") and QTick + 1 < GameTimer() then
+		spell = myHero.activeSpell
+		AnnieQTarg = spell.target
+		local start = Vector(spell.startPos)
+		local endPos = Vector(spell.placementPos)
+		local totalTime = (endPos:DistanceTo(start) / 1400 + spell.windup)
+		QTick = GameTimer() + totalTime
+	end
+	
+	if(QTick > GameTimer()) then
+		AnnieQActive = true
+	else
+		AnnieQTarg = nil
+		AnnieQActive = false
+	end
+
 end
 
 function Annie:HasTibbers()
@@ -1261,7 +1286,8 @@ end
 function Annie:Clear()
 	
 	if(self.Menu.Clear.UseQ:Value() == false and self.Menu.Clear.UseW:Value() == false) then return end
-	if(not Ready(_Q) and not Ready(_W)) then return end
+	if(not Ready(_Q) and not Ready(_W)) then return end	
+	if(myHero.isChanneling) then return end
 	
 	local SMART_CLEAR = 1
 	local SPAM_CLEAR = 2
@@ -1269,7 +1295,7 @@ function Annie:Clear()
 	
 	local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) -- Q range is the same as W range
 	local canonMinion = GetCanonMinion(minions)
-
+	
 	if(clearMode == SPAM_CLEAR) then
 		if(Ready(_Q) and self.Menu.Clear.UseQ:Value()) then
 			
@@ -1308,10 +1334,11 @@ function Annie:Clear()
 			if(canonMinion ~= nil) and IsValid(canonMinion) then
 				local WDam = getdmg("W", canonMinion, myHero)
 				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, W.Delay)
-				
-				if (hp > 0) and (hp + (canonMinion.health*0.08) < WDam) or (canonMinion.health + 10 < WDam) then
-					Control.CastSpell(HK_W, canonMinion)
-					return
+				if(AnnieQActive == false) and (AnnieQTarg ~= canonMinion) then
+					if (hp > 0) and (hp + (canonMinion.health*0.08) < WDam) or (canonMinion.health + 10 < WDam) then
+						Control.CastSpell(HK_W, canonMinion)
+						return
+					end
 				end
 			end
 			
