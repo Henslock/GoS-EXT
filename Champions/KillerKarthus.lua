@@ -41,28 +41,26 @@ end
 --]]
 
 -- [ AutoUpdate ]
---[[ 
 do
     
-    local Version = scriptVersion
-    
+	local Version = scriptVersion
+	local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champions/"
     local Files = {
+	
         Lua = {
             Path = SCRIPT_PATH,
             Name = "KillerKarthus.lua",
-            Url = ""
         },
         Version = {
             Path = SCRIPT_PATH,
             Name = "KillerKarthus.version",
-            Url = ""
         }
+		
     }
     
     local function AutoUpdate()
-
-        local function DownloadFile(url, path, fileName)
-            DownloadFileAsync(url, path .. fileName, function() end)
+        local function DownloadFile(path, fileName)
+            DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
             while not FileExist(path .. fileName) do end
         end
         
@@ -73,23 +71,19 @@ do
             return result
         end
         
-        DownloadFile(Files.Version.Url, Files.Version.Path, Files.Version.Name)
+        DownloadFile(Files.Version.Path, Files.Version.Name)
         local textPos = myHero.pos:To2D()
         local NewVersion = tonumber(ReadFile(Files.Version.Path, Files.Version.Name))
         if NewVersion > Version then
-            DownloadFile(Files.Lua.Url, Files.Lua.Path, Files.Lua.Name)
+            DownloadFile(Files.Lua.Path, Files.Lua.Name)
             print("New Killer Karthus Version - Please reload with F6")
         else
             print("| KILLER | Karthus Loaded! Enjoy :)")
         end
-    
     end
-    
-   --AutoUpdate()
-
+	
+   AutoUpdate()
 end
---]]
-
 ----------------------------------------------------
 --|                   		UTILITY					             |--
 ----------------------------------------------------
@@ -802,6 +796,7 @@ end
 
 function Karthus:LastHit()
 	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
+	if(myHero.isChanneling) then return end
 	
 	if(self:CanQ() and self.Menu.LastHit.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.LastHit.QMana:Value() / 100)) then
 	    local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range)
@@ -993,14 +988,14 @@ function Karthus:AutoRCheck()
 	if (self.Menu.AutoR.AutoRDead:Value() and HasBuff(myHero, PassiveBuff) and Ready(_R)) then
 		for k, v in pairs(UltableChamps) do
 			if(v.killable) then
-				Control.CastSpell(HK_R)
+				DelayAction(function () Control.CastSpell(HK_R) end, 0.25)
 				break
 			end
 		end
 	end
 	
 	--Alive check
-	local enemiesNearby = GetEnemyCount(1200, myHero)
+	local enemiesNearby = GetEnemyCount(1750, myHero)
 	if (self.Menu.AutoR.AutoRAlive:Value() and Ready(_R) and enemiesNearby == 0 and not IsUnderTurret(myHero)) then
 		for k, v in pairs(UltableChamps) do
 			if(v.killable) then
