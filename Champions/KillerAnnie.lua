@@ -42,25 +42,23 @@ end
 do
     
 	local Version = scriptVersion
-	
+	local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champions/"
     local Files = {
 	
         Lua = {
             Path = SCRIPT_PATH,
             Name = "KillerAnnie.lua",
-            Url = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champions/KillerAnnie.lua"
         },
         Version = {
             Path = SCRIPT_PATH,
             Name = "KillerAnnie.version",
-            Url = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champions/KillerAnnie.version"
         }
 		
     }
     
     local function AutoUpdate()
-        local function DownloadFile(url, path, fileName)
-            DownloadFileAsync(url, path .. fileName, function() end)
+        local function DownloadFile(path, fileName)
+            DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
             while not FileExist(path .. fileName) do end
         end
         
@@ -71,11 +69,11 @@ do
             return result
         end
         
-        DownloadFile(Files.Version.Url, Files.Version.Path, Files.Version.Name)
+        DownloadFile(Files.Version.Path, Files.Version.Name)
         local textPos = myHero.pos:To2D()
         local NewVersion = tonumber(ReadFile(Files.Version.Path, Files.Version.Name))
         if NewVersion > Version then
-            DownloadFile(Files.Lua.Url, Files.Lua.Path, Files.Lua.Name)
+            DownloadFile(Files.Lua.Path, Files.Lua.Name)
             print("New Killer Annie Version - Please reload with F6")
         else
             print("| KILLER | Annie Loaded! Enjoy :)")
