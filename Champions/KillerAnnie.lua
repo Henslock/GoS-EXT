@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.19
+scriptVersion = 1.20
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -649,7 +649,7 @@ local function CalcMagicalDamage(source, target, amount, time)
     
     if target.charName == "Kassadin" then
         dmg = dmg * 0.85
-	elseif target.charName == "Malzahar" and HasBuff(t, "malzaharpassiveshield") then
+	elseif target.charName == "Malzahar" and HasBuff(target, "malzaharpassiveshield") then
 		dmg = dmg * 0.1
     end
     
