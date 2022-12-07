@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.16
+scriptVersion = 1.17
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -1110,15 +1110,15 @@ function Annie:Combo()
 		
 		local RBuffer = 30
 		local nearbyEnemies = GetEnemiesAtPos(R.Range + R.Radius -RBuffer, R.Radius*2 -RBuffer, target.pos, target)
-		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius)
-
+		local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius, true)
+		
 		if(self:GetPassiveStacks() == 3) then
-			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+			if(myHero.pos:DistanceTo(bestPos) < R.Range) then
 				Control.CastSpell(HK_E)
 				Control.CastSpell(HK_R, bestPos)
 			end
 		else
-			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+			if(myHero.pos:DistanceTo(bestPos) < R.Range) then
 				Control.CastSpell(HK_R, bestPos)
 			end
 		end
@@ -1749,12 +1749,11 @@ function Annie:NinjaCombo()
 				searchrange=(R.Range + R.Radius +flashRange - RBuffer)
 			end		
 
-			local nearbyEnemies = GetEnemiesAtPos(searchrange, R.Radius*2 -RBuffer, target.pos,target)
+			local nearbyEnemies = GetEnemiesAtPos(searchrange, R.Radius*2 -RBuffer, target.pos, target)
 			local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius-RBuffer, true)
 
 			if(flashSlot ~= nil and canFlash) then
 				if(myHero.pos:DistanceTo(bestPos) < R.Range + flashRange -50) and (myHero.pos:DistanceTo(target.pos) > R.Range) then
-					
 					_G.SDK.Orbwalker:SetMovement(false)
 					_G.Control.CastSpell(HK_E)
 					_G.Control.CastSpell(HK_R, bestPos)
@@ -1767,8 +1766,7 @@ function Annie:NinjaCombo()
 				Control.CastSpell(HK_E)
 			end
 			
-			
-			if(myHero.pos:DistanceTo(bestPos) < R.Range - RBuffer) and Ready(_R) then
+			if(myHero.pos:DistanceTo(bestPos) < R.Range + RBuffer) and Ready(_R) then
 				Control.CastSpell(HK_R, bestPos)
 			end
 			
