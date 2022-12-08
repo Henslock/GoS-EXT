@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.20
+scriptVersion = 1.21
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -703,17 +703,28 @@ local R = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.25, Radius = 250, Ran
 
 local comboDamageData = {}
 
+--Main Menu
+Annie.Menu = MenuElement({type = MENU, id = "KillerAnnie", name = "Killer Annie", leftIcon = AnnieIcon})
+Annie.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
+
 function Annie:__init()
 	self:LoadMenu()
 	Callback.Add("Tick", function() self:Tick() end)
 	Callback.Add("Draw", function() self:Draw() end)
+	
+	--Load AutoE Champ Spell Toggles
+	DelayAction(function() 
+		for _, enemy in ipairs(Enemies) do
+			self.Menu.AutoE.Ignore[enemy.charName]:MenuElement({id = enemy:GetSpellData(_Q).name, name = "Q", value = false})
+			self.Menu.AutoE.Ignore[enemy.charName]:MenuElement({id = enemy:GetSpellData(_W).name, name = "W", value = false})
+			self.Menu.AutoE.Ignore[enemy.charName]:MenuElement({id = enemy:GetSpellData(_E).name, name = "E", value = false})
+			self.Menu.AutoE.Ignore[enemy.charName]:MenuElement({id = enemy:GetSpellData(_R).name, name = "R", value = false})
+		end
+	end, 0.5)
 end
 
 function Annie:LoadMenu()                     	
-	--Main Menu
-	self.Menu = MenuElement({type = MENU, id = "KillerAnnie", name = "Killer Annie", leftIcon = AnnieIcon})
-	self.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
-	
+
 	-- Combo
 	self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
 	if(myHero:GetSpellData(SUMMONER_1).name == "SummonerDot") or (myHero:GetSpellData(SUMMONER_2).name == "SummonerDot") then
@@ -782,10 +793,12 @@ function Annie:LoadMenu()
 	
 	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
 		self.Menu.AutoE.Ignore:MenuElement({id = args.charName, name = args.charName, type = MENU})
-		self.Menu.AutoE.Ignore[args.charName]:MenuElement({id = args.charName.. "Q", name = "Q", value = false})
-		self.Menu.AutoE.Ignore[args.charName]:MenuElement({id = args.charName.. "W", name = "W", value = false})
-		self.Menu.AutoE.Ignore[args.charName]:MenuElement({id = args.charName.. "E", name = "E", value = false})
-		self.Menu.AutoE.Ignore[args.charName]:MenuElement({id = args.charName.. "R", name = "R", value = false})
+		--[[
+		self.Menu.AutoE.Ignore[args.charName]:MenuElement({id = args:GetSpellData(_Q).name, name = "Q", value = false})
+		self.Menu.AutoE.Ignore[args.charName]:MenuElement({id = args:GetSpellData(_W).name, name = "W", value = false})
+		self.Menu.AutoE.Ignore[args.charName]:MenuElement({id = args:GetSpellData(_E).name, name = "E", value = false})
+		self.Menu.AutoE.Ignore[args.charName]:MenuElement({id = args:GetSpellData(_R).name, name = "R", value = false})
+		--]]
 	end)
 	
 	-- Kill Steal
@@ -827,6 +840,7 @@ function Annie:Tick()
 	self:ManualSpells()
 	self:AutoStack()
 	self:UpdateComboDamage()
+	
 	
 	if(self.Menu.Combo.NinjaCombo.Key:Value()) then
 		self:NinjaCombo()
