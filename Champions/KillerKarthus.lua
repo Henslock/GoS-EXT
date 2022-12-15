@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.06
+scriptVersion = 1.07
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -986,21 +986,32 @@ end
 function Karthus:AutoRCheck()
 	-- Zombie check
 	if (self.Menu.AutoR.AutoRDead:Value() and HasBuff(myHero, PassiveBuff) and Ready(_R)) then
-		for k, v in pairs(UltableChamps) do
-			if(v.killable) then
-				DelayAction(function () Control.CastSpell(HK_R) end, 0.25)
-				break
+		for k, v in pairs(Enemies) do
+			if (v and v.valid and v.alive) then
+				local ultableChamp = UltableChamps[v.name]
+				if(ultableChamp ~= nil) then
+					if(ultableChamp.killable) then
+						DelayAction(function () Control.CastSpell(HK_R) end, 0.25)
+						break
+					end
+				end
 			end
 		end
 	end
-	
-	--Alive check
+
+	--Alive check	
+	if(IsUnderTurret(myHero)) then return end -- Extra check to make sure we don't ult under tower
 	local enemiesNearby = GetEnemyCount(1750, myHero)
 	if (self.Menu.AutoR.AutoRAlive:Value() and Ready(_R) and enemiesNearby == 0 and not IsUnderTurret(myHero)) then
-		for k, v in pairs(UltableChamps) do
-			if(v.killable) then
-				Control.CastSpell(HK_R)
-				break
+		for k, v in pairs(Enemies) do
+			if (v and v.valid and v.alive) then
+				local ultableChamp = UltableChamps[v.name]
+				if(ultableChamp ~= nil) then
+					if(ultableChamp.killable) then
+						Control.CastSpell(HK_R)
+						break
+					end
+				end
 			end
 		end
 	end
