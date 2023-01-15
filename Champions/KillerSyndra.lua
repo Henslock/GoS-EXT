@@ -1477,7 +1477,7 @@ function Syndra:Clear()
 	end
 	
 	--Toss a minion away if its the last one, or just at the last minion
-	if(self.Menu.Clear.UseW:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.WMana:Value() / 100)) then
+	if(self.Menu.Clear.UseW:Value()) then
 		if(myHero:GetSpellData(_W).name == "SyndraWCast") then
 			if(#minions == 0) then
 				Control.CastSpell(HK_W, cursorPos)
@@ -1692,7 +1692,7 @@ function Syndra:SemiManualStun()
 	end
 	
 	
-	if(Ready(_Q) and Ready(_E) and (myHero.mana / myHero.maxMana) >= 0.25) then
+	if(Ready(_Q) and Ready(_E) and (myHero.mana / myHero.maxMana) >= 0.2) then
 		local target = GetTarget(QE.Range - 100)
 		if(target and IsValid(target)) then
 			local QEPrediction = GGPrediction:SpellPrediction(QE)
