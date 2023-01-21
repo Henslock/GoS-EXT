@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -947,7 +947,7 @@ local gameTick = GameTimer()
 Syndra.AutoLevelCheck = false
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.75, Range = 800, Radius = 190, Speed = math.huge, Collision = false}
+local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.7, Range = 800, Radius = 175, Speed = math.huge, Collision = false}
 local W = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.2, Radius = 225, Range = 950, Speed = 1450, Collision = false}
 local E = {Type = GGPrediction.SPELLTYPE_CONE, Delay = 0.25, Radius = 150, Range = 700, Speed = 2500, Collision = false}
 local QE = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 100, Range = 1200, Speed = 2000, Collision = GGPrediction.COLLISION_YASUOWALL}
