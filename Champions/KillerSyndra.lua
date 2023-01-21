@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -289,11 +289,16 @@ local function IsUnderFriendlyTurret(unit)
         local range = (turret.boundingRadius + 750 + unit.boundingRadius / 2)
         if not turret.dead then 
             if turret.pos:DistanceTo(unit.pos) < range then
-                return true
+                return true, turret
             end
         end
     end
     return false
+end
+
+local function GetTurretDamage()
+	local minutes = math.min(Game.Timer()/60, 14)
+	return 162 + (13 * math.floor(minutes))
 end
 
 local function IsInFountain()
@@ -548,6 +553,13 @@ local function AverageClusterPosition(targets)
 	return point
 end
 
+-- 2D dot product of two normalized vectors
+function dotProduct( a, b )
+        -- multiply the x's, multiply the y's, then add
+        local dot = (a.x * b.x + a.z * b.z)
+        return dot
+end
+
 local function CalculateBoundingBoxAvg(targets, predDelay)
 	local highestX, lowestX, highestZ, lowestZ = 0, math.huge, 0, math.huge
 	local avg = {x = 0, y = 0, z = 0}
@@ -688,12 +700,15 @@ end
 
 --This is a helper function that will use GGPrediction to find a suitable area to cast area spells outside of their default range - AKA edge casting
 local function GetExtendedSpellPrediction(target, spellData)
+	local isExtended = false
 	local extendedSpellData = {Type = spellData.Type, Delay = spellData.Delay, Range = spellData.Range + spellData.Radius, Radius = spellData.Radius, Speed = spellData.Speed, Collision = spellData.Collision}
 	local spellPred = GGPrediction:SpellPrediction(extendedSpellData)
 	spellPred:GetPrediction(target, myHero)
-	
 	--Get the extended predicted position, and the cast range of the spell
 	local predVec = Vector(spellPred.CastPosition.x, myHero.pos.y, spellPred.CastPosition.z)
+	if(myHero.pos:DistanceTo(predVec) < spellData.Range) then
+		return spellPred, isExtended
+	end
 	local defaultRangeVec = (predVec - myHero.pos):Normalized() * spellData.Range + myHero.pos
 	
 	--Find the difference between these two points as a vector to create a line, and then find a perpendicular bisecting line at the extended cast position using this line
@@ -714,18 +729,10 @@ local function GetExtendedSpellPrediction(target, spellData)
 	local preciseCircRadius = intVec:DistanceTo(predVec)
 	local preciseSpellData = {Type = spellData.Type, Delay = spellData.Delay, Range = spellData.Range + spellData.Radius, Radius = preciseCircRadius, Speed = spellData.Speed, Collision = spellData.Collision}
 	local preciseSpellPred = GGPrediction:SpellPrediction(preciseSpellData)
+	isExtended = true
 	preciseSpellPred:GetPrediction(target, myHero)
 	
-	--[[
-	--Debug drawings
-	DrawCircle(predVec, spellData.Radius)
-	DrawCircle(defaultRangeVec, spellData.Radius)
-	DrawCircle(halfVec, preciseCircRadius, 1, DrawColor(255, 255, 110, 110))
-	DrawLine(predVec:To2D(), defaultRangeVec:To2D(), 2)
-	DrawLine(negPerp:To2D(), perp:To2D(), 2)
-	--]]
-	
-	return preciseSpellPred
+	return preciseSpellPred, isExtended
 end
 
 class("SpellCast")
@@ -801,6 +808,133 @@ local function OnSpellCast(fn)
     table.insert(SpellCast.OnSpellCastCallback, fn)
 end
 
+class("StrafePred")
+
+StrafePred.WaypointData = {}
+StrafePred.NewPosData = {}
+
+function StrafePred:__init()
+    _G._STAFEPRED_START = true
+    self.OnStrafePredCallback = {}
+    Callback.Add("Tick", function() self:OnTick() end)
+	
+	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
+		local enemyUnit = args.unit
+		self.WaypointData[enemyUnit.handle] = {}
+		self.NewPosData[enemyUnit.handle] = {x = 0, z = 0}
+		
+	end)
+	
+end
+ 
+local waypointLimit = 4
+local strafeMargin = 0.5 --The closer this value is to 1, the more strict the strafe check will be
+local stutterDistMargin = 125
+
+function StrafePred:OnTick()	
+	for _, unit in pairs(Enemies) do
+		if(unit.valid and IsValid(unit)) then
+			if(unit.pathing.hasMovePath) and (self.NewPosData[unit.handle])  then
+				local newPos = self.NewPosData[unit.handle]
+				if(unit.pathing.endPos.x ~= newPos.x and unit.pathing.endPos.z ~= newPos.z ) then
+					self.NewPosData[unit.handle] = unit.pathing.endPos
+					local endPosVec = Vector(unit.pathing.endPos.x, unit.pos.y, unit.pathing.endPos.z)
+					local startPosVec = Vector(unit.pathing.startPos.x, unit.pos.y, unit.pathing.startPos.z)
+					local nVec = Vector(endPosVec - startPosVec):Normalized()
+
+					if(self.WaypointData[unit.handle] ~= nil or self.WaypointData[unit.handle]) then
+						self:AddWaypointData(unit, {nVec, GameTimer(), unit.pos})
+					end
+					
+				end
+			end
+		end
+	end
+	
+end
+
+function StrafePred:AddWaypointData(unit, tbl)
+	local uName = unit.handle
+	for i = #self.WaypointData[uName], 1, -1 do
+		self.WaypointData[uName][i + 1] = self.WaypointData[uName][i]
+	end
+	if(#self.WaypointData[uName] > waypointLimit) then
+		table.remove(self.WaypointData[uName], waypointLimit + 1)
+	end
+	self.WaypointData[uName][1] = tbl
+end
+
+function StrafePred:IsStrafing(tar)
+	local tName = tar.handle
+	if(tar.pathing.hasMovePath == false) then return false end
+	if(self.WaypointData[tName] ~= nil or self.WaypointData[tName]) then
+		if(#self.WaypointData[tName] == waypointLimit) then
+			--Dot product check
+			local res1 = dotProduct(self.WaypointData[tName][1][1], self.WaypointData[tName][2][1])
+			local res2 = dotProduct(self.WaypointData[tName][1][1], self.WaypointData[tName][3][1])
+			local res3 = dotProduct(self.WaypointData[tName][1][1], self.WaypointData[tName][4][1])
+			local timebetweenWaypoints = self.WaypointData[tName][1][2] - self.WaypointData[tName][2][2] -- Time between waypoint update
+			local lastWaypointTime = GameTimer() - self.WaypointData[tName][1][2] --Time between last waypoint and game time
+			
+			local pos1 = self.WaypointData[tName][1][3]
+			local pos2 = self.WaypointData[tName][2][3]
+			local pos3 = self.WaypointData[tName][3][3]
+			local pos4 = self.WaypointData[tName][4][3]
+			local avgPos = (pos1+pos2+pos3+pos4)/4
+
+			if(res1 <= -strafeMargin and res2 >= strafeMargin and res3 <= -strafeMargin and timebetweenWaypoints <= 0.70 and lastWaypointTime <= 0.7) then
+				return true, avgPos
+			else
+				return false
+			end
+		end
+	else
+		return false
+	end
+	
+	return false
+end
+
+function StrafePred:IsStutterDancing(tar)
+	local tName = tar.handle
+	if(tar.pathing.hasMovePath == false) then return false end
+	if(self.WaypointData[tName] ~= nil or self.WaypointData[tName]) then
+		if(#self.WaypointData[tName] == waypointLimit) then
+
+			local pos1 = self.WaypointData[tName][1][3]
+			local pos2 = self.WaypointData[tName][2][3]
+			local pos3 = self.WaypointData[tName][3][3]
+			local pos4 = self.WaypointData[tName][4][3]
+			local avgPos = (pos1+pos2+pos3+pos4)/4
+			
+			--[[
+			DrawCircle((pos1), 5, 20)
+			DrawCircle((pos2), 5, 20)
+			DrawCircle((pos3), 5, 20)
+			DrawCircle((pos4), 5, 20)
+			DrawCircle(avgPos, 5, 20, DrawColor(255, 255, 0, 0))
+			--]]
+			local timebetweenWaypoints = self.WaypointData[tName][1][2] - self.WaypointData[tName][2][2] -- Time between waypoint update
+			local lastWaypointTime = GameTimer() - self.WaypointData[tName][1][2] --Time between last waypoint and game time
+			
+			if(tar.pos:DistanceTo(avgPos) <= stutterDistMargin and tar.pos:DistanceTo(pos4) <= stutterDistMargin and timebetweenWaypoints <= 0.90 and lastWaypointTime <= 1 ) then
+				return true, avgPos
+			end
+		end
+	else
+		return false
+	end
+	
+	return false
+end
+
+local function OnChampStrafe(fn)
+    if not _STAFEPRED_START then
+        _G.StrafePred = StrafePred()
+    end
+    table.insert(StrafePred.OnStrafePredCallback, fn)
+end
+
 ----------------------------------------------------
 --|                Champion               		|--
 ----------------------------------------------------
@@ -813,13 +947,13 @@ local gameTick = GameTimer()
 Syndra.AutoLevelCheck = false
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.6, Range = 800, Radius = 190, Speed = math.huge, Collision = false}
+local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.75, Range = 800, Radius = 190, Speed = math.huge, Collision = false}
 local W = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.2, Radius = 225, Range = 950, Speed = 1450, Collision = false}
 local E = {Type = GGPrediction.SPELLTYPE_CONE, Delay = 0.25, Radius = 150, Range = 700, Speed = 2500, Collision = false}
-local QE = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 100, Range = 1100, Speed = 2000, Collision = GGPrediction.COLLISION_YASUOWALL}
+local QE = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 100, Range = 1200, Speed = 2000, Collision = GGPrediction.COLLISION_YASUOWALL}
 local R = {Range = 675, Collision = GGPrediction.COLLISION_YASUOWALL}
 
-local QPremium = {speed = math.huge, range = 800, delay = 0.6, radius = 210, collision = {nil}, type = "circular"}
+local QPremium = {speed = math.huge, range = 800, delay = 0.7, radius = 210, collision = {nil}, type = "circular"}
 
 --Main Menu
 Syndra.Menu = MenuElement({type = MENU, id = "KillerSyndra", name = "Killer Syndra", leftIcon = SyndraIcon})
@@ -858,9 +992,10 @@ function Syndra:__init()
 	self:LoadMenu()
 	Callback.Add("Tick", function() self:Tick() end)
 	Callback.Add("Draw", function() self:Draw() end)
-	
 	--Custom Callbacks
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
+	StrafePred()
+	_G.SDK.Orbwalker:OnPreAttack(function(...) Syndra:OnPreAttack(...) end)
 end
 
 function Syndra:LoadMenu()                     	
@@ -888,6 +1023,7 @@ function Syndra:LoadMenu()
 	self.Menu.LastHit:MenuElement({id = "UseQ", name = "Use Q", value = true})
 	self.Menu.LastHit:MenuElement({id = "QMode", name = "Q Mode",  value = 2, drop = {"Always Last Hit", "Only Last Hit if AA Cant Kill"}})
 	self.Menu.LastHit:MenuElement({id = "PrioritizeCanon", name = "Prioritize Canon Minion", value = true})
+	self.Menu.LastHit:MenuElement({id = "AssistedW", name = "Use W to Farm Under Turret", value = true})
 	self.Menu.LastHit:MenuElement({id = "QMana", name = "Q Min Mana", value = 15, min = 0, max = 100, step = 5, identifier = "%"})
 	
 
@@ -912,6 +1048,7 @@ function Syndra:LoadMenu()
 	self.Menu:MenuElement({id = "Drawings", name = "Draws", type = MENU})
 	self.Menu.Drawings:MenuElement({id = "DrawQ", name = "Draw Q Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawW", name = "Draw W Range", value = true})
+	self.Menu.Drawings:MenuElement({id = "DrawQE", name = "Draw QE Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawKillableTargets", name = "Draw Killable Targets", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawChampTracker", name = "Draw Champ Tracker", value = true})
 	self.Menu.Drawings:MenuElement({id = "Debug", name = "Debug Drawings", type = MENU})
@@ -942,6 +1079,7 @@ function Syndra:LoadMenu()
 		end
 	end)
 end
+
 
 function Syndra:Tick()
 	if(MyHeroNotReady()) then return end
@@ -976,6 +1114,12 @@ function Syndra:Tick()
 	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
 		self:AutoLevel()
 	end	
+end
+
+function Syndra:OnPreAttack(args)
+    if GetMode()=="Combo" and (Ready(_Q) or Ready(_W)) then
+        args.Process = false
+    end
 end
 
 -- Make sure we don't have duplicate orbs in our database
@@ -1036,6 +1180,7 @@ function Syndra:UpdateOrbs()
 		end
 	end
 end
+
 
 function Syndra:OnSpellCast(spell)
 	if spell.name == "SyndraQ" or spell.name == "SyndraQUpgrade" then
@@ -1136,17 +1281,13 @@ function Syndra:Combo()
 		local target = GetTarget(Q.Range + Q.Radius*2)
 		if(target ~= nil and IsValid(target)) then
 		
-			if(myHero.pos:DistanceTo(target.pos) <= Q.Range) then
-				local QPrediction = GGPrediction:SpellPrediction(Q)
-				QPrediction:GetPrediction(target, myHero)
+			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius*2) then
+
+				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
 				if QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
 					Control.CastSpell(HK_Q, QPrediction.CastPosition)
 				end
-			elseif(myHero.pos:DistanceTo(target.pos) > Q.Range and myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius*2) then
-				local QExtendedPrediction = GetExtendedSpellPrediction(target, Q)
-				if QExtendedPrediction:CanHit(3) then
-					Control.CastSpell(HK_Q, QExtendedPrediction.CastPosition)
-				end
+		
 			end
 		end
 	end
@@ -1195,8 +1336,8 @@ function Syndra:Combo()
 						if isOnSegment then
 							local distCheck = GetDistance(finalPos, point)
 							if distCheck < QE.Radius then
-								Control.Move(myHero.pos)
 								Control.CastSpell(HK_E, QEPrediction.CastPosition)
+								gameTick = GameTimer() + 0.2
 								return
 							end
 						end
@@ -1256,19 +1397,13 @@ function Syndra:Harass()
 	if(Ready(_Q) and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
 		local target = GetTarget(Q.Range + Q.Radius*2) 
 		if(target ~= nil and IsValid(target)) then
-			if(myHero.pos:DistanceTo(target.pos) <= Q.Range) then
-				local QPrediction = GGPrediction:SpellPrediction(Q)
-				QPrediction:GetPrediction(target, myHero)
+			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius*2) then
+
+				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
 				if QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
 					Control.CastSpell(HK_Q, QPrediction.CastPosition)
-					return
 				end
-			elseif(myHero.pos:DistanceTo(target.pos) > Q.Range and myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius*2) then
-				local QExtendedPrediction = GetExtendedSpellPrediction(target, Q)
-				if QExtendedPrediction:CanHit(3) then
-					Control.CastSpell(HK_Q, QExtendedPrediction.CastPosition)
-					return
-				end
+		
 			end
 		end
 	end
@@ -1307,8 +1442,66 @@ function Syndra:LastHit()
 	local minions = _G.SDK.ObjectManager:GetEnemyMinions(W.Range) --Just do 1 check for optimization
 	local canonMinion = GetCanonMinion(minions)
 	
+	if(#minions == 0) then
+		if(myHero:GetSpellData(_W).name == "SyndraWCast") then
+			Control.CastSpell(HK_W)
+		end
+	end
+	
+	--Assisted W for farming under tower
+	if(self.Menu.LastHit.AssistedW:Value()) then
+		if(Ready(_W) and (myHero.mana / myHero.maxMana) >= (self.Menu.LastHit.QMana:Value() / 100)) then
+			for i = 1, #minions do
+				local minion = minions[i]
+				if IsValid(minion) and myHero.pos:DistanceTo(minion.pos) <= Q.Range then -- Normally i'd do W range here, but for sake of consistent range I am just sticking with Q
+					--Under tower last hitting
+					local isUnderTurret, turretUnit = IsUnderFriendlyTurret(minion)
+					if(isUnderTurret) then
+						if(turretUnit.targetID == minion.networkID) then
+						
+							if(myHero:GetSpellData(_W).name == "SyndraWCast") then
+								Control.CastSpell(HK_W, minion)
+							end
+							--Active turret target
+							local QDam = getdmg("Q", minion, myHero)
+							local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
+							local turrDmg = (GetTurretDamage())
+							
+							--Check if our Q is up
+							if(Ready(_Q) == false and myHero:GetSpellData(_Q).currentCd >= 0.6) then
+								if(hp - turrDmg <= 0 and minion.health - myHero.totalDamage > 0) then
+									if(myHero:GetSpellData(_W).name == "SyndraW") then
+										Control.CastSpell(HK_W, minion)
+									end
+								end
+							end
+							
+							--Use W if our Q wont kill the minion but the turret will
+							if(Ready(_Q)) then
+								if(hp - QDam > 0 and hp - turrDmg <= 0 ) then
+									if(myHero:GetSpellData(_W).name == "SyndraW") then
+										Control.CastSpell(HK_W, minion)
+									end
+								end
+							end
+						else
+							local turrDmg = (GetTurretDamage())
+							if(minion.health - turrDmg > 0 and minion.health - turrDmg < myHero.totalDamage*2) then
+								_G.SDK.Orbwalker:Attack(minion)
+							end
+						end
+					else
+						--For instances where you are holding a minion and the others arent under tower
+						if(myHero:GetSpellData(_W).name == "SyndraWCast") then
+							Control.CastSpell(HK_W, minion)
+						end
+					end	
+				end
+			end
+		end
+	end
+	
 	if(Ready(_Q) and self.Menu.LastHit.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.LastHit.QMana:Value() / 100)) then
-		
 		--Prioritize the canon minion if its low
 		if(self.Menu.LastHit.PrioritizeCanon:Value()) then
 			if(canonMinion ~= nil) and IsValid(canonMinion) and myHero.pos:DistanceTo(canonMinion.pos) <= Q.Range then
@@ -1318,7 +1511,7 @@ function Syndra:LastHit()
 					local QDam = getdmg("Q", canonMinion, myHero)
 					local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
 					
-					if ((hp > 0) and (hp + (canonMinion.health*0.07) < QDam)) then
+					if ((hp > 0) and (hp + canonMinion.health*0.07 - QDam <= 0)) then
 						Control.CastSpell(HK_Q, prediction.CastPos)
 					end
 				end
@@ -1327,20 +1520,37 @@ function Syndra:LastHit()
 		end
 		
 		if(self.Menu.LastHit.QMode:Value() == 1) or IsUnderFriendlyTurret(myHero) then 
-		--Always LastHit
-			
+			--Always LastHit
 			for i = 1, #minions do
 				local minion = minions[i]
 				if IsValid(minion) and myHero.pos:DistanceTo(minion.pos) <= Q.Range then
-					local prediction = _G.PremiumPrediction:GetPrediction(myHero, minion, QPremium)
-					if prediction.CastPos and prediction.HitChance >= 0.15 then
-						local QDam = getdmg("Q", minion, myHero)
-						local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
-						
-						if ((hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 5 < QDam)) then
-							Control.CastSpell(HK_Q, prediction.CastPos)
+				
+					--Under tower last hitting
+					local isUnderTurret, turretUnit = IsUnderFriendlyTurret(minion)
+					if(isUnderTurret) then
+						if(turretUnit.targetID == minion.networkID) then
+							--Active turret target
+							local QDam = getdmg("Q", minion, myHero)
+							local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
+							local turrDmg = (GetTurretDamage())
+							
+							--If a Q will kill the target, do it.
+							if ((hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 5 < QDam)) then
+								Control.CastSpell(HK_Q, minion)
+							end
+						end
+					else
+						local prediction = _G.PremiumPrediction:GetPrediction(myHero, minion, QPremium)
+						if prediction.CastPos and prediction.HitChance >= 0.15 then
+							local QDam = getdmg("Q", minion, myHero)
+							local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
+							
+							if ((hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 5 < QDam)) then
+								Control.CastSpell(HK_Q, prediction.CastPos)
+							end
 						end
 					end
+					
 				end
 			end
 			
@@ -1383,12 +1593,10 @@ function Syndra:LastHit()
 						end
 					end
 				end
-				
 			end
-			
 		end
-		
 	end
+	
 end
 
 function Syndra:Clear()
@@ -1685,42 +1893,117 @@ end
 
 function Syndra:SemiManualStun()
 	
-	local canOrbWalker = true
+	_G.SDK.Orbwalker:Orbwalk()
 	
-	if(Ready(_Q) == false and Ready(_E) == true) then
-		canOrbWalker = false
-	end
-	
-	
-	if(Ready(_Q) and Ready(_E) and (myHero.mana / myHero.maxMana) >= 0.2) then
-		local target = GetTarget(QE.Range - 100)
-		if(target and IsValid(target)) then
-			local QEPrediction = GGPrediction:SpellPrediction(QE)
-			QEPrediction:GetPrediction(target, myHero)
-			if QEPrediction:CanHit(2) then
-				local finalPos = QEPrediction.CastPosition
-				
-				if(myHero.pos:DistanceTo(target.pos) >= myHero.range) then
-					local Qvec = Vector(QEPrediction.CastPosition.x, myHero.pos.y, QEPrediction.CastPosition.z)
-					local QDirVec = (Qvec - myHero.pos):Normalized() * Q.Range /2
-					finalPos = QDirVec + myHero.pos
-				end
-				Control.Move(myHero.pos)
-				Control.CastSpell(HK_Q, finalPos)
-				canOrbWalker = false
-				DelayAction(function()
-					if(Ready(_Q) == false) then
-						Control.CastSpell(HK_E, QEPrediction.CastPosition)
-						canOrbWalker = true
+	if(gameTick > GameTimer()) then return end	
+
+	--First check for existing orbs
+	if(Ready(_E) and (myHero.mana / myHero.maxMana) >= 0.2) then
+		local target = GetTarget(QE.Range) 
+		if(target ~= nil and IsValid(target)) then
+
+			for _, orb in pairs(self.OrbData) do
+				if(myHero.pos:DistanceTo(orb.orbObj.pos) < E.Range and myHero.pos:DistanceTo(orb.orbObj.pos) >= 175) then --Don't try to E orbs we are directly on top of, massive accuracy issues
+					local trueOrbPos = self:GetTrueOrbPos(orb.orbObj)
+					local dirVec = (trueOrbPos - myHero.pos):Normalized() * QE.Range
+					local finalVec = myHero.pos + dirVec
+					
+					--First check strafing/stutter dancing
+					local isStrafing, avgPos = StrafePred:IsStrafing(target)
+					local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
+					if(isStrafing or isStutterDancing) then
+						local finalPos = 0
+						if(avgPos2 ~= nil) then 
+							finalPos = avgPos2
+						else
+							finalPos = avgPos
+						end
+						local point, isOnSegment = ClosestPointOnLineSegment(finalPos, myHero.pos, finalVec)						
+						if isOnSegment then
+							local distCheck = GetDistance(finalPos, point)
+							if distCheck < QE.Radius then
+								Control.CastSpell(HK_E, finalPos)
+								gameTick = GameTimer() + 0.2
+								return
+							end
+						end
 					end
-				end, 0.15)
+					
+					local QEPrediction = GGPrediction:SpellPrediction(QE)
+					QEPrediction:GetPrediction(target, myHero)
+					if QEPrediction:CanHit(2) then
+						local finalPos = QEPrediction.CastPosition
+						local point, isOnSegment = ClosestPointOnLineSegment(finalPos, myHero.pos, finalVec)						
+						if isOnSegment then
+							local distCheck = GetDistance(finalPos, point)
+							if distCheck < QE.Radius then
+								Control.CastSpell(HK_E, QEPrediction.CastPosition)
+								gameTick = GameTimer() + 0.2
+								return
+							end
+						end
+					end
+				end
 			end
 		end
 	end
 	
-	if(canOrbWalker) then
-		_G.SDK.Orbwalker:Orbwalk()
+	--If Q and E are up, place a Q in our path so we can E follow up
+	if(Ready(_Q) and Ready(_E) and (myHero.mana / myHero.maxMana) >= 0.2) then
+		local target = GetTarget(QE.Range - 100)
+		if(target and IsValid(target)) then
+			--Start by predicting your own movement
+			local myHeroQE = QE
+			myHeroQE.Delay = 0.15
+			local MePred = GGPrediction:SpellPrediction(myHeroQE)
+			MePred:GetPrediction(myHero, myHero)
+			if(MePred.CastPosition) then
+				local myHeroCalcPos = Vector(MePred.CastPosition.x, myHero.pos.y, MePred.CastPosition.z)
+				
+				local QESpecial = QE
+				QESpecial.Delay = 0.60 --Preorbs have a larger delay before they start moving, hacky fix
+				local QEPrediction = GGPrediction:SpellPrediction(QESpecial)
+				QEPrediction:GetPrediction(target, myHeroCalcPos)
+				
+				local isStrafing, avgPos = StrafePred:IsStrafing(target)
+				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
+				if(isStrafing or isStutterDancing) then
+					local finalPos = 0
+					if(avgPos2 ~= nil) then 
+						finalPos = avgPos2
+					else
+						finalPos = avgPos
+					end
+					if(myHeroCalcPos:DistanceTo(target.pos) >= myHero.range) then
+						local Qvec = Vector(finalPos.x, myHero.pos.y, finalPos.z)
+						local QDirVec = (Qvec - myHeroCalcPos):Normalized() * Q.Range /2
+						finalPos = QDirVec + myHeroCalcPos
+					end
+					Control.CastSpell(HK_Q, finalPos)
+					DelayAction(function()
+						Control.CastSpell(HK_E, finalPos)
+						return
+					end, 0.15)
+				end
+				
+				if QEPrediction.CastPosition then
+					local finalPos = QEPrediction.CastPosition
+					if(myHeroCalcPos:DistanceTo(target.pos) >= myHero.range) then
+						local Qvec = Vector(QEPrediction.CastPosition.x, myHero.pos.y, QEPrediction.CastPosition.z)
+						local QDirVec = (Qvec - myHeroCalcPos):Normalized() * Q.Range /2
+						finalPos = QDirVec + myHeroCalcPos
+					end
+					Control.CastSpell(HK_Q, finalPos)
+					DelayAction(function()
+						Control.CastSpell(HK_E, finalPos)
+						return
+					end, 0.15)
+				end
+				
+			end
+		end
 	end
+	
 end
 
 function Syndra:SmartAABlock()
@@ -1921,6 +2204,10 @@ function Syndra:Draw()
 		DrawCircle(myHero, W.Range, 1, DrawColor(50, 150, 65, 215)) --(Alpha, R, G, B)
 	end
 	
+	if(self.Menu.Drawings.DrawQE:Value()) then
+		DrawCircle(myHero, QE.Range, 1, DrawColor(40, 195, 85, 1155)) --(Alpha, R, G, B)
+	end
+	
 	if(self.Menu.Drawings.DrawChampTracker:Value()) then
 		-- Draw lines connecting to enemy champions
 		for k, v in pairs(Enemies) do
@@ -1997,6 +2284,15 @@ function Syndra:DrawOrbs()
 end
 
 function Syndra:DrawELines()
+	for _, preorbs in pairs(self.PreOrbData) do
+		local orb = preorbs[1]
+		if(myHero.pos:DistanceTo(orb.pos) < E.Range) then
+			local dirVec = (orb.pos - myHero.pos):Normalized() * QE.Range
+			local finalVec = myHero.pos + dirVec
+			DrawLine(orb.pos:To2D(), finalVec:To2D(), 1, DrawColor(140, 215, 25, 255))
+		end
+	end
+	
 	for _, orb in pairs(self.OrbData) do
 		if(myHero.pos:DistanceTo(orb.orbObj.pos) < E.Range) then
 			local newOrbsPos = self:GetTrueOrbPos(orb.orbObj)
