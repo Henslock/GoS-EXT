@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -1286,13 +1286,17 @@ function Syndra:Combo()
 				local isStrafing, avgPos = StrafePred:IsStrafing(target)
 				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
 				if(isStrafing) then
-					Control.CastSpell(HK_Q, avgPos)
-					return
+					if(avgPos:DistanceTo(myHero.pos) < Q.Range + Q.Radius) then
+						Control.CastSpell(HK_Q, avgPos)
+						return
+					end
 				end
 				
 				if(isStutterDancing) then
-					Control.CastSpell(HK_Q, avgPos2)
-					return
+					if(avgPos2:DistanceTo(myHero.pos) < Q.Range + Q.Radius) then
+						Control.CastSpell(HK_Q, avgPos2)
+						return
+					end
 				end
 				
 				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
@@ -1411,20 +1415,24 @@ function Syndra:Harass()
 	
 	-- Q
 	if(Ready(_Q) and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
-		local target = GetTarget(Q.Range + Q.Radius*2) 
+		local target = GetTarget(Q.Range + Q.Radius) 
 		if(target ~= nil and IsValid(target)) then
 			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius) then
 			
 				local isStrafing, avgPos = StrafePred:IsStrafing(target)
 				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
 				if(isStrafing) then
-					Control.CastSpell(HK_Q, avgPos)
-					return
+					if(avgPos:DistanceTo(myHero.pos) < Q.Range + Q.Radius) then
+						Control.CastSpell(HK_Q, avgPos)
+						return
+					end
 				end
 				
 				if(isStutterDancing) then
-					Control.CastSpell(HK_Q, avgPos2)
-					return
+					if(avgPos2:DistanceTo(myHero.pos) < Q.Range + Q.Radius) then
+						Control.CastSpell(HK_Q, avgPos2)
+						return
+					end
 				end
 				
 				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
