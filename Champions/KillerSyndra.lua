@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.03
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -1037,7 +1037,6 @@ function Syndra:LoadMenu()
 	-- Kill Steal
 	self.Menu:MenuElement({id = "KillSteal", name = "Kill Steal", type = MENU})
 	self.Menu.KillSteal:MenuElement({id = "UseR", name = "Use R", value = true})
-	self.Menu.KillSteal:MenuElement({id = "UseQ", name = "Use Q", value = true})
 	self.Menu.KillSteal:MenuElement({id = "RBlacklist", name = "R Killsteal Blacklist (Unless Solo)", type = MENU})
 
 	self.Menu:MenuElement({id = "EInterrupter", name = "E Interrupter", type = MENU})
@@ -1281,11 +1280,25 @@ function Syndra:Combo()
 		local target = GetTarget(Q.Range + Q.Radius*2)
 		if(target ~= nil and IsValid(target)) then
 		
-			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius*2) then
-
+			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius) then
+				
+				
+				local isStrafing, avgPos = StrafePred:IsStrafing(target)
+				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
+				if(isStrafing) then
+					Control.CastSpell(HK_Q, avgPos)
+					return
+				end
+				
+				if(isStutterDancing) then
+					Control.CastSpell(HK_Q, avgPos2)
+					return
+				end
+				
 				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
 				if QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
 					Control.CastSpell(HK_Q, QPrediction.CastPosition)
+					return
 				end
 		
 			end
@@ -1298,7 +1311,7 @@ function Syndra:Combo()
 		if(target ~= nil and IsValid(target)) then
 			if(myHero:GetSpellData(_W).name == "SyndraW") then
 				local obj = self:GetGrabObject()
-				if(obj ~= nil) then
+				if(obj ~= nil and myHero.pos:DistanceTo(obj.pos) < W.Range - 25) then
 					Control.CastSpell(HK_W, obj.pos)
 					gameTick = GameTimer() + 0.05 -- To prevent you from casting W at your mouse cursor instead of target
 					return
@@ -1307,6 +1320,7 @@ function Syndra:Combo()
 				end
 				
 			elseif(myHero:GetSpellData(_W).name == "SyndraWCast") then
+			
 				local WPrediction = GGPrediction:SpellPrediction(W)
 				WPrediction:GetPrediction(target, myHero)
 				if WPrediction.CastPosition and WPrediction:CanHit(self.Menu.Prediction.WHitChance:Value()) then
@@ -1380,15 +1394,17 @@ function Syndra:Harass()
 	
 	
 	if(self.Menu.Harass.QCanon:Value()) then
-		local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) -- Q range is the same as W range
-		local canonMinion = GetCanonMinion(minions)
-		--Prioritize the canon minion if its low
-		if(canonMinion ~= nil) and IsValid(canonMinion) then
-			local QDam = getdmg("Q", canonMinion, myHero)
-			local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
-			
-			if ((hp > 0) and (hp + (canonMinion.health*0.05) < QDam) or (canonMinion.health + 5 < QDam)) then
-				Control.CastSpell(HK_Q, canonMinion)
+		if(Ready(_Q)) then
+			local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) -- Q range is the same as W range
+			local canonMinion = GetCanonMinion(minions)
+			--Prioritize the canon minion if its low
+			if(canonMinion ~= nil) and IsValid(canonMinion) then
+				local QDam = getdmg("Q", canonMinion, myHero)
+				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
+				
+				if ((hp > 0) and (hp + (canonMinion.health*0.05) < QDam) or (canonMinion.health + 5 < QDam)) then
+					Control.CastSpell(HK_Q, canonMinion)
+				end
 			end
 		end
 	end
@@ -1397,8 +1413,20 @@ function Syndra:Harass()
 	if(Ready(_Q) and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
 		local target = GetTarget(Q.Range + Q.Radius*2) 
 		if(target ~= nil and IsValid(target)) then
-			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius*2) then
-
+			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius) then
+			
+				local isStrafing, avgPos = StrafePred:IsStrafing(target)
+				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
+				if(isStrafing) then
+					Control.CastSpell(HK_Q, avgPos)
+					return
+				end
+				
+				if(isStutterDancing) then
+					Control.CastSpell(HK_Q, avgPos2)
+					return
+				end
+				
 				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
 				if QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
 					Control.CastSpell(HK_Q, QPrediction.CastPosition)
@@ -1841,29 +1869,6 @@ function Syndra:KillSteal()
 		end
 	end
 	
-	
-	--Q
-	if(self.Menu.KillSteal.UseQ:Value()) then
-		if(Ready(_Q)) and not myHero.isChanneling then
-			local enemies = GetEnemyHeroes(Q.Range)
-			if(#enemies > 0) then
-				for _, enemy in pairs (enemies) do
-					if(enemy.valid and IsValid(enemy)) then
-						if(self:IsKillable(enemy)) then
-						
-							local QPrediction = GGPrediction:SpellPrediction(Q)
-							QPrediction:GetPrediction(enemy, myHero)
-							if QPrediction:CanHit(2) then
-								Control.CastSpell(HK_Q, QPrediction.CastPosition)
-							end
-							
-						end
-					end
-				end
-			end
-		end
-	end
-	
 end
 
 function Syndra:EInterrupter()
@@ -2124,7 +2129,7 @@ function Syndra:UpdateComboDamage()
 			end
 		end
 		
-		dataTick = GameTimer() + 0.5
+		dataTick = GameTimer() + 0.25
 	end
 end
 
@@ -2135,6 +2140,11 @@ function Syndra:IsKillable(unit)
 
 	if(self.ComboDamageData[unit.networkID] ~= nil) then	
 		local dmg = self.ComboDamageData[unit.networkID]
+		if(self:HasRExecute() == true) then
+			if(unit.health - dmg <= unit.maxHealth*0.15) then
+				isKillable = true
+			end
+		end
 		if(unit.health - dmg <= 0) then
 			isKillable = true
 		end
@@ -2146,6 +2156,15 @@ function Syndra:IsKillable(unit)
 		end
 	end
 	return isKillable, igniteOverkill
+end
+
+function Syndra:HasRExecute()
+	for i = 0, myHero.buffCount do
+		local buff = myHero:GetBuff(i)
+		if(buff.name:lower() == ("syndrapassiverupgrade")) then
+			return true
+		end
+	end
 end
 
 function Syndra:HasElectrocute(unit)
