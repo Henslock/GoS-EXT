@@ -8,7 +8,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-scriptVersion = 1.21
+scriptVersion = 1.22
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -18,26 +18,6 @@ end
 ----------------------------------------------------
 --|                    Checks                    |--
 ----------------------------------------------------
-
---[[
-
-if not FileExist(COMMON_PATH .. "GamsteronPrediction.lua") then
-	DownloadFileAsync("https://raw.githubusercontent.com/gamsteron/GOS-EXT/master/Common/GamsteronPrediction.lua", COMMON_PATH .. "GamsteronPrediction.lua", function() end)
-	print("gamsteronPred. installed Press 2x F6")
-	return
-end
-
-if not FileExist(COMMON_PATH .. "GGPrediction.lua") then
-	DownloadFileAsync("https://raw.githubusercontent.com/gamsteron/GG/master/GGPrediction.lua", COMMON_PATH .. "GGPrediction.lua", function() end)
-	print("GGPrediction installed Press 2x F6")
-	return
-end
---]]
-
--- [ AutoUpdate ]
---[[
---]]
-
 
 do
     
@@ -713,14 +693,15 @@ function Annie:__init()
 	Callback.Add("Draw", function() self:Draw() end)
 	
 	--Load AutoE Champ Spell Toggles
-	DelayAction(function() 
-		for _, enemy in ipairs(Enemies) do
-			self.Menu.AutoE.Ignore[enemy.charName]:MenuElement({id = enemy:GetSpellData(_Q).name, name = "Q", value = false})
-			self.Menu.AutoE.Ignore[enemy.charName]:MenuElement({id = enemy:GetSpellData(_W).name, name = "W", value = false})
-			self.Menu.AutoE.Ignore[enemy.charName]:MenuElement({id = enemy:GetSpellData(_E).name, name = "E", value = false})
-			self.Menu.AutoE.Ignore[enemy.charName]:MenuElement({id = enemy:GetSpellData(_R).name, name = "R", value = false})
-		end
-	end, 0.5)
+	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
+		champName = args.charName
+		enemy = args.unit
+		self.Menu.AutoE.Ignore[champName]:MenuElement({id = enemy:GetSpellData(_Q).name, name = "Q", value = false})
+		self.Menu.AutoE.Ignore[champName]:MenuElement({id = enemy:GetSpellData(_W).name, name = "W", value = false})
+		self.Menu.AutoE.Ignore[champName]:MenuElement({id = enemy:GetSpellData(_E).name, name = "E", value = false})
+		self.Menu.AutoE.Ignore[champName]:MenuElement({id = enemy:GetSpellData(_R).name, name = "R", value = false})
+	end)
+	
 end
 
 function Annie:LoadMenu()                     	
