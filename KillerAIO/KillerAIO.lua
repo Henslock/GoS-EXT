@@ -20,7 +20,9 @@ local scriptVersion = 1.01
 local KILLER_PATH = COMMON_PATH.."KillerAIO/"
 local KILLER_CHAMPS = KILLER_PATH.."Champions/"
 local KILLER_LIB = "KillerLib.lua"
-local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champions/"
+local KILLER_VERSION = "KillerLib.version"
+local KILLER_UPDATER = "KillerChampUpdater.lua"
+local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/KillerAIO/"
 
 local champName = myHero.charName
 local champFile = "Killer"..champName..".lua"
@@ -42,16 +44,45 @@ local function ReadFile(path, fileName)
 	return result
 end
 
+local function DownloadFile(path, fileName)
+	local startTime = os.clock()
+	DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
+	repeat until os.clock() - startTime > 3 or FileExists(path .. fileName)
+end
+
 local function CheckSupportedChamp()
 	local result = FileExists(KILLER_CHAMPS .. champFile)
 	return result
 end
 
+local function InitLibs()
+	local libCheck = FileExists(KILLER_PATH .. KILLER_LIB)
+	local updaterCheck = FileExists(KILLER_PATH .. KILLER_UPDATER)
+	
+	if(libCheck == false) then
+		print("Installing Killer Libs...")
+		DownloadFile(KILLER_PATH, KILLER_LIB)
+		DownloadFile(KILLER_PATH, KILLER_VERSION)
+		return
+	end
+	
+	if(updaterCheck == false) then
+		DownloadFile(KILLER_PATH, KILLER_UPDATER)
+		return
+	end
+end
 
 local function InitKillerAIO()
+	InitLibs()
 	local libCheck = FileExists(KILLER_PATH .. KILLER_LIB)
 	if(libCheck == false) then
 		print("Could not load KillerLib - Exiting!")
+		return
+	end
+	
+	local updaterCheck = FileExists(KILLER_PATH .. KILLER_UPDATER)
+	if(updaterCheck == false) then
+		print("Could not load Killer Champ Updater - Exiting!")
 		return
 	end
 	
@@ -62,7 +93,7 @@ local function InitKillerAIO()
 	end
 end
 	
-Callback.Add("Load", function() 
+Callback.Add("Load", function()
 	InitKillerAIO()
 	_G.Killer = true
 end)
