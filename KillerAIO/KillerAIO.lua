@@ -2,12 +2,7 @@
 
 --[[
 
-Supported Champions:
-- Karthus
-- Annie
-- Syndra
-
-Created by Hightail.
+Created by Hightail
 
 --]]
 
