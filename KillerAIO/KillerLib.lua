@@ -15,10 +15,22 @@ do
 	local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/KillerAIO/"
     
     local function AutoUpdate()
-        local function DownloadFile(path, fileName)
-            DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
-            while not FileExist(path .. fileName) do end
-        end
+	
+		local function FileExists(path)
+			local file = io.open(path, "r")
+			if file ~= nil then 
+				io.close(file) 
+				return true 
+			else 
+				return false 
+			end
+		end
+		
+		local function DownloadFile(path, fileName)
+			local startTime = os.clock()
+			DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
+			repeat until os.clock() - startTime > 3 or FileExists(path .. fileName)
+		end
         
         local function ReadFile(path, fileName)
             local file = io.open(path .. fileName, "r")
