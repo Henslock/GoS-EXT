@@ -22,7 +22,17 @@ do
 	local champFile = "Killer"..champName..".lua"
 	local champVersion = "Killer"..champName..".version"
 	local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/KillerAIO/"
-    
+	
+	local function FileExists(path)
+		local file = io.open(path, "r")
+		if file ~= nil then 
+			io.close(file) 
+			return true 
+		else 
+			return false 
+		end
+	end
+
     local function AutoUpdate()
 		local function DownloadFile(path, fileName)
 			local startTime = os.clock()
