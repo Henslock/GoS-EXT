@@ -4,6 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
+require "KillerAIO\\KillerChampUpdater"
 
 scriptVersion = 1.05
 
