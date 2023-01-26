@@ -50,11 +50,29 @@ local function DownloadFile(path, fileName)
 	repeat until os.clock() - startTime > 3 or FileExists(path .. fileName)
 end
 
-local function CheckSupportedChamp()
-	local result = FileExists(KILLER_CHAMPS .. champFile)
-	return result
+local function TryChampScriptDownload()
+	local startTime = os.clock()
+	DownloadFileAsync(gitHub .. "Champions/" .. champFile, KILLER_CHAMPS .. champFile, function() end)
+	repeat until os.clock() - startTime > 3 or FileExists(KILLER_CHAMPS .. champFile)
+	if(FileExists(KILLER_CHAMPS .. champFile)) then
+		return true
+	else
+		return false
+	end
 end
 
+local function CheckSupportedChamp()
+	local result = FileExists(KILLER_CHAMPS .. champFile)
+	if(result == true) then
+		return result
+	else
+		local tryDownload = TryChampScriptDownload()
+		if(tryDownload) == true then return true end
+		return result
+	end
+end
+
+--Download necessary core files/libraries
 local function InitLibs()
 	local libCheck = FileExists(KILLER_PATH .. KILLER_LIB)
 	local updaterCheck = FileExists(KILLER_PATH .. KILLER_UPDATER)
