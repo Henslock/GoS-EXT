@@ -4,6 +4,39 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
+local kLibVersion = 2.01
+
+-- [ AutoUpdate ]
+do
+
+	local KILLER_PATH = COMMON_PATH.."KillerAIO/"
+	local KILLER_LIB = "KillerLib.lua"
+	local KILLER_VERSION = "KillerLib.version"
+	local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/KillerAIO/"
+    
+    local function AutoUpdate()
+        local function DownloadFile(path, fileName)
+            DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
+            while not FileExist(path .. fileName) do end
+        end
+        
+        local function ReadFile(path, fileName)
+            local file = io.open(path .. fileName, "r")
+            local result = file:read()
+            file:close()
+            return result
+        end
+        
+        DownloadFile(KILLER_PATH, KILLER_VERSION)
+        local NewVersion = tonumber(ReadFile(KILLER_PATH, KILLER_VERSION))
+        if NewVersion > kLibVersion then
+            DownloadFile(KILLER_PATH, KILLER_LIB)
+            print("New Killer Library Update - Please reload with F6")
+        end
+    end
+	
+   AutoUpdate()
+end
 ----------------------------------------------------
 --|                   		UTILITY					             |--
 ----------------------------------------------------
