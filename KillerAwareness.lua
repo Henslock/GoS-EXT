@@ -175,7 +175,7 @@ end
 class "KillerAwareness"
 
 local gameTick = GameTimer()
-local scriptVersion = 1.04
+local scriptVersion = 1.05
 local scriptIcon = "https://www.proguides.com/public/media/rlocal/rune/reforged/thumbnail/8128.png"
 local updateIcon = "https://www.proguides.com/public/media/rlocal/summonerspell/thumbnail/12.png"
 local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/"
