@@ -178,7 +178,7 @@ local gameTick = GameTimer()
 local scriptVersion = 1.04
 local scriptIcon = "https://www.proguides.com/public/media/rlocal/rune/reforged/thumbnail/8128.png"
 local updateIcon = "https://www.proguides.com/public/media/rlocal/summonerspell/thumbnail/12.png"
-local gitHub = ""
+local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/"
 
 TOP_LEFT, BOTTOM_LEFT, TOP_RIGHT, BOTTOM_RIGHT = {x = 0, y = 0}, {x = 0, y = GameResolution.y}, {x = GameResolution.x, y = 0}, {x = GameResolution.x , y = GameResolution.y}
 
@@ -228,7 +228,6 @@ function KillerAwareness:Tick()
 end
 
 function KillerAwareness:DownloadFile(path, fileName)
-	local startTime = os.clock()
 	DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
 end
 
