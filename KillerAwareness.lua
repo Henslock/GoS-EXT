@@ -229,6 +229,7 @@ end
 
 function KillerAwareness:DownloadFile(path, fileName)
 	DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
+	while not FileExist(path .. fileName) do end
 end
 
 
