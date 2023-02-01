@@ -1,11 +1,13 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
+--[[
 local map = Game.mapID
 if(map ~= SUMMONERS_RIFT) then
 	print("Killer Awareness only works on Summoners Rift. Exiting!")
 	return
 end
+--]]
 
 ----------------------------------------------------
 --|                   		UTILITY					             |--
