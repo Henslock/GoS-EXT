@@ -89,6 +89,16 @@ GameTurretCount = Game.TurretCount
 GameTurret = Game.Turret
 GameIsChatOpen = Game.IsChatOpen
 castSpell = {state = 0, tick = GetTickCount(), casting = GetTickCount() - 1000, mouse = mousePos}
+
+HITCHANCE_IMPOSSIBLE = 0
+HITCHANCE_COLLISION = 1
+HITCHANCE_NORMAL = 2
+HITCHANCE_HIGH = 3
+HITCHANCE_IMMOBILE = 4
+
+RUNNING_AWAY = -1
+RUNNING_TOWARDS = 1
+
 _G.LATENCY = 0.05
 
 
@@ -687,27 +697,29 @@ function GetExtendedSpellPrediction(target, spellData)
 	local isExtended = false
 	local extendedSpellData = {Type = spellData.Type, Delay = spellData.Delay, Range = spellData.Range + spellData.Radius, Radius = spellData.Radius, Speed = spellData.Speed, Collision = spellData.Collision}
 	local spellPred = GGPrediction:SpellPrediction(extendedSpellData)
+	local predVec = Vector(0, 0, 0)
 	spellPred:GetPrediction(target, myHero)
 	--Get the extended predicted position, and the cast range of the spell
 	if(spellPred.CastPosition) then
-		local predVec = Vector(spellPred.CastPosition.x, myHero.pos.y, spellPred.CastPosition.z)
+		predVec = Vector(spellPred.CastPosition.x, myHero.pos.y, spellPred.CastPosition.z)
 		if(myHero.pos:DistanceTo(predVec) < spellData.Range) then
 			return spellPred, isExtended
 		end
 	end
 	local defaultRangeVec = (predVec - myHero.pos):Normalized() * spellData.Range + myHero.pos
-	
+	--DrawCircle(testVec, 150, 3)
 	--Find the difference between these two points as a vector to create a line, and then find a perpendicular bisecting line at the extended cast position using this line
 	local vec = (predVec - defaultRangeVec):Normalized() * 100 + myHero.pos
 	local vecNormal = (predVec - defaultRangeVec):Normalized()
 	local perp = Vector(vecNormal.z, 0, -vecNormal.x) * spellData.Radius + predVec
 	local negPerp = Vector(-vecNormal.z, 0, vecNormal.x) * spellData.Radius + predVec
-	
+
 	--Find the points of intersection from our bisecting line to the radius of our spell at its cast range. 
 	-- We can use this data to find a more precise circle, and make sure that our prediction will hit that.
 	-- If our prediction hits the precise circle, that means our spell will hit if its extended
 	-- This is really difficult to explain but much easier to visualize with diagrams
 	local intersections = GetCircleIntersectionPoints(perp, negPerp, defaultRangeVec, spellData.Radius)
+	
 	--We only need one of the intersection points to form our precise circle
 	local intVec = Vector(intersections[0][1], myHero.pos.y, intersections[0][3])
 	local halfVec = Vector((intersections[0][1] + intersections[1][1]) /2, myHero.pos.y, (intersections[0][3] + intersections[1][3])/2)
@@ -717,6 +729,20 @@ function GetExtendedSpellPrediction(target, spellData)
 	local preciseSpellPred = GGPrediction:SpellPrediction(preciseSpellData)
 	isExtended = true
 	preciseSpellPred:GetPrediction(target, myHero)
-	
+
 	return preciseSpellPred, isExtended
+end
+
+--Checks to see if a unit is running towards or away from the target
+function GetUnitRunDirection(unit, target)
+	if(target.pathing.hasMovePath) then
+		local meVec = (unit.pos - target.pos):Normalized()
+		local pathVec = (target.pathing.endPos - target.pos):Normalized()
+		if(dotProduct(meVec, pathVec) <= -0.5) then
+			return RUNNING_AWAY
+		else
+			return RUNNING_TOWARDS
+		end
+	end
+	return nil
 end
