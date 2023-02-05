@@ -1,43 +1,36 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
---[[
-local map = Game.mapID
-if(map ~= SUMMONERS_RIFT) then
-	print("Killer Awareness only works on Summoners Rift. Exiting!")
-	return
-end
---]]
 
 ----------------------------------------------------
 --|                   		UTILITY					             |--
 ----------------------------------------------------
-TEAM_ALLY = myHero.team
-TEAM_ENEMY = 300 - myHero.team
-TEAM_JUNGLE = 300
-GameTimer = Game.Timer
-Allies, Enemies, Units, EnemyTurrets, FriendlyTurrets = {}, {}, {}, {}, {}
-MathHuge = math.huge
-TableInsert = table.insert
-TableRemove = table.remove
-DrawRect = Draw.Rect
-DrawLine = Draw.Line
-DrawCircle = Draw.Circle
-DrawCircleMinimap = Draw.CircleMinimap
-DrawColor = Draw.Color
-DrawText = Draw.Text
-ControlSetCursorPos = Control.SetCursorPos
-ControlKeyUp = Control.KeyUp
-ControlKeyDown = Control.KeyDown
-GameCanUseSpell = Game.CanUseSpell
-GameHeroCount = Game.HeroCount
-GameHero = Game.Hero
-GameMinionCount = Game.MinionCount
-GameMinion = Game.Minion
-GameTurretCount = Game.TurretCount
-GameTurret = Game.Turret
-GameIsChatOpen = Game.IsChatOpen
-GameResolution = Game.Resolution()
+local TEAM_ALLY = myHero.team
+local TEAM_ENEMY = 300 - myHero.team
+local TEAM_JUNGLE = 300
+local GameTimer = Game.Timer
+local Allies, Enemies, Units, EnemyTurrets, FriendlyTurrets = {}, {}, {}, {}, {}
+local MathHuge = math.huge
+local TableInsert = table.insert
+local TableRemove = table.remove
+local DrawRect = Draw.Rect
+local DrawLine = Draw.Line
+local DrawCircle = Draw.Circle
+local DrawCircleMinimap = Draw.CircleMinimap
+local DrawColor = Draw.Color
+local DrawText = Draw.Text
+local ControlSetCursorPos = Control.SetCursorPos
+local ControlKeyUp = Control.KeyUp
+local ControlKeyDown = Control.KeyDown
+local GameCanUseSpell = Game.CanUseSpell
+local GameHeroCount = Game.HeroCount
+local GameHero = Game.Hero
+local GameMinionCount = Game.MinionCount
+local GameMinion = Game.Minion
+local GameTurretCount = Game.TurretCount
+local GameTurret = Game.Turret
+local GameIsChatOpen = Game.IsChatOpen
+local GameResolution = Game.Resolution()
 -- UTILITY FUNCTIONS --
 
 local function LoadUnits()
@@ -177,7 +170,7 @@ end
 class "KillerAwareness"
 
 local gameTick = GameTimer()
-local scriptVersion = 1.06
+local scriptVersion = 1.07
 local scriptIcon = "https://www.proguides.com/public/media/rlocal/rune/reforged/thumbnail/8128.png"
 local updateIcon = "https://www.proguides.com/public/media/rlocal/summonerspell/thumbnail/12.png"
 local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/"
