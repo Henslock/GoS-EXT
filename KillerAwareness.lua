@@ -47,6 +47,15 @@ local function LoadUnits()
 	end
 end
 
+local function IsTurret(unit)
+	if (not unit or unit.valid == false) then return false end
+	
+	for i = 1, Game.TurretCount() do
+		if(unit.networkID == Game.Turret(i).networkID) then return true end
+	end
+	return false
+end
+
 function GetEnemyHeroes()
 	return Enemies
 end
@@ -170,7 +179,7 @@ end
 class "KillerAwareness"
 
 local gameTick = GameTimer()
-local scriptVersion = 1.07
+local scriptVersion = 1.08
 local scriptIcon = "https://www.proguides.com/public/media/rlocal/rune/reforged/thumbnail/8128.png"
 local updateIcon = "https://www.proguides.com/public/media/rlocal/summonerspell/thumbnail/12.png"
 local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/"
@@ -338,11 +347,13 @@ function KillerAwareness:DrawTurretAwareness()
 	if(self.Menu.TurretAwareness.DrawAllies:Value()) then
 		for _, turret in pairs(FriendlyTurrets) do
 			if(turret.valid and myHero.alive) then
-				local turretRange = (turret.boundingRadius + 750 + myHero.boundingRadius / 2)
-				local totalRange = drawRange + turretRange
-				if(turret.distance <= totalRange and (turret.name ~= "Turret_OrderTurretShrine_A" and turret.name ~= "Turret_ChaosTurretShrine_A")) then
-					local alphaLerp = 1 - math.max((turret.distance - (totalRange - 200)) / (totalRange - (totalRange - 200)), 0)
-					DrawCircle(turret, turretRange, 2, DrawColor(255 *alphaLerp, 50, 90, 255))
+				if(IsTurret(turret)) then
+					local turretRange = (turret.boundingRadius + 750 + myHero.boundingRadius / 2)
+					local totalRange = drawRange + turretRange
+					if(turret.distance <= totalRange and (turret.name ~= "Turret_OrderTurretShrine_A" and turret.name ~= "Turret_ChaosTurretShrine_A")) then
+						local alphaLerp = 1 - math.max((turret.distance - (totalRange - 200)) / (totalRange - (totalRange - 200)), 0)
+						DrawCircle(turret, turretRange, 2, DrawColor(255 *alphaLerp, 50, 90, 255))
+					end
 				end
 			end
 		end
@@ -351,9 +362,11 @@ function KillerAwareness:DrawTurretAwareness()
 	if(self.Menu.TurretAwareness.DrawHP:Value()) then
 		for _, turret in pairs(EnemyTurrets) do
 			if(turret.valid and turret.isTargetableToTeam ) then
-				local hp = tostring(math.floor((turret.health / turret.maxHealth) * 100)).."%"
-				DrawRect(turret.posMM.x - 14, turret.posMM.y + 12, 34, 16, DrawColor(125, 0, 0, 0));
-				DrawText(hp, 16, turret.posMM.x - 12, turret.posMM.y + 12, DrawColor(255, 255, 255, 255));
+				if(IsTurret(turret)) then
+					local hp = tostring(math.floor((turret.health / turret.maxHealth) * 100)).."%"
+					DrawRect(turret.posMM.x - 14, turret.posMM.y + 12, 34, 16, DrawColor(125, 0, 0, 0));
+					DrawText(hp, 16, turret.posMM.x - 12, turret.posMM.y + 12, DrawColor(255, 255, 255, 255));
+				end
 			end			
 		end
 	end
@@ -361,11 +374,13 @@ function KillerAwareness:DrawTurretAwareness()
 	if(self.Menu.TurretAwareness.DrawEnemies:Value()) then
 		for _, turret in pairs(EnemyTurrets) do
 			if(turret.valid and myHero.alive) then
-				local turretRange = (turret.boundingRadius + 750 + myHero.boundingRadius / 2)
-				local totalRange = drawRange + turretRange
-				if(turret.distance <= totalRange and (turret.name ~= "Turret_OrderTurretShrine_A" and turret.name ~= "Turret_ChaosTurretShrine_A")) then
-					local alphaLerp = 1 - math.max((turret.distance - (totalRange - 200)) / (totalRange - (totalRange - 200)), 0)
-					DrawCircle(turret, turretRange, 2, DrawColor(255 *alphaLerp, 255, 90, 55))
+				if(IsTurret(turret)) then
+					local turretRange = (turret.boundingRadius + 750 + myHero.boundingRadius / 2)
+					local totalRange = drawRange + turretRange
+					if(turret.distance <= totalRange and (turret.name ~= "Turret_OrderTurretShrine_A" and turret.name ~= "Turret_ChaosTurretShrine_A")) then
+						local alphaLerp = 1 - math.max((turret.distance - (totalRange - 200)) / (totalRange - (totalRange - 200)), 0)
+						DrawCircle(turret, turretRange, 2, DrawColor(255 *alphaLerp, 255, 90, 55))
+					end
 				end
 			end			
 		end
