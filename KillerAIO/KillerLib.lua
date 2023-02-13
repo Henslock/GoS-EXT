@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.02
+local kLibVersion = 2.03
 
 -- [ AutoUpdate ]
 do
@@ -364,7 +364,7 @@ function IsImmobile(unit)
         local buff = unit:GetBuff(i)
         if buff and buff.count > 0 then
             local BuffType = buff.type
-            if BuffType == 5 or BuffType == 11 or BuffType == 21 or BuffType == 22 or BuffType == 24 or BuffType == 29 or buff.name == "recall" then
+            if BuffType == 5 or BuffType == 12 or BuffType == 11 or BuffType == 21 or BuffType == 22 or BuffType == 35 or BuffType == 25 or BuffType == 29 or buff.name == "recall" then
                 local BuffDuration = buff.duration
                 if BuffDuration > MaxDuration then
                     MaxDuration = BuffDuration
@@ -527,6 +527,18 @@ function GetCanonMinion(minions)
 			if (minion.charName == "SRU_ChaosMinionSiege" or minion.charName == "SRU_OrderMinionSiege") then
 				return minion
 			end
+		end
+	end
+	
+	return nil
+end
+
+function GetMinionByHandle(handle)
+	local cachedminions = _G.SDK.ObjectManager:GetMinions()
+	for i = 1, #cachedminions do
+		local obj = cachedminions[i]
+		if(obj.handle == handle) then
+			return obj
 		end
 	end
 	
