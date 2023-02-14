@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.03
+local kLibVersion = 2.04
 
 -- [ AutoUpdate ]
 do
@@ -53,7 +53,7 @@ end
 --|                   		UTILITY					             |--
 ----------------------------------------------------
 -- VARS --
-print("Killer Libs Loaded")
+print("Killer Libs Loaded [ver. "..kLibVersion.."]")
 heroes = false
 wClock = 0
 clock = os.clock
@@ -95,6 +95,10 @@ HITCHANCE_COLLISION = 1
 HITCHANCE_NORMAL = 2
 HITCHANCE_HIGH = 3
 HITCHANCE_IMMOBILE = 4
+
+MINION_CANON = 0
+MINION_MELEE = 1
+MINION_CASTER = 2
 
 RUNNING_AWAY = -1
 RUNNING_TOWARDS = 1
@@ -253,6 +257,53 @@ end
 
 function GetFriendlyTurrets()
 	return FriendlyTurrets
+end
+
+function GetClosestFriendlyTurret()
+	local closestTurret = nil
+	local closestDist = math.huge
+	for _, turret in pairs(FriendlyTurrets) do
+		if(turret and IsValid(turret) and not turret.dead) then
+			local checkDist = myHero.pos:DistanceTo(turret.pos)
+			if(checkDist <= closestDist) then
+				closestDist = checkDist
+				closestTurret = turret
+			end
+		end
+	end
+	return closestTurret
+end
+
+function GetEnemyMinionsUnderTurret(turret)
+	local turretMinions = {}
+	if(turret and IsValid(turret) and not turret.dead) then
+		local minions = _G.SDK.ObjectManager:GetEnemyMinions(750 + myHero.range)
+		for _, minion in pairs(minions) do
+			if(minion and IsValid(minion)) then
+				if(minion.pos:DistanceTo(turret.pos) < (turret.boundingRadius + 750 + minion.boundingRadius / 2 + 100)) then
+					table.insert(turretMinions, minion)
+				end
+			end
+		end
+	end
+	return turretMinions
+end
+
+local targetCachedNetID = 0
+local cachedTarget = nil
+
+function GetTurretMinionTarget(turret, minions)
+	if(turret.targetID == targetCachedNetID) then
+		return cachedTarget
+	end
+	for _, minion in pairs(minions) do
+		if(turret.targetID == minion.networkID) then
+			targetCachedNetID = minion.networkID
+			cachedTarget = minion
+			return cachedTarget
+		end
+	end
+	return nil
 end
 
 function GetEnemyHeroes(range, bbox)
@@ -552,6 +603,22 @@ function GetMinionByHandle(handle)
 	end
 	
 	return nil
+end
+
+function GetMinionType(minion)
+	if (minion.charName:find("ChaosMinionSiege")  or minion.charName:find("OrderMinionSiege")) then
+		return MINION_CANON
+	end
+	
+	if (minion.charName:find("ChaosMinionRanged")  or minion.charName:find("OrderMinionRanged")) then
+		return MINION_CASTER
+	end
+	
+	if (minion.charName:find("ChaosMinionMelee")  or minion.charName:find("OrderMinionMelee")) then
+		return MINION_MELEE
+	end
+	
+	return -1
 end
 
 function AverageClusterPosition(targets)
