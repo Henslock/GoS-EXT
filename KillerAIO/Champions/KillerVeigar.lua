@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -302,7 +302,6 @@ function Veigar:LoadMenu()
 	-- Last Hit
 	self.Menu:MenuElement({id = "LastHit", name = "Last Hit", type = MENU})
 	self.Menu.LastHit:MenuElement({id = "UseQ", name = "Use Q", value = true})
-	self.Menu.LastHit:MenuElement({id = "TowerFarmAssist", name = "Tower Farming Assist", value = true})
 	
 	-- Clear
 	self.Menu:MenuElement({id = "Clear", name = "Clear", type = MENU})
@@ -839,18 +838,30 @@ local avoidQMinionHandle = 0
 function Veigar:LastHit()
 	if(gameTick > GameTimer()) then return end	
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
-	
-	local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) --Just do 1 check for optimization
-	local canonMinion = GetCanonMinion(minions)
-	
+
 	if(myHero.activeSpell.name:find("VeigarBasicAttack")) then
 		avoidQMinionHandle = myHero.activeSpell.target
 	end
 	
 	--Q
 	if(self.Menu.LastHit.UseQ:Value()) then
+	
+		--Turret last hitting
+		local closestTurret = GetClosestFriendlyTurret()
+		local numTurretMinions = 0
+		if(closestTurret ~= nil) then
+			local turretMinions = GetEnemyMinionsUnderTurret(closestTurret)
+			if(#turretMinions > 0) then
+				numTurretMinions = #turretMinions
+				self:TurretLastHit(closestTurret, turretMinions)
+			end
+		end
+			
 		if(Ready(_Q)) then
 		
+			local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) --Just do 1 check for optimization
+			local canonMinion = GetCanonMinion(minions)
+			
 			--Prioritize the canon minion if its low
 			if(canonMinion ~= nil) and IsValid(canonMinion) then
 				local QDam = self:GetRawAbilityDamage("Q")
@@ -863,31 +874,22 @@ function Veigar:LastHit()
 				end
 			end
 			
-			for i = 1, #minions do
-				local minion = minions[i]
-				if(minion and IsValid(minion)) then
-					--This is to prevent us Q'ing a target we are going to kill with an AA 
-					local check = true
-					if(avoidQMinionHandle == minion.handle and myHero.levelData.lvl >= 3) then
-						if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
-							check = false
-						end
-					end
-					if(myHero.pos:DistanceTo(minion.pos) <= Q.Range and check) then
-						if(self.Menu.LastHit.TowerFarmAssist:Value()) then
-							local isMinionUnderTurret, turretUnitMinion = IsUnderFriendlyTurret(minion)
-							local isHeroUnderTurret, turretUnitHero = IsUnderFriendlyTurret(myHero)
-							if (isMinionUnderTurret == false and isHeroUnderTurret == false) then
-								self:StandardLastHit(minion)
-							else
-								--Check to see if the minion is under a friendly tower, or at least nearby it enough to justify using turret assist last hit
-								local turretUnit = turretUnitMinion or turretUnitHero
-								if(minion.pos:DistanceTo(turretUnit.pos) <= ((turretUnit.boundingRadius + 750 + minion.boundingRadius / 2) + 200)) then
-									self:TowerLastHit(minion, turretUnit)
-								end
+			if(#minions ~= numTurretMinions) then --Optimization trick, if all of our minions are under the turret then dont iterate through because we'll do the turret last hitting anyways
+				for i = 1, #minions do
+					local minion = minions[i]
+					if(minion and IsValid(minion)) then
+						--This is to prevent us Q'ing a target we are going to kill with an AA 
+						local check = true
+						if(avoidQMinionHandle == minion.handle) then
+							if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
+								check = false
 							end
-						else
-							self:StandardLastHit(minion)
+						end
+						if(myHero.pos:DistanceTo(minion.pos) <= Q.Range and check) then
+							local isMinionUnderTurret, turretUnitMinion = IsUnderFriendlyTurret(minion)
+							if (isMinionUnderTurret == false) then
+								self:StandardLastHit(minion)
+							end
 						end
 					end
 				end
@@ -910,26 +912,86 @@ function Veigar:StandardLastHit(minion)
 	end
 end
 
-function Veigar:TowerLastHit(minion, turret)
-	local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, minion.pos, Q.Speed, Q.Delay, Q.Radius, Q.CollisionTypes, minion.networkID)
+function Veigar:TurretLastHit(turret, minions)
+	local currentTurretTarget = GetTurretMinionTarget(turret, minions)
 	local turrDmg = GetTurretDamage()
-	local predHP = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 	local QDam = self:GetRawAbilityDamage("Q")
-	if(turret.targetID == minion.networkID) then
-		if(collisionCount <= Q.MaxCollision) then
-			if(predHP > 0 and minion.health - QDam <= 0) then
-				Control.CastSpell(HK_Q, minion)
-			end
+	--Farming under tower follows a set of general rules that can dynamically change based on minion HP and other variables.
+	--This is my approach to successfully farm under tower and get as many last hits as possible
+	
+	local shouldCast = true
+	if(turret.activeSpell.valid) then
+		if(GameTimer() - turret.activeSpell.castEndTime) >= 0.9 then
+			shouldCast = false
 		end
-	else -- Prime minions
-		if(predHP - turrDmg > 0 and predHP - turrDmg < myHero.totalDamage*2) then
-			_G.SDK.Orbwalker:Attack(minion)
-		end
+	end
+	
+	for i = 1, #minions do
+		local minion = minions[i]
+		if(minion and IsValid(minion)) then
 		
-		if(turret.targetID == 0 or turret.targetID == nil) then
-			if(predHP > 0 and minion.health - QDam <= 0) then
-				Control.CastSpell(HK_Q, minion)
+			--Condition 1: We auto caster minions once if the primary focus of the turret is on a siege minion
+			if(myHero.pos:DistanceTo(minion.pos) <= Q.Range) then
+				if(currentTurretTarget ~= nil) then
+					if(GetMinionType(currentTurretTarget) == MINION_CANON) and (currentTurretTarget.health - (turrDmg*2) > 0) then
+						if(GetMinionType(minion) == MINION_CASTER and (minion.health/minion.maxHealth >= 0.95)) then
+							_G.SDK.Orbwalker:Attack(minion)
+						end
+					end
+				end
 			end
+			
+			--Condition 6: Cast W on a caster minion that will get 1 shot by the tower if your Q wont kill
+			if(GetMinionType(minion) == MINION_CASTER) and Ready(_W) and shouldCast then
+				if((minion.health/minion.maxHealth) <= 0.7 and minion.health > myHero.totalDamage) then
+					Control.CastSpell(HK_W, minion)
+					return
+				end
+			end
+			
+		end
+	end
+
+	if(myHero.pos:DistanceTo(currentTurretTarget.pos) <= Q.Range) then
+		if(currentTurretTarget ~= nil) then
+		
+			--Condition 2: If the turret is attacking a melee unit, and our Q will kill the target in time but an auto attack won't, then Q the target.
+			if(GetMinionType(currentTurretTarget) == MINION_MELEE) then
+				if(currentTurretTarget.health - turrDmg <= 0 and currentTurretTarget.health - myHero.totalDamage > 0 and currentTurretTarget.health - QDam <= 0 and Ready(_Q) and shouldCast) then
+					Control.CastSpell(HK_Q, currentTurretTarget)
+					return
+				end
+			end
+			
+			--Condition 3: Use Q on a caster minion if they cant be last hit
+			if(GetMinionType(currentTurretTarget) == MINION_CASTER) then
+				if(currentTurretTarget.health - turrDmg <= 0 and currentTurretTarget.health - myHero.totalDamage > 0 and currentTurretTarget.health - QDam <= 0) and Ready(_Q) and shouldCast then
+					Control.CastSpell(HK_Q, currentTurretTarget)
+					return
+				end
+			end
+			
+			--Condition 4: Our Q is on cooldown, and the casters are at full HP - Use W to put them in Q last hit range
+			if(Ready(_W) and Ready(_Q) == false) then
+				if(GetMinionType(currentTurretTarget) == MINION_CASTER) then
+					if(currentTurretTarget.health/currentTurretTarget.maxHealth >= 0.95) then
+						local clusterMinions = GetMinionsAroundMinion(W.Range, W.Radius, currentTurretTarget)
+						if(#clusterMinions >= 1) then
+							local clusterMinionsAvgPos = AverageClusterPosition(clusterMinions)
+							Control.CastSpell(HK_W, clusterMinionsAvgPos)
+							return
+						end
+					end
+				end
+			end
+			
+			--Condition 5: If a non-caster can be killed with a Q if it had one more auto attack, auto attack and Q it
+			if(GetMinionType(currentTurretTarget) ~= MINION_CASTER) then
+				if(currentTurretTarget.health - turrDmg <= 0 and currentTurretTarget.health - myHero.totalDamage > 0 and currentTurretTarget.health - QDam > 0 and currentTurretTarget.health - QDam - myHero.totalDamage <= 0) then
+					_G.SDK.Orbwalker:Attack(currentTurretTarget)
+				end
+			end
+			
 		end
 	end
 end
