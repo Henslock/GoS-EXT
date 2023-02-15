@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.03
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -955,7 +955,7 @@ function Veigar:TurretLastHit(turret, minions)
 		if(minion and IsValid(minion)) then
 		
 			--Condition 1: We auto caster minions once if the primary focus of the turret is on a siege minion
-			if(myHero.pos:DistanceTo(minion.pos) <= Q.Range) then
+			if(myHero.pos:DistanceTo(minion.pos) <= myHero.range) then
 				if(currentTurretTarget ~= nil) then
 					if(GetMinionType(currentTurretTarget) == MINION_CANON) and (currentTurretTarget.health - (turrDmg*2) > 0) then
 						if(GetMinionType(minion) == MINION_CASTER and (minion.health/minion.maxHealth >= 0.95)) then
@@ -1011,8 +1011,10 @@ function Veigar:TurretLastHit(turret, minions)
 			
 			--Condition 5: If a non-caster can be killed with a Q if it had one more auto attack, auto attack and Q it
 			if(GetMinionType(currentTurretTarget) ~= MINION_CASTER) then
-				if(currentTurretTarget.health - turrDmg <= 0 and currentTurretTarget.health - myHero.totalDamage > 0 and currentTurretTarget.health - QDam > 0 and currentTurretTarget.health - QDam - myHero.totalDamage <= 0) then
-					_G.SDK.Orbwalker:Attack(currentTurretTarget)
+				if(myHero.pos:DistanceTo(minion.pos) <= myHero.range) then
+					if(currentTurretTarget.health - turrDmg <= 0 and currentTurretTarget.health - myHero.totalDamage > 0 and currentTurretTarget.health - QDam > 0 and currentTurretTarget.health - QDam - myHero.totalDamage <= 0) then
+						_G.SDK.Orbwalker:Attack(currentTurretTarget)
+					end
 				end
 			end
 			
@@ -1157,12 +1159,12 @@ end
 
 function Veigar:AutoWImmobile()
 	if(Ready(_W)) then
-		local target = GetTarget(W.Range + W.Radius)
+		local target = GetTarget(W.Range + W.Radius -10)
 		if(target ~= nil and IsValid(target)) then
 			local WPrediction, isExtended = GetExtendedSpellPrediction(target, W)
 			if WPrediction:CanHit(HITCHANCE_IMMOBILE) then
 				if(isExtended) then
-					local castPos = myHero.pos:Extended(WPrediction.CastPosition, W.Range)
+					local castPos = myHero.pos:Extended(WPrediction.CastPosition, W.Range -10)
 					Control.CastSpell(HK_W, castPos)
 					return
 				else
@@ -1175,7 +1177,7 @@ function Veigar:AutoWImmobile()
 				local WPrediction, isExtended = GetExtendedSpellPrediction(target, W)
 				if WPrediction:CanHit(HITCHANCE_HIGH) then
 					if(isExtended) then
-						local castPos = myHero.pos:Extended(WPrediction.CastPosition, W.Range)
+						local castPos = myHero.pos:Extended(WPrediction.CastPosition, W.Range -10)
 						Control.CastSpell(HK_W, castPos)
 						return
 					else
