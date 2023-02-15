@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -282,6 +282,7 @@ function Veigar:LoadMenu()
 	self.Menu.Combo:MenuElement({id = "WSettings", name = "W Settings", type = MENU})
 	self.Menu.Combo:MenuElement({id = "UseE", name = "Use E", value = true})
 	self.Menu.Combo:MenuElement({id = "UseR", name = "Use R", value = true})
+	self.Menu.Combo:MenuElement({id = "OverkillRProtection", name = "Enable R Overkill Protection", value = true})
 	self.Menu.Combo:MenuElement({id = "SmartAABlock", name = "Smart AA Block", value = true})
 	self.Menu.Combo:MenuElement({id = "SemiManualE", name = "Semi-manual E", key = string.byte("Z")})
 	
@@ -312,6 +313,8 @@ function Veigar:LoadMenu()
 	-- Kill Steal
 	self.Menu:MenuElement({id = "KillSteal", name = "Kill Steal", type = MENU})
 	self.Menu.KillSteal:MenuElement({id = "UseR", name = "Use R", value = true})
+	self.Menu.KillSteal:MenuElement({id = "OverkillRProtection", name = "Enable R Overkill Protection", value = true})
+	self.Menu.KillSteal:MenuElement({id = "RBlacklist", name = "R Killsteal Blacklist (Unless Solo)", type = MENU})
 	
 	self.Menu:MenuElement({id = "AutoW", name = "Auto W on Immobile", value = true})
 	self.Menu:MenuElement({id = "AutoE", name = "Auto E to Stop Dangerous Channels", value = true})
@@ -322,6 +325,7 @@ function Veigar:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawQW", name = "Draw Q & W Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawE", name = "Draw E Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawKillableTargets", name = "Draw Killable Targets", value = true})
+	self.Menu.Drawings:MenuElement({id = "DrawQMinions", name = "Draw Killable Minions with Q", value = false})
 	self.Menu.Drawings:MenuElement({id = "DamageHPBar", name = "Damage HP Bar", type = MENU})
 	self.Menu.Drawings:MenuElement({id = "Debug", name = "Debug Drawings", type = MENU})
 	
@@ -335,14 +339,27 @@ function Veigar:LoadMenu()
 	self.Menu.Prediction:MenuElement({id = "QHitChance", name = "Q Hit Chance",  value = 2, drop = {"Normal", "High", "Immobile"}})
 		
 	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - E - W)", value = false})
+	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
+	
+	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
+		local hero = args.unit
+		local charName = args.charName
+		--Add R blacklist champs
+		self.Menu.KillSteal.RBlacklist:MenuElement({id = charName, name = charName, value = false})
+	end)
+	
 end
 
 
 function Veigar:Tick()
 	if(MyHeroNotReady()) then return end
 	
-	if(IsInFountain()) then
-		_G.SDK.Orbwalker:SetMovement(false)
+	if(self.Menu.DisableInFountain:Value()) then
+		if(IsInFountain()) then
+			_G.SDK.Orbwalker:SetMovement(false)
+		else
+			_G.SDK.Orbwalker:SetMovement(true)
+		end
 	else
 		_G.SDK.Orbwalker:SetMovement(true)
 	end
@@ -361,7 +378,6 @@ function Veigar:Tick()
 	self:UpdateEData()
 	self:UpdateComboDamage()
 	self:KillSteal()
-	
 	
 	if(self.Menu.Combo.SmartAABlock:Value()) then
 		self:SmartAABlock()
@@ -398,7 +414,6 @@ function Veigar:OnSpellCast(spell)
 	if spell.name == "VeigarEventHorizon" then
 		DelayAction(function()
             self:CheckE()
-			WBufferTick = GameTimer() + 0 --Gives us a small window to react with our W after casting E, mostly used when they are in the cage
         end, E.Delay)
 	end
 end
@@ -475,7 +490,7 @@ end
 function Veigar:Combo()
 	if(gameTick > GameTimer()) then return end
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
-
+	
 	--Q
 	if(self.Menu.Combo.UseQ:Value()) then
 		if(Ready(_Q)) then
@@ -737,9 +752,17 @@ function Veigar:Combo()
 			local target = GetTarget(R.Range)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
 				if(self:IsKillable(target) and (self:CantKill(target, true, true, false))==false) then
-					Control.CastSpell(HK_R, target)
-					gameTick = GameTimer() + 0.2
-					return
+					if(self.Menu.Combo.OverkillRProtection:Value()) then
+						if(self:ROverkillCheck(target) == false) then --Use R if it's not an overkill
+							Control.CastSpell(HK_R, target)
+							gameTick = GameTimer() + 0.2
+							return
+						end
+					else
+						Control.CastSpell(HK_R, target)
+						gameTick = GameTimer() + 0.2
+						return
+					end
 				end
 			end
 		end
@@ -844,6 +867,7 @@ function Veigar:LastHit()
 	end
 	
 	--Q
+		
 	if(self.Menu.LastHit.UseQ:Value()) then
 	
 		--Turret last hitting
@@ -1092,13 +1116,37 @@ function Veigar:KillSteal()
 	--R
 	if(self.Menu.KillSteal.UseR:Value()) then
 		if(Ready(_R)) then
-			for _, enemy in pairs(Enemies) do
-				if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
-					if(enemy.pos:DistanceTo(myHero.pos) <= R.Range) then
+			local enemies = GetEnemyHeroes(1500)
+			if(#enemies > 0) then
+				for _, enemy in pairs (enemies) do
+					if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
 						if(self:IsKillable(enemy) and (self:CantKill(enemy, true, true, false)==false)) then
-							Control.CastSpell(HK_R, enemy)
-							gameTick = GameTimer() + 0.2
-							return
+							local isOverkill = false
+							if(self.Menu.KillSteal.OverkillRProtection:Value()) then
+								isOverkill = self:ROverkillCheck(enemy)
+							end
+
+							if(#enemies == 1) then --We can KS on solo targets
+							
+								if(myHero.pos:DistanceTo(enemy.pos) < R.Range) and not isOverkill then
+									Control.CastSpell(HK_R, enemy)
+									gameTick = GameTimer() + 0.2
+									return
+								end
+								
+							else --If the KS'able target is in a group, lets make sure he's not on an R blacklist
+							
+								if(self.Menu.KillSteal.RBlacklist[enemy.charName]) then
+									if(self.Menu.KillSteal.RBlacklist[enemy.charName]:Value() == false) then
+										if(myHero.pos:DistanceTo(enemy.pos) < R.Range) and not isOverkill then
+											Control.CastSpell(HK_R, enemy)
+											gameTick = GameTimer() + 0.2
+											return
+										end
+									end
+								end
+								
+							end
 						end
 					end
 				end
@@ -1352,6 +1400,19 @@ function Veigar:IsUnitInsideE(unit)
 	return false
 end
 
+function Veigar:ROverkillCheck(unit)
+	--An overkill occurs when a target is extremely low HP, and we could have simply finished them off with a Q
+	--We'll check to see if the unit is within R range since this determines if we should ultimately use R or not
+	if(myHero.pos:DistanceTo(unit.pos) <= R.Range) then
+		local QCheck = (myHero:GetSpellData(_Q).cd - myHero:GetSpellData(_Q).currentCd) <= 0.5
+		if(Ready(_Q) or QCheck) and unit.health <= (self:GetRawAbilityDamage("Q")*0.65) then
+			return true
+		end
+	end
+	
+	return false
+end
+
 function Veigar:GetRawAbilityDamage(spell)
 	if(spell == "Q") then
 		 return ({80, 120, 160, 200, 240})[myHero:GetSpellData(_Q).level] + (0.6 * myHero.ap)
@@ -1497,6 +1558,19 @@ function Veigar:Draw()
 			alphaLerp = math.max(alphaLerp - 0.1, 0)
 		else
 			alphaLerp = math.min(alphaLerp + 0.1, 1)
+		end
+	end
+	
+	if(self.Menu.Drawings.DrawQMinions:Value()) then
+		local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range)
+		for i = 1, #minions do
+			local minion = minions[i]
+			if(minion and IsValid(minion)) then
+				local QDam = self:GetRawAbilityDamage("Q")
+				if (minion.health + 10 - QDam <= 0) then
+					DrawCircle(minion, 25, 8, DrawColor(255, 35, 175, 255))
+				end
+			end
 		end
 	end
 	
