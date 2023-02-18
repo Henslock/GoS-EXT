@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.04
+local kLibVersion = 2.06
 
 -- [ AutoUpdate ]
 do
@@ -176,6 +176,27 @@ end
 
 function GetDistance(pos1, pos2)
 	return sqrt(GetDistanceSqr(pos1, pos2))
+end
+
+function GetDistance2D(pos1, pos2)
+	local pos2 = pos2 or myHero.pos
+	local dx = pos1.x - pos2.x
+	local dy = pos1.y - pos2.y
+	return sqrt(dx * dx + dy * dy)
+end
+
+function GetClosestPointToCursor(tbl)
+	local closestPoint = nil
+	local closestDist = math.huge
+	for i = 1, #tbl do
+		point = tbl[i]
+		local dist = GetDistance2D(point:To2D(), cursorPos)
+		if(dist <= closestDist) then	
+			closestPoint = point
+			closestDist = dist
+		end
+	end
+	return closestPoint
 end
 
 function GetTarget(range) 
@@ -619,6 +640,18 @@ function GetMinionType(minion)
 	end
 	
 	return -1
+end
+
+function GetMinionTurretDamage(minion)
+	if(GetMinionType(minion) == MINION_CASTER) then
+		return minion.maxHealth * 0.7
+	end
+
+	if(GetMinionType(minion) == MINION_MELEE) then
+		return minion.maxHealth * 0.45
+	end
+	
+	return GetTurretDamage()
 end
 
 function AverageClusterPosition(targets)
