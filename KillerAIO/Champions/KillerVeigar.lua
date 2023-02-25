@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -669,7 +669,7 @@ function Veigar:Combo()
 	
 	--W Normal
 	if(self.Menu.Combo.WSettings.UseWNormal:Value()) then
-		if(Ready(_W) and Ready(_E) == false and WBufferTick < GameTimer()) then
+		if(Ready(_W) and (Ready(_E) == false or myHero:GetSpellData(_E).cd < 3.5) and WBufferTick < GameTimer()) then
 			if (myHero:GetSpellData(_E).cd - myHero:GetSpellData(_E).currentCd) <= E.Delay then return end
 			local target = GetTarget(W.Range)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
