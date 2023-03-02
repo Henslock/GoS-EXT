@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.06
+scriptVersion = 1.07
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -1421,7 +1421,7 @@ function Veigar:GetRawAbilityDamage(spell)
 	end
 	
 	if(spell == "W") then
-		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_Q).level] + myHero.ap
+		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_W).level] + myHero.ap
 	end
 	
 	return 0
