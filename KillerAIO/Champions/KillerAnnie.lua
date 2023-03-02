@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.25
+scriptVersion = 1.28
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -152,14 +152,30 @@ function Annie:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawQW", name = "Draw Q & W Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawKillable", name = "Draw Killable Enemies", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawNinjaComboStatus", name = "Draw Ninja Combo Status", value = true})
-	self.Menu.Drawings:MenuElement({id = "DrawUltClusters", name = "Draw Ult Clusters", value = false})
-	self.Menu.Drawings:MenuElement({id = "DrawChampTracker", name = "Draw Proximity Champion Tracker", value = false})
+	self.Menu.Drawings:MenuElement({id = "DamageHPBar", name = "Damage HP Bar", type = MENU})
+	self.Menu.Drawings:MenuElement({id = "Debug", name = "Debug Drawings", type = MENU})
+	
+	self.Menu.Drawings.DamageHPBar:MenuElement({id = "DrawDamageHPBar", name = "Draw Full Combo Damage", value = true})
+	self.Menu.Drawings.DamageHPBar:MenuElement({id = "YOffset", name = "Y Offset", value = 60, min = -100, max = 100, step = 5})
+	--debug
+	self.Menu.Drawings.Debug:MenuElement({id = "DrawUltClusters", name = "Draw Ult Clusters", value = false})
 	
 	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - W - E)", value = false})
+	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
 	
 end
 
 function Annie:Tick()
+	if(self.Menu.DisableInFountain:Value()) then
+		if(IsInFountain() or not myHero.alive) then
+			_G.SDK.Orbwalker:SetMovement(false)
+		else
+			_G.SDK.Orbwalker:SetMovement(true)
+		end
+	else
+		_G.SDK.Orbwalker:SetMovement(true)
+	end
+	
 	if(MyHeroNotReady()) then return end
 	
 	self:AABlock()
@@ -372,6 +388,22 @@ end
 
 function Annie:GetPassiveStacks()
 	return GetBuffData(myHero, AnniePassiveStacksBuff).count
+end
+
+function Annie:GetRawAbilityDamage(spell)
+	if(spell == "Q") then
+		 return ({80, 115, 150, 185, 220})[myHero:GetSpellData(_Q).level] + (0.8 * myHero.ap)
+	end
+	
+	if(spell == "W") then
+		return ({70, 115, 160, 205, 250})[myHero:GetSpellData(_W).level] + (0.85 * myHero.ap)
+	end
+	
+	if(spell == "R") then
+		return ({150, 275, 400})[myHero:GetSpellData(_R).level] + (0.75 * myHero.ap)
+	end
+	
+	return 0
 end
 
 function Annie:HasStunBuff()
@@ -1055,10 +1087,12 @@ function Annie:GetTotalDamage(unit)
 	if(Ready(_R) and not self:HasTibbers()) then
 		totalDmg = totalDmg + getdmg("R", unit, myHero)
 		
+		--[[
 		local TibbersAA = ((myHero:GetSpellData(_R).level * 25) + 25) + 0.15 * myHero.ap
 		local TibbersAOE = ((myHero:GetSpellData(_R).level * 20) + (0.12 * myHero.ap))
 		local TibbersAAdmg = CalcMagicalDamage(myHero, unit, TibbersAA)
 		local TibbersAOEdmg = CalcMagicalDamage(myHero, unit, TibbersAOE)
+		--]]
 	end
 	
 	if myHero:GetSpellData(SUMMONER_1).name == "SummonerDot" and Ready(SUMMONER_1) then
@@ -1089,6 +1123,47 @@ function Annie:GetTotalDamage(unit)
 	local AAdmg = getdmg("AA", unit, myHero)
 	
 	totalDmg = totalDmg + AAdmg
+	
+	return totalDmg
+end
+
+function Annie:GetTotalComboDamage(unit)
+	local totalDmg = 0
+	
+	if(Ready(_Q)) then
+		local QDmg = self:GetRawAbilityDamage("Q")
+		QDmg = CalcMagicalDamage(myHero, unit, QDmg)
+		totalDmg = totalDmg + QDmg
+	end
+	
+	if(Ready(_W)) then
+		local WDmg = self:GetRawAbilityDamage("W")
+		WDmg = CalcMagicalDamage(myHero, unit, WDmg)
+		totalDmg = totalDmg + WDmg
+	end
+	
+	if(Ready(_R) and not self:HasTibbers()) then
+		local RDmg = self:GetRawAbilityDamage("R")
+		RDmg = CalcMagicalDamage(myHero, unit, RDmg)
+		totalDmg = totalDmg + RDmg
+	end
+	
+	if self:HasElectrocute(myHero) then
+		local baseDmg = 30+(150/(17*(myHero.levelData.lvl)))
+		local bonusDmg = (myHero.ap * 0.25)+(myHero.bonusDamage*0.4)
+		local value = baseDmg + bonusDmg 
+		local ElecDmg=_G.SDK.Damage:CalculateDamage(myHero, unit, _G.SDK.DAMAGE_TYPE_MAGICAL , value )
+		totalDmg= totalDmg + ElecDmg
+	end
+	
+	--6655 = Ludens
+	local ludensCheck, ludensIsUp = CheckDmgItems(6655)
+	if(ludensCheck and ludensIsUp) then
+		local ludensDmg = 100 + (myHero.ap * 0.1)
+		local ludensCalcDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
+		
+		totalDmg = totalDmg + ludensCalcDmg
+	end
 	
 	return totalDmg
 end
@@ -1228,10 +1303,11 @@ function Annie:CantKill(unit, kill, ss, aa)
 	return false
 end
 
+local alphaLerp = 0
 function Annie:Draw()
 	if myHero.dead then return end
 	
-	if(self.Menu.Drawings.DrawUltClusters:Value()) then
+	if(self.Menu.Drawings.Debug.DrawUltClusters:Value()) then
 		self:DebugCluster()
 	end
 	
@@ -1259,30 +1335,80 @@ function Annie:Draw()
 		end
 	end
 	
-	if(self.Menu.Drawings.DrawChampTracker:Value()) then
-		-- Draw lines connecting to enemy champions
-		for k, v in pairs(Enemies) do
-			local distMax = 3000
-			local distMin = R.Range
-			if(v and IsValid(v) and myHero.pos.DistanceTo(v.pos) <= distMax and myHero.pos.DistanceTo(v.pos) > distMin) then
-				local lineAlphaVal = ((myHero.pos.DistanceTo(v.pos) - distMin) / (distMax - distMin)) * 0.9
-				DrawLine(myHero.pos:To2D(), v.pos:To2D(), 1, DrawColor(300 * lineAlphaVal, 255, 0, 0))
-			end
-		end
+	if(self.Menu.Drawings.DrawKillable:Value()) then
+		self:DrawKillable()
 	end
 	
-	if(self.Menu.Drawings.DrawKillable:Value()) then
-		local enemies = GetEnemyHeroes(2000)
-		if(enemies ~= nil) then
-			for _, enemy in pairs(enemies) do
-				if(enemy and enemy.valid and IsValid(enemy)) then
-					if(self:IsKillable(enemy)) then
-						DrawCircle(enemy, 100, 10, DrawColor(180, 255, 0, 155)) --(Alpha, R, G, B)
+	if(self.Menu.Drawings.DamageHPBar.DrawDamageHPBar:Value()) then
+		self:DrawDamageHPBars()
+		local mode = GetMode()
+		if(mode == "Combo") then
+			alphaLerp = math.max(alphaLerp - 0.1, 0)
+		else
+			alphaLerp = math.min(alphaLerp + 0.1, 1)
+		end
+	end
+end
+
+function Annie:DrawDamageHPBars()
+	for _, enemy in pairs(Enemies) do
+		if(enemy.valid and IsValid(enemy)) then
+			if(enemy.toScreen.onScreen) then
+				if(Ready(_Q) or Ready(_W) or Ready(_R)) then
+					local bar = enemy.pos:To2D()
+					local barLength = 150
+					local barHeight = 4
+					local barOffset = self.Menu.Drawings.DamageHPBar.YOffset:Value()
+					local hpRatio = (enemy.health / enemy.maxHealth)
+					local dmg = self:GetTotalComboDamage(enemy)
+					local dmgRatio = (dmg / enemy.maxHealth)
+					if(enemy.health - dmg <= 0) then
+						dmgRatio = hpRatio
 					end
+					--Bar BG
+					Draw.Rect(bar.x - (barLength/2) -3, bar.y + barOffset - 3, barLength +6, barHeight + 6, DrawColor(225 * alphaLerp, 0, 0, 0))
+					
+					--Health bar
+					Draw.Rect(bar.x - (barLength/2), bar.y + barOffset, barLength * (hpRatio - 0.02), barHeight, DrawColor(255 * alphaLerp, 55, 255, 115))
+				
+					--Damage bar
+					Draw.Rect(bar.x - (barLength/2) + (barLength * hpRatio) - (barLength * dmgRatio), bar.y + barOffset, barLength * dmgRatio, barHeight, DrawColor(255 * alphaLerp, 255, 45, 115))
 				end
 			end
 		end
 	end
+end
+
+function Annie:DrawKillable()
+	local enemies = GetEnemyHeroes(3000)
+	if(#enemies > 0) then
+		for _, enemy in pairs(enemies) do
+			if(enemy.valid and IsValid(enemy)) then
+				if(self:IsKillable(enemy)) then
+					self:DrawKillReticle(enemy)
+				end
+			end
+		end
+	end
+end
+
+function Annie:DrawKillReticle(unit)
+	local reticleRadius = 75
+	local speed = 135
+	local newPos = Vector(unit.pos.x, unit.pos.y + 15, unit.pos.z)
+	DrawCircle(unit, reticleRadius, 2, DrawColor(255, 255, 25, 25))
+	local angle = ((GetTickCount() / 1000) % 360) * speed
+	
+	local vec1 = (Vector(math.cos(math.rad(angle)) + unit.pos.x, unit.pos.y, math.sin(math.rad(angle)) + unit.pos.z) - unit.pos):Normalized()
+	local vec2 = (Vector(math.cos(math.rad(angle + 90)) + unit.pos.x, unit.pos.y, math.sin(math.rad(angle + 90)) + unit.pos.z) - unit.pos):Normalized()
+	local vec3 = (Vector(math.cos(math.rad(angle + 180)) + unit.pos.x, unit.pos.y, math.sin(math.rad(angle + 180)) + unit.pos.z) - unit.pos):Normalized()
+	local vec4 = (Vector(math.cos(math.rad(angle + 270)) + unit.pos.x, unit.pos.y, math.sin(math.rad(angle + 270)) + unit.pos.z) - unit.pos):Normalized()
+	
+	
+	DrawLine((unit.pos + (vec1 * (reticleRadius - 20))):To2D(), (unit.pos + (vec1 * (reticleRadius + 20))):To2D(), 3, DrawColor(255, 255, 25, 25))
+	DrawLine((unit.pos + (vec2 * (reticleRadius - 20))):To2D(), (unit.pos + (vec2 * (reticleRadius + 20))):To2D(), 3, DrawColor(255, 255, 25, 25))
+	DrawLine((unit.pos + (vec3 * (reticleRadius - 20))):To2D(), (unit.pos + (vec3 * (reticleRadius + 20))):To2D(), 3, DrawColor(255, 255, 25, 25))
+	DrawLine((unit.pos + (vec4 * (reticleRadius - 20))):To2D(), (unit.pos + (vec4 * (reticleRadius + 20))):To2D(), 3, DrawColor(255, 255, 25, 25))
 end
 
 Annie()
