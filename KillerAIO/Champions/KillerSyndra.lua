@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -326,8 +326,11 @@ function Syndra:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawW", name = "Draw W Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawQE", name = "Draw QE Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawKillableTargets", name = "Draw Killable Targets", value = true})
-	self.Menu.Drawings:MenuElement({id = "DrawChampTracker", name = "Draw Champ Tracker", value = true})
+	self.Menu.Drawings:MenuElement({id = "DamageHPBar", name = "Damage HP Bar", type = MENU})
 	self.Menu.Drawings:MenuElement({id = "Debug", name = "Debug Drawings", type = MENU})
+	
+	self.Menu.Drawings.DamageHPBar:MenuElement({id = "DrawDamageHPBar", name = "Draw Full Combo Damage", value = true})
+	self.Menu.Drawings.DamageHPBar:MenuElement({id = "YOffset", name = "Y Offset", value = 60, min = -100, max = 100, step = 5})
 	
 	-- Debug
 	self.Menu.Drawings.Debug:MenuElement({id = "DrawOrbs", name = "Draw Orbs", value = true})
@@ -341,7 +344,8 @@ function Syndra:LoadMenu()
 	self.Menu.Prediction:MenuElement({id = "EHitChance", name = "E Hit Chance",  value = 2, drop = {"Normal", "High", "Immobile"}})
 		
 	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - W - E)", value = false})
-
+	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
+	
 	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
 		local hero = args.unit
 		local charName = args.charName
@@ -358,6 +362,16 @@ end
 
 
 function Syndra:Tick()
+	if(self.Menu.DisableInFountain:Value()) then
+		if(IsInFountain() or not myHero.alive) then
+			_G.SDK.Orbwalker:SetMovement(false)
+		else
+			_G.SDK.Orbwalker:SetMovement(true)
+		end
+	else
+		_G.SDK.Orbwalker:SetMovement(true)
+	end
+	
 	if(MyHeroNotReady()) then return end
 
 	local mode = GetMode()
@@ -423,7 +437,7 @@ function Syndra:CheckOrbs()
 	local particleCount = Game.ParticleCount()
 	for i = particleCount, 1, -1 do
 		local obj = Game.Particle(i)
-		local nameCheck = obj.name:lower():find("_q_lv5_idle") or obj.name:lower():find("_q_2021_idle")
+		local nameCheck = obj.name:lower():find("_q_lv5_idle") or obj.name:lower():find("_q_2021_idle") or obj.name:lower():find("_q_idle")
 		if obj and obj.type == "obj_GeneralParticleEmitter" and nameCheck and self:CheckExistingOrb(obj) == false then
 			self.OrbData[#self.OrbData + 1] = {orbObj = obj, age = GameTimer()}
 		end
@@ -457,7 +471,6 @@ function Syndra:UpdateOrbs()
 	end
 end
 
-
 function Syndra:OnSpellCast(spell)
 	if spell.name == "SyndraQ" or spell.name == "SyndraQUpgrade" then
 		self:CheckSpawningOrbs()
@@ -471,6 +484,24 @@ function Syndra:OnSpellCast(spell)
             self:CheckOrbs()
         end, 1.75)
 	end
+end
+
+function Syndra:GetRawAbilityDamage(spell)
+	if(spell == "Q") then
+		 return ({70, 105, 140, 175, 210})[myHero:GetSpellData(_Q).level] + (0.7 * myHero.ap)
+	end
+	
+	if(spell == "W") then
+		return ({70, 110, 150, 190, 230})[myHero:GetSpellData(_W).level] + (0.7 * myHero.ap)
+	end
+	
+	if(spell == "R") then
+		local spheres = myHero:GetSpellData(_R).ammo
+		local sphereDmg = (({90, 130, 170})[myHero:GetSpellData(_R).level] + 0.17 * myHero.ap)
+		return sphereDmg * spheres
+	end
+	
+	return 0
 end
 
 function Syndra:GetGrabObject()
@@ -1489,10 +1520,58 @@ function Syndra:GetTotalDamage(unit)
 	return totalDmg - dmgBuffer
 end
 
+function Syndra:GetTotalComboDamage(unit)
+	local totalDmg = 0
+	
+	if(Ready(_Q)) then
+		local QDmg = self:GetRawAbilityDamage("Q")
+		QDmg = CalcMagicalDamage(myHero, unit, QDmg)
+		totalDmg = totalDmg + QDmg
+	end
+	
+	if(Ready(_W)) then
+		local splinters = GetBuffData(myHero, "syndrapassivestacks")
+		local WDmg = self:GetRawAbilityDamage("W")
+		local bonusDmg = 0
+		if(splinters.stacks >= 60) then
+			local bonusPercent = ((myHero.ap / 50) + 12)/100
+			bonusDmg = (WDmg * (1 + bonusPercent)) - WDmg -- Bonus true damage
+		end
+		WDmg = CalcMagicalDamage(myHero, unit, WDmg)
+		totalDmg = totalDmg + WDmg + bonusDmg
+	end
+	
+	if self:HasElectrocute(myHero) then
+		local baseDmg = 30+(150/(17*(myHero.levelData.lvl)))
+		local bonusDmg = (myHero.ap * 0.25)+(myHero.bonusDamage*0.4)
+		local value = baseDmg + bonusDmg 
+		local ElecDmg=_G.SDK.Damage:CalculateDamage(myHero, unit, _G.SDK.DAMAGE_TYPE_MAGICAL , value )
+		totalDmg= totalDmg + ElecDmg
+	end
+	
+	--6655 = Ludens
+	local ludensCheck, ludensIsUp = CheckDmgItems(6655)
+	if(ludensCheck and ludensIsUp) then
+		local ludensDmg = 100 + (myHero.ap * 0.1)
+		local ludensCalcDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
+		
+		totalDmg = totalDmg + ludensCalcDmg
+	end
+	
+	if(Ready(_R)) then
+		local RDmg = self:GetRawAbilityDamage("R")
+		RDmg = CalcMagicalDamage(myHero, unit, RDmg)
+		totalDmg = totalDmg + RDmg
+	end
+
+	return totalDmg
+end
+
 function Syndra:GetTrueOrbPos(orb)
 	return orb.pos + Vector(0, -50, 0)
 end
 
+local alphaLerp = 0
 function Syndra:Draw()
 	if myHero.dead then return end
 	
@@ -1512,15 +1591,13 @@ function Syndra:Draw()
 		DrawCircle(myHero, QE.Range, 1, DrawColor(40, 195, 85, 1155)) --(Alpha, R, G, B)
 	end
 	
-	if(self.Menu.Drawings.DrawChampTracker:Value()) then
-		-- Draw lines connecting to enemy champions
-		for k, v in pairs(Enemies) do
-			local distMax = 3000
-			local distMin = W.Range
-			if(v and IsValid(v) and myHero.pos.DistanceTo(v.pos) <= distMax and myHero.pos.DistanceTo(v.pos) > distMin) then
-				local lineAlphaVal = ((myHero.pos.DistanceTo(v.pos) - distMin) / (distMax - distMin)) * 0.9
-				DrawLine(myHero.pos:To2D(), v.pos:To2D(), 1, DrawColor(300 * lineAlphaVal, 255, 0, 0))
-			end
+	if(self.Menu.Drawings.DamageHPBar.DrawDamageHPBar:Value()) then
+		self:DrawDamageHPBars()
+		local mode = GetMode()
+		if(mode == "Combo") then
+			alphaLerp = math.max(alphaLerp - 0.1, 0)
+		else
+			alphaLerp = math.min(alphaLerp + 0.1, 1)
 		end
 	end
 	
@@ -1550,6 +1627,35 @@ function Syndra:DrawKillable()
 			if(enemy.valid and IsValid(enemy)) then
 				if(self:IsKillable(enemy)) then
 					self:DrawKillReticle(enemy)
+				end
+			end
+		end
+	end
+end
+
+function Syndra:DrawDamageHPBars()
+	for _, enemy in pairs(Enemies) do
+		if(enemy.valid and IsValid(enemy)) then
+			if(enemy.toScreen.onScreen) then
+				if(Ready(_Q) or Ready(_W) or Ready(_R)) then
+					local bar = enemy.pos:To2D()
+					local barLength = 150
+					local barHeight = 4
+					local barOffset = self.Menu.Drawings.DamageHPBar.YOffset:Value()
+					local hpRatio = (enemy.health / enemy.maxHealth)
+					local dmg = self:GetTotalComboDamage(enemy)
+					local dmgRatio = (dmg / enemy.maxHealth)
+					if(enemy.health - dmg <= 0) then
+						dmgRatio = hpRatio
+					end
+					--Bar BG
+					Draw.Rect(bar.x - (barLength/2) -3, bar.y + barOffset - 3, barLength +6, barHeight + 6, DrawColor(225 * alphaLerp, 0, 0, 0))
+					
+					--Health bar
+					Draw.Rect(bar.x - (barLength/2), bar.y + barOffset, barLength * (hpRatio - 0.02), barHeight, DrawColor(255 * alphaLerp, 55, 255, 115))
+				
+					--Damage bar
+					Draw.Rect(bar.x - (barLength/2) + (barLength * hpRatio) - (barLength * dmgRatio), bar.y + barOffset, barLength * dmgRatio, barHeight, DrawColor(255 * alphaLerp, 255, 45, 115))
 				end
 			end
 		end
