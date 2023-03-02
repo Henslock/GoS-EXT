@@ -39,6 +39,8 @@ do
         if NewVersion > Version then
             DownloadFile(Files.Lua.Path, Files.Lua.Name)
             print("New KillerAwareness Downloaded - Please RELOAD with F6")
+		else
+			print("Killer Awareness [ver. "..tostring(scriptVersion).."] loaded!")
         end
     end
    AutoUpdate()
@@ -240,7 +242,6 @@ KillerAwareness.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolut
 KillerAwareness.AllowMove = nil
 
 function KillerAwareness:__init()
-	print("Killer Awareness [ver. "..tostring(scriptVersion).."] loaded!")
 	self:LoadMenu()
 	self:CreateSprites()
 	self:LoadHealthTrackerData()
