@@ -1,6 +1,49 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
+local scriptVersion = 1.09
+----------------------------------------------------
+--|                    AUTO UPDATE                       |--
+----------------------------------------------------
+
+do
+    
+	local Version = scriptVersion
+	local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/"
+    local Files = {
+        Lua = {
+            Path = SCRIPT_PATH,
+            Name = "KillerAwareness.lua",
+        },
+        Version = {
+            Path = SCRIPT_PATH,
+            Name = "KillerAwareness.version",
+        }
+    }
+    
+    local function AutoUpdate()
+        local function DownloadFile(path, fileName)
+            DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
+            while not FileExist(path .. fileName) do end
+        end
+        
+        local function ReadFile(path, fileName)
+            local file = io.open(path .. fileName, "r")
+            local result = file:read()
+            file:close()
+            return result
+        end
+        
+        DownloadFile(Files.Version.Path, Files.Version.Name)
+        local NewVersion = tonumber(ReadFile(Files.Version.Path, Files.Version.Name))
+        if NewVersion > Version then
+            DownloadFile(Files.Lua.Path, Files.Lua.Name)
+            print("New KillerAwareness Downloaded - Please RELOAD with F6")
+        end
+    end
+   AutoUpdate()
+end
+
 
 ----------------------------------------------------
 --|                   		UTILITY					             |--
@@ -45,6 +88,7 @@ local function LoadUnits()
 		if turret and turret.isEnemy then TableInsert(EnemyTurrets, turret) end
 		if turret and not turret.isEnemy then TableInsert(FriendlyTurrets, turret) end
 	end
+	
 end
 
 local function IsTurret(unit)
@@ -179,9 +223,7 @@ end
 class "KillerAwareness"
 
 local gameTick = GameTimer()
-local scriptVersion = 1.08
 local scriptIcon = "https://www.proguides.com/public/media/rlocal/rune/reforged/thumbnail/8128.png"
-local updateIcon = "https://www.proguides.com/public/media/rlocal/summonerspell/thumbnail/12.png"
 local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/"
 
 TOP_LEFT, BOTTOM_LEFT, TOP_RIGHT, BOTTOM_RIGHT = {x = 0, y = 0}, {x = 0, y = GameResolution.y}, {x = GameResolution.x, y = 0}, {x = GameResolution.x , y = GameResolution.y}
@@ -189,15 +231,29 @@ TOP_LEFT, BOTTOM_LEFT, TOP_RIGHT, BOTTOM_RIGHT = {x = 0, y = 0}, {x = 0, y = Gam
 local fallBackSprite = Sprite("KillerAwareness\\fallback.png")
 local ChampionSprites = {}
 local ChampionHaloData = {}
+local TrackerData = {}
 
+local MIATimer = 5
 local haloCD = 10
+
+KillerAwareness.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolution().y * 0.5 }
+KillerAwareness.AllowMove = nil
 
 function KillerAwareness:__init()
 	print("Killer Awareness [ver. "..tostring(scriptVersion).."] loaded!")
 	self:LoadMenu()
 	self:CreateSprites()
+	self:LoadHealthTrackerData()
 	Callback.Add("Tick", function() self:Tick() end)
 	Callback.Add("Draw", function() self:Draw() end)
+end
+
+function KillerAwareness:LoadHealthTrackerData()
+	DelayAction(function()
+	for k, v in pairs (Enemies) do
+		TrackerData[v.name] = {champ = v.charName, timelastspotted = 0, mia = false}
+	end
+	end,  4)
 end
 
 function KillerAwareness:LoadMenu()
@@ -224,24 +280,12 @@ function KillerAwareness:LoadMenu()
 	self.Menu.TurretAwareness:MenuElement({id = "DrawHP", name = "Draw Turret HP on Minimap", value = true})
 	self.Menu.TurretAwareness:MenuElement({id = "DrawRange", name = "Turret Draw Range", value = 500, min = 200, max = 1500, step = 100})
 	
-	--Update button
-	self.Menu:MenuElement({id = "UpdateBtn", name = "Check for Script Updates", type =  MENU, leftIcon = updateIcon, onclick = function() self:CheckUpdates() end})
+	--Health Tracker
+	self.Menu:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = false})
+
 end
 
 function KillerAwareness:Tick()
-end
-
-function KillerAwareness:DownloadFile(path, fileName)
-	DownloadFileAsync(gitHub .. fileName, path .. fileName, function() end)
-	while not FileExist(path .. fileName) do end
-end
-
-
-function KillerAwareness:CheckUpdates()
-	self.Menu.UpdateBtn:Hide(true)
-	print("Fetching latest version of the script...")
-	self:DownloadFile(SCRIPT_PATH, "KillerAwareness.lua")
-	print("Script downloaded, please reload with F6")
 end
 
 function KillerAwareness:CreateSprites()
@@ -260,6 +304,21 @@ function KillerAwareness:FetchSprite(unit)
 	else
 		return fallBackSprite
 	end
+end
+
+function KillerAwareness:IsInStatusBox(pt)
+	return pt.x >= self.Window.x
+		and pt.x <= self.Window.x + 186
+		and pt.y >= self.Window.y
+		and pt.y <= self.Window.y + 68
+end
+
+function KillerAwareness:OnWndMsg(msg, wParam)
+	self.AllowMove = msg == 513
+			and wParam == 0
+			and self:IsInStatusBox(cursorPos)
+			and { x = self.Window.x - cursorPos.x, y = self.Window.y - cursorPos.y }
+		or nil
 end
 
 function KillerAwareness:Draw()
@@ -317,6 +376,11 @@ function KillerAwareness:Draw()
 	end
 	
 	self:DrawTurretAwareness()
+	
+	if(self.Menu.DrawHealthTracker:Value()) then
+		self:UpdateHealthData()
+		self:DrawHealthTracker()
+	end
 	
 end
 
@@ -387,7 +451,81 @@ function KillerAwareness:DrawTurretAwareness()
 	end
 end
 
+function KillerAwareness:DrawHealthTracker()
+	if not (myHero.networkID)then return end
+	if (Game.Timer() <= 1) then return end
+	if KillerAwareness.AllowMove then
+		KillerAwareness.Window = { x = cursorPos.x + KillerAwareness.AllowMove.x, y = cursorPos.y + KillerAwareness.AllowMove.y }
+	end
+
+	local rectHeight = #Enemies * 30	
+	Draw.Rect(self.Window.x, self.Window.y, 300, rectHeight, Draw.Color(224, 23, 23, 23))
+	Draw.Text("Health Tracker", 18, self.Window.x + 10, self.Window.y + 5, DrawColor(255, 255, 255, 255))
+	local yOffset = 0
+	
+	local barWidth = 180
+	local barOffset = 100
+	local miaCheck = false
+	for k, v in pairs(Enemies) do
+		local hpRatio = v.health / math.floor(v.maxHealth)
+		if(TrackerData[v.name] ~= nil) then
+			miaCheck = ((GetTickCount() - TrackerData[v.name].timelastspotted) / 1000 >= MIATimer)
+		end
+		
+		--HealthBarDraws
+		if(not miaCheck and v.alive) then
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, DrawColor(255, 0, 0, 0))
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth * hpRatio -1, 8, IsValid(v) and DrawColor(255, 0, 255, 125) or DrawColor(55, 0, 255, 125))
+		else
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, DrawColor(55, 255, 255, 255))
+		end
+		
+		-- Name
+
+		if(not miaCheck and v.alive) then
+			Draw.Text(v.charName, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, DrawColor(255, 55, 255, 155))
+		else
+			Draw.Text(v.charName, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, DrawColor(125, 255, 255, 255))
+		end
+		
+		yOffset = yOffset + 20
+	end
+
+end
+
+local pulseCheck = 0
+function KillerAwareness:UpdateHealthData()
+	for k,v in pairs(Enemies) do
+		if(TrackerData[v.name] == nil) then return end
+		if(IsValid(v)) then
+			TrackerData[v.name].timelastspotted = GetTickCount()
+			TrackerData[v.name].mia = false
+		end
+	end
+	
+	if(pulseCheck > GameTimer()) then return end
+	pulseCheck = GameTimer() + 0.25
+	
+	for _, enemy in pairs(Enemies) do
+		local miaCheck = ((GetTickCount() - TrackerData[enemy.name].timelastspotted) / 1000 >= MIATimer)	
+		
+		if(IsValid(enemy)) then
+			TrackerData[enemy.name].timelastspotted = GetTickCount()
+		end
+		
+		if(enemy.visible == false) then
+			TrackerData[enemy.name].mia = true
+		end
+	end
+end
+
 Callback.Add("Load", function()
 	LoadUnits()
 	KillerAwareness()
 end)
+
+if KillerAwareness.OnWndMsg then
+	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
+		KillerAwareness:OnWndMsg(msg, wParam)
+	end)
+end
