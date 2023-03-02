@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.07
+scriptVersion = 1.08
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -352,10 +352,8 @@ end
 
 
 function Veigar:Tick()
-	if(MyHeroNotReady()) then return end
-	
 	if(self.Menu.DisableInFountain:Value()) then
-		if(IsInFountain()) then
+		if(IsInFountain() or not myHero.alive) then
 			_G.SDK.Orbwalker:SetMovement(false)
 		else
 			_G.SDK.Orbwalker:SetMovement(true)
@@ -363,6 +361,8 @@ function Veigar:Tick()
 	else
 		_G.SDK.Orbwalker:SetMovement(true)
 	end
+	
+	if(MyHeroNotReady()) then return end
 	
 	local mode = GetMode()
 	if(mode == "Combo") then
