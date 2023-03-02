@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.09
+local scriptVersion = 1.10
 ----------------------------------------------------
 --|                    AUTO UPDATE                       |--
 ----------------------------------------------------
@@ -38,9 +38,9 @@ do
         local NewVersion = tonumber(ReadFile(Files.Version.Path, Files.Version.Name))
         if NewVersion > Version then
             DownloadFile(Files.Lua.Path, Files.Lua.Name)
-            print("New KillerAwareness Downloaded - Please RELOAD with F6")
+            print("*WARNING* New KillerAwareness Downloaded - Please RELOAD with [ F6 ]")
 		else
-			print("Killer Awareness [ver. "..tostring(scriptVersion).."] loaded!")
+			print("| KILLER | Awareness [ver. "..tostring(scriptVersion).."] loaded!")
         end
     end
    AutoUpdate()
