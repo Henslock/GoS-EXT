@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Teemo will exit.")
@@ -187,10 +187,8 @@ function Teemo:GetPred(tbl)
 end
 
 function Teemo:Tick()
-	if(MyHeroNotReady()) then return end
-	
 	if(self.Menu.DisableInFountain:Value()) then
-		if(IsInFountain()) then
+		if(IsInFountain() or not myHero.alive) then
 			_G.SDK.Orbwalker:SetMovement(false)
 		else
 			_G.SDK.Orbwalker:SetMovement(true)
@@ -198,6 +196,8 @@ function Teemo:Tick()
 	else
 		_G.SDK.Orbwalker:SetMovement(true)
 	end
+	
+	if(MyHeroNotReady()) then return end
 	
 	local mode = GetMode()
 	if(mode == "Combo") then
@@ -269,7 +269,6 @@ function Teemo:AutoLevel()
 		end, 0.5)
 	end
 end
-
 
 local RComboCD = 5
 local RComboTimer = GameTimer()
@@ -552,7 +551,10 @@ function Teemo:KillSteal()
 end
 
 function Teemo:AutoQ()
-	if(gameTick > GameTimer()) then return end	
+	if(gameTick > GameTimer()) then return end
+	
+	--Auto Q won't work if you are in stealth
+	if(self:HasStealthBuff()) then return end
 	--Anti-melee
 	if(Ready(_Q)) then
 		local meleeTarget = GetTarget(300)
@@ -588,7 +590,6 @@ end
 
 function Teemo:MushroomAssistant()
 	if(Game.mapID == SUMMONERS_RIFT) then
-		_G.SDK.Orbwalker:Orbwalk()
 		self:UpdateNearbyShroomSpots()
 		
 		if(Ready(_R)) then
@@ -631,6 +632,10 @@ function Teemo:GetRRange()
 	if(myHero:GetSpellData(_R).level == 0) then return 600 end
 	
 	return ({600, 750, 900})[myHero:GetSpellData(_R).level]
+end
+
+function Teemo:HasStealthBuff()
+	return HasBuff(myHero, "camouflagestealth")
 end
 
 function Teemo:CantKill(unit, kill, ss, aa)
@@ -747,24 +752,24 @@ function Teemo:DrawBlindBar()
 	end
 end
 
-
 Teemo.targetSpot = nil
 function Teemo:DrawMushroomSpots()
 	if(#nearbyShroomSpots == 0) then return end
 	
-	local closestPoint = self:GetClosestPointToMe(nearbyShroomSpots)	
+	local heroPos = myHero.pos:To2D()
+	DrawText("[Left Click] To Place", 18, heroPos.x - 65, heroPos.y + 50)
+	
+	local closestPoint = self:GetClosestPointToCursor(nearbyShroomSpots)
 	for i = 1, #nearbyShroomSpots do
 		spot = nearbyShroomSpots[i]
-		if(myHero.pos:DistanceTo(spot) > R.Range) or Ready(_R) == false then
-			DrawCircle(spot, R.Radius/2 , 3, DrawColor(105, 125, 125, 125))
-		else
+
 			if(spot == closestPoint) then
 				DrawCircle(spot, R.Radius/2 , 3, DrawColor(255, 125, 255, 65))
 				self.targetSpot = spot
 			else
 				DrawCircle(spot, R.Radius/2 , 3, DrawColor(175, 255, 255, 255))
 			end
-		end
+
 	end
 end
 
@@ -774,6 +779,20 @@ function Teemo:GetClosestPointToMe(tbl)
 	for i = 1, #tbl do
 		point = tbl[i]
 		local dist = GetDistance(point, myHero.pos)
+		if(dist <= closestDist) then	
+			closestPoint = point
+			closestDist = dist
+		end
+	end
+	return closestPoint
+end
+
+function Teemo:GetClosestPointToCursor(tbl)
+	local closestPoint = nil
+	local closestDist = math.huge
+	for i = 1, #tbl do
+		point = tbl[i]
+		local dist = GetDistance(point, Game.mousePos())
 		if(dist <= closestDist) then	
 			closestPoint = point
 			closestDist = dist
