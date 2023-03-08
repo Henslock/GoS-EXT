@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.07
+local kLibVersion = 2.08
 
 -- [ AutoUpdate ]
 do
@@ -437,7 +437,6 @@ function IsImmobile(unit, recallOption)
         if buff and buff.count > 0 then
             local BuffType = buff.type
             if BuffType == 5 or BuffType == 12 or BuffType == 11 or BuffType == 22 or BuffType == 35 or BuffType == 25 or BuffType == 29 then
-				print(BuffType)
                 local BuffDuration = buff.duration
                 if BuffDuration > MaxDuration then
                     MaxDuration = BuffDuration
