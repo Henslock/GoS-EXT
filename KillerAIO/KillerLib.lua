@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.06
+local kLibVersion = 2.07
 
 -- [ AutoUpdate ]
 do
@@ -436,7 +436,8 @@ function IsImmobile(unit, recallOption)
         local buff = unit:GetBuff(i)
         if buff and buff.count > 0 then
             local BuffType = buff.type
-            if BuffType == 5 or BuffType == 12 or BuffType == 11 or BuffType == 21 or BuffType == 22 or BuffType == 35 or BuffType == 25 or BuffType == 29 then
+            if BuffType == 5 or BuffType == 12 or BuffType == 11 or BuffType == 22 or BuffType == 35 or BuffType == 25 or BuffType == 29 then
+				print(BuffType)
                 local BuffDuration = buff.duration
                 if BuffDuration > MaxDuration then
                     MaxDuration = BuffDuration
@@ -743,6 +744,7 @@ function CalcMagicalDamage(source, target, amount, time)
     local passiveMod = 0
     
     local totalMR = target.magicResist + target.bonusMagicResist
+
     if totalMR < 0 then
         passiveMod = 2 - 100 / (100 - totalMR)
     elseif totalMR * source.magicPenPercent - source.magicPen < 0 then
@@ -750,6 +752,7 @@ function CalcMagicalDamage(source, target, amount, time)
     else
         passiveMod = 100 / (100 + totalMR * source.magicPenPercent - source.magicPen)
     end
+
     local dmg = math.max(math.floor(passiveMod * amount), 0)
     
     if target.charName == "Kassadin" then
