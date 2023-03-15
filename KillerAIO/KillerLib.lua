@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.08
+local kLibVersion = 2.11
 
 -- [ AutoUpdate ]
 do
@@ -456,6 +456,23 @@ function IsImmobile(unit, recallOption)
     return MaxDuration
 end
 
+function IsHardCCd(unit)
+    local MaxDuration = 0
+    for i = 0, unit.buffCount do
+        local buff = unit:GetBuff(i)
+        if buff and buff.count > 0 then
+            local BuffType = buff.type
+            if BuffType == 5 or BuffType == 12 or BuffType == 22 or BuffType == 35 or BuffType == 25 or BuffType == 29 then
+                local BuffDuration = buff.duration
+                if BuffDuration > MaxDuration then
+                    MaxDuration = BuffDuration
+                end
+            end
+        end
+    end
+    return MaxDuration
+end
+
 function IsCleanse(unit)
     local MaxDuration = 0
     for i = 0, unit.buffCount do
@@ -558,7 +575,7 @@ function GetEnemyCountAtPos(checkrange, range, pos)
     return count
 end
 
-function GetEnemiesAtPos(checkrange, range, pos,target)
+function GetEnemiesAtPos(checkrange, range, pos, target)
     local enemies = _G.SDK.ObjectManager:GetEnemyHeroes(checkrange)
 	local results = {}
     for i = 1, #enemies do 
@@ -675,6 +692,13 @@ function dotProduct( a, b )
         return dot
 end
 
+-- 3D dot product of two normalized vectors
+function dotProduct3D( a, b )
+        -- multiply the x's, multiply the y's, then add
+        local dot = (a.x * b.x + a.y * b.y + a.z * b.z)
+        return dot
+end
+
 function CalculateBoundingBoxAvg(targets, predDelay)
 	local highestX, lowestX, highestZ, lowestZ = 0, math.huge, 0, math.huge
 	local avg = {x = 0, y = 0, z = 0}
@@ -766,6 +790,29 @@ function CalcMagicalDamage(source, target, amount, time)
     return dmg
 end
 
+function CalcPhysicalDamage(source, target, amount)
+    local armorPenetrationPercent = source.armorPenPercent
+    local armorPenetrationFlat = source.armorPen * (0.6 + 0.4 * source.levelData.lvl / 18)
+    local bonusArmorPenetrationMod = source.bonusArmorPenPercent
+
+    local armor = target.armor
+    local bonusArmor = target.bonusArmor
+    local value
+
+    if armor < 0 then
+        value = 2 - 100 / (100 - armor)
+    elseif armor * armorPenetrationPercent - bonusArmor *
+        (1 - bonusArmorPenetrationMod) - armorPenetrationFlat < 0 then
+        value = 1
+    else
+        value = 100 / (100 + armor * armorPenetrationPercent - bonusArmor *
+                    (1 - bonusArmorPenetrationMod) - armorPenetrationFlat)
+    end
+	
+	local final = math.max(math.floor(value * amount), 0)
+	return final
+end
+
 function UseIgnite(unit)
 	if myHero:GetSpellData(SUMMONER_1).name == "SummonerDot" and Ready(SUMMONER_1) then
 		Control.CastSpell(HK_SUMMONER_1, unit)
@@ -854,6 +901,69 @@ function GetExtendedSpellPrediction(target, spellData)
 	preciseSpellPred:GetPrediction(target, myHero)
 
 	return preciseSpellPred, isExtended
+end
+
+function CalculateBestCirclePosition(targets, radius, edgeDetect, spellRange)
+
+	local avgCastPos = CalculateBoundingBoxAvg(targets, 0.25)
+	local newCluster = {}
+	local distantEnemies = {}
+
+	for _, enemy in pairs(targets) do
+		if(enemy.pos:DistanceTo(avgCastPos) > radius) then
+			table.insert(distantEnemies, enemy)
+		else
+			table.insert(newCluster, enemy)
+		end
+	end
+	
+	if(#distantEnemies > 0) then
+		local closestDistantEnemy = nil
+		local closestDist = 10000
+		for _, distantEnemy in pairs(distantEnemies) do
+			local dist = distantEnemy.pos:DistanceTo(avgCastPos)
+			if( dist < closestDist ) then
+				closestDistantEnemy = distantEnemy
+				closestDist = dist
+			end
+		end
+		if(closestDistantEnemy ~= nil) then
+			table.insert(newCluster, closestDistantEnemy)
+		end
+		
+		--Recursion, we are discarding the furthest target and recalculating the best position
+		if(#newCluster ~= #targets) then
+			return self:CalculateBestCirclePosition(newCluster, radius)
+		end
+	end
+	
+	if(edgeDetect) and myHero.pos:DistanceTo(avgCastPos) > spellRange then
+
+		local checkPos = myHero.pos:Extended(avgCastPos, spellRange)
+		local furthestTarget = FindFurthestTargetFromMe(newCluster)
+		local fakeMyHeroPos = avgCastPos:Extended(myHero.pos, spellRange + radius - 50)
+		if(furthestTarget ~= nil) then
+			fakeMyHeroPos = avgCastPos:Extended(myHero.pos, spellRange + radius - furthestTarget.pos:DistanceTo(avgCastPos))
+		end
+
+		if(myHero.pos:DistanceTo(avgCastPos) >= fakeMyHeroPos:DistanceTo(avgCastPos)) then
+			checkPos = fakeMyHeroPos:Extended(avgCastPos, spellRange)
+		end
+		
+		local hitAllCheck = true
+		for _, v in pairs(newCluster) do
+			if(v:GetPrediction(math.huge, 0.25):DistanceTo(checkPos) >= radius + 5) then -- the +5 is to fix a precision issue
+				hitAllCheck = false
+			end
+		end
+		
+		if hitAllCheck then 
+			return checkPos, #newCluster, newCluster
+		end
+
+	end
+	
+	return avgCastPos, #targets, targets
 end
 
 --Checks to see if a unit is running towards or away from the target
