@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.11
+local kLibVersion = 2.13
 
 -- [ AutoUpdate ]
 do
@@ -330,6 +330,17 @@ end
 function GetEnemyHeroes(range, bbox)
 	local result = {}
 	for _, unit in ipairs(Enemies) do
+		local extrarange = bbox and unit.boundingRadius or 0
+		if unit.distance < range + extrarange then
+			table.insert(result, unit)
+		end
+	end
+	return result
+end
+
+function GetAllyHeroes(range, bbox)
+	local result = {}
+	for _, unit in ipairs(Allies) do
 		local extrarange = bbox and unit.boundingRadius or 0
 		if unit.distance < range + extrarange then
 			table.insert(result, unit)
@@ -933,7 +944,7 @@ function CalculateBestCirclePosition(targets, radius, edgeDetect, spellRange)
 		
 		--Recursion, we are discarding the furthest target and recalculating the best position
 		if(#newCluster ~= #targets) then
-			return self:CalculateBestCirclePosition(newCluster, radius)
+			return CalculateBestCirclePosition(newCluster, radius)
 		end
 	end
 	
