@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.13
+local kLibVersion = 2.14
 
 -- [ AutoUpdate ]
 do
@@ -822,6 +822,16 @@ function CalcPhysicalDamage(source, target, amount)
 	
 	local final = math.max(math.floor(value * amount), 0)
 	return final
+end
+
+function HasIgnite()
+	if myHero:GetSpellData(SUMMONER_1).name == "SummonerDot" and Ready(SUMMONER_1) then
+		return true
+	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerDot" and Ready(SUMMONER_2) then
+		return true
+	end
+	
+	return false
 end
 
 function UseIgnite(unit)
