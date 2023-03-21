@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.14
+local kLibVersion = 2.15
 
 -- [ AutoUpdate ]
 do
@@ -175,7 +175,9 @@ function GetDistanceSqr(pos1, pos2)
 end
 
 function GetDistance(pos1, pos2)
-	return sqrt(GetDistanceSqr(pos1, pos2))
+	local a = pos1.pos or pos1
+	local b = pos2.pos or pos2
+	return sqrt(GetDistanceSqr(a, b))
 end
 
 function GetDistance2D(pos1, pos2)
