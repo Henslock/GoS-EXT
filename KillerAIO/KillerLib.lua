@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.15
+local kLibVersion = 2.16
 
 -- [ AutoUpdate ]
 do
@@ -185,6 +185,10 @@ function GetDistance2D(pos1, pos2)
 	local dx = pos1.x - pos2.x
 	local dy = pos1.y - pos2.y
 	return sqrt(dx * dx + dy * dy)
+end
+
+function Lerp(a, b, t)
+	return (a + ((b - a)*t))
 end
 
 function GetClosestPointToCursor(tbl)
