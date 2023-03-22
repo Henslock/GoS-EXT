@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.16
+local kLibVersion = 2.17
 
 -- [ AutoUpdate ]
 do
@@ -479,7 +479,7 @@ function IsHardCCd(unit)
         local buff = unit:GetBuff(i)
         if buff and buff.count > 0 then
             local BuffType = buff.type
-            if BuffType == 5 or BuffType == 12 or BuffType == 22 or BuffType == 35 or BuffType == 25 or BuffType == 29 then
+            if BuffType == 5 or BuffType == 8 or BuffType == 10 or BuffType == 12 or BuffType == 22 or BuffType == 23 or BuffType == 35 or BuffType == 34 or BuffType == 25 or BuffType == 29 then
                 local BuffDuration = buff.duration
                 if BuffDuration > MaxDuration then
                     MaxDuration = BuffDuration
