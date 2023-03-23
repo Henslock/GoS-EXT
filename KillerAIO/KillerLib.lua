@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.17
+local kLibVersion = 2.18
 
 -- [ AutoUpdate ]
 do
