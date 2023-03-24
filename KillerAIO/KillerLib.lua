@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.18
+local kLibVersion = 2.19
 
 -- [ AutoUpdate ]
 do
@@ -705,7 +705,11 @@ end
 -- 2D dot product of two normalized vectors
 function dotProduct( a, b )
         -- multiply the x's, multiply the y's, then add
-        local dot = (a.x * b.x + a.z * b.z)
+		local mag1 = a
+		local mag2 = b
+		mag1.y = a.y or a.z or 0
+		mag2.y = b.y or b.z or 0
+        local dot = (mag1.x * mag2.x + mag1.y * mag2.y)
         return dot
 end
 
