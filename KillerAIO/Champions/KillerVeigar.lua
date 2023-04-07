@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.08
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -1417,18 +1417,21 @@ end
 
 function Veigar:GetRawAbilityDamage(spell)
 	if(spell == "Q") then
-		 return ({80, 120, 160, 200, 240})[myHero:GetSpellData(_Q).level] + (0.6 * myHero.ap)
+		local apRatio = ({45, 50, 55, 60, 65})[myHero:GetSpellData(_Q).level] / 100
+		return ({80, 120, 160, 200, 240})[myHero:GetSpellData(_Q).level] + (apRatio * myHero.ap)
 	end
 	
 	if(spell == "W") then
-		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_W).level] + myHero.ap
+		local apRatio = ({70, 80, 90, 100, 110})[myHero:GetSpellData(_W).level] / 100
+		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_W).level] + (apRatio * myHero.ap)
 	end
 	
 	return 0
 end
 
 function Veigar:GetRDamage(unit)
-	local baseAmnt = ({175, 250, 325})[myHero:GetSpellData(_R).level] + (0.75 * myHero.ap)
+	local apRatio = ({65, 70, 75})[myHero:GetSpellData(_R).level] / 100
+	local baseAmnt = ({175, 250, 325})[myHero:GetSpellData(_R).level] + (apRatio * myHero.ap)
 	local ratioMult = (math.min(1 -(unit.health / unit.maxHealth), 0.667) / 0.667)
 	return CalcMagicalDamage(myHero, unit, baseAmnt + (baseAmnt * ratioMult))
 end
@@ -1528,7 +1531,8 @@ function Veigar:GetTotalComboDamage(unit)
 	end
 	
 	if(Ready(_R)) then
-		local baseAmnt = ({175, 250, 325})[myHero:GetSpellData(_R).level] + (0.75 * myHero.ap)
+		local apRatio = ({65, 70, 75})[myHero:GetSpellData(_R).level] / 100
+		local baseAmnt = ({175, 250, 325})[myHero:GetSpellData(_R).level] + (apRatio * myHero.ap)
 		local ratioMult = (math.min(1 -((unit.health - totalDmg) / unit.maxHealth), 0.667) / 0.667)
 		local RDmg = CalcMagicalDamage(myHero, unit, baseAmnt + (baseAmnt * ratioMult))
 		totalDmg = totalDmg + RDmg
