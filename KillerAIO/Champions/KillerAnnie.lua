@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.28
+scriptVersion = 1.29
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -285,7 +285,7 @@ end
 
 function Annie:CalculateBestCirclePosition(targets, radius, edgeDetect)
 
-	local avgCastPos = CalculateBoundingBoxAvg(targets, 0.25)
+	local avgCastPos = CalculateBoundingBoxAvg(targets, math.huge, 0.25)
 	local newCluster = {}
 	local distantEnemies = {}
 
