@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.19
+local kLibVersion = 2.22
 
 -- [ AutoUpdate ]
 do
@@ -720,13 +720,13 @@ function dotProduct3D( a, b )
         return dot
 end
 
-function CalculateBoundingBoxAvg(targets, predDelay)
+function CalculateBoundingBoxAvg(targets, predSpeed, predDelay)
 	local highestX, lowestX, highestZ, lowestZ = 0, math.huge, 0, math.huge
 	local avg = {x = 0, y = 0, z = 0}
 	for k, v in pairs(targets) do
 		local vPos = v.pos
 		if(predDelay > 0) then
-			vPos = v:GetPrediction(math.huge, predDelay)
+			vPos = v:GetPrediction(predSpeed, predDelay)
 		end
 		
 		if(vPos.x >= highestX) then
@@ -934,9 +934,9 @@ function GetExtendedSpellPrediction(target, spellData)
 	return preciseSpellPred, isExtended
 end
 
-function CalculateBestCirclePosition(targets, radius, edgeDetect, spellRange)
+function CalculateBestCirclePosition(targets, radius, edgeDetect, spellRange, spellSpeed, spellDelay)
 
-	local avgCastPos = CalculateBoundingBoxAvg(targets, 0.25)
+	local avgCastPos = CalculateBoundingBoxAvg(targets, spellSpeed, spellDelay)
 	local newCluster = {}
 	local distantEnemies = {}
 
