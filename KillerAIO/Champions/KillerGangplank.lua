@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -1431,7 +1431,7 @@ function Gangplank:Combo()
 					local EPrediction = GGPrediction:SpellPrediction(E) --Chain barrels have a delay to their explosion
 					EPrediction:GetPrediction(tar, myHero)
 					if EPrediction.CastPosition then
-						if(GetDistance(lastCastBarrelPosVec, barrel.barrelObj) <= E.Radius*2.6 and self:GetBarrelHealth(barrel, E.Delay + myHero.attackData.windUpTime - extraReaction) == 1) then
+						if(GetDistance(lastCastBarrelPosVec, barrel.barrelObj) <= E.Radius*2.6 and self:GetBarrelHealth(barrel, myHero.attackData.windUpTime - extraReaction) == 1) then
 							self:SetAABarrel(barrel)
 							return
 						end
