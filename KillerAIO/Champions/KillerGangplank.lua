@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -832,8 +832,10 @@ function Gangplank:IsBarrelOnAnyUnit()
 	
 	if(currBarrel) then
 		for _, enemy in ipairs(Enemies) do
-			if GetDistance(currBarrel, enemy) < E.Radius then
-				return true, enemy
+			if(enemy and IsValid(enemy)) then
+				if GetDistance(currBarrel, enemy) < E.Radius then
+					return true, enemy
+				end
 			end
 		end
 	end
@@ -841,8 +843,10 @@ function Gangplank:IsBarrelOnAnyUnit()
 	for _, enemy in ipairs(Enemies) do
 		if(GetDistance(enemy, myHero) < E.Range -10) then
 			for k, barrel in ipairs(self.BarrelData) do
-				if GetDistance(barrel.barrelObj, enemy) < E.Radius then
-					return true, enemy
+				if(enemy and IsValid(enemy)) then
+					if GetDistance(barrel.barrelObj, enemy) < E.Radius then
+						return true, enemy
+					end
 				end
 			end
 		end
