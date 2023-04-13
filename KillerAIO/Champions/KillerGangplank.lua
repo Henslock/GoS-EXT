@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.03
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -356,6 +356,9 @@ Gangplank.ComboKey = 32
 Gangplank.Ping = 0
 
 
+Gangplank.BaseAS = 0.658
+Gangplank.ASRatio = 0.69
+
 function Gangplank:__init()
 	self:LoadMenu()
 	Callback.Add("Tick", function() self:Tick() end)
@@ -493,7 +496,7 @@ function Gangplank:Tick()
 		_G.SDK.Orbwalker:SetMovement(true)
 	end
 	
-	self.Ping = (_G.SDK.Menu.Main.Latency:Value() - 15)/1000
+	self.Ping = (_G.SDK.Menu.Main.Latency:Value() - 5)/1000
 	
 	local mode = GetMode()
 	if(mode == "Combo") then
@@ -590,20 +593,34 @@ function Gangplank:OnPreAttack(args)
 						local dist = GetDistance(myHero, barrel.barrelObj)
 						if(self:IsBarrelBehindUnit(barrel, tar) == false) then
 							if dist < _G.SDK.Data:GetAutoAttackRange(myHero)+75 then
-								if(self:GetBarrelHealth(barrel, (1 / (0.658+((myHero.attackSpeed-1) * 0.69))) + ((_G.SDK.Menu.Main.Latency:Value() + 15)/1000)) == 1) then
+								if(self:GetBarrelHealth(barrel, (1 / (self.BaseAS+((myHero.attackSpeed-1) * self.ASRatio))) + ((_G.SDK.Menu.Main.Latency:Value() + 15)/1000)) == 1) then
 									args.Process = false
 									
 									--Q weaving
+									--[[
 									if(self.Menu.Combo.UseQ:Value()) then
 										if(Ready(_Q) and self:GetBarrelHealth(barrel, Q.Delay + 0.1) > 1 and  myHero.levelData.lvl >= 7) then
 											Control.CastSpell(HK_Q, tar)
 										end
 									end
+									--]]
 								end
 							end                        
 						end
 					end
 				end
+				
+				
+                if myHero:GetSpellData(_Q).currentCd<0.8 and (myHero:GetSpellData(_E).ammo>0 or (myHero:GetSpellData(_E).ammo==0 and myHero:GetSpellData(_E).currentCd>0))  then
+                    local proximityBarrels = self:GetBarrelsAroundUnit(myHero, Q.Range)
+                    if#proximityBarrels >= 1 then 
+                        for _, barrel in ipairs(proximityBarrels) do
+                            if(self:GetBarrelHealth(barrel, E.Delay + Q.Delay + GetDistance(myHero, barrel.barrelObj)/Q.Speed + ((1 /(self.BaseAS+((myHero.attackSpeed-1) * self.ASRatio)))-E.Delay-Q.Delay)) == 1)  and GetDistance(barrel.barrelObj, tar.pos)<E.Radius*2.66 and self:HasPassive() == false  then
+                            args.Process = false
+                            end
+                        end
+                    end
+                end     
 			end
 			Control.KeyDown(self.ComboKey)
 		end
@@ -810,6 +827,30 @@ function Gangplank:GetChainBarrels()
 	return chainBarrels
 end
 
+function Gangplank:IsBarrelOnAnyUnit()
+	local currBarrel = self:GetCurrentBarrelPlacementPos(0.25)
+	
+	if(currBarrel) then
+		for _, enemy in ipairs(Enemies) do
+			if GetDistance(currBarrel, enemy) < E.Radius then
+				return true, enemy
+			end
+		end
+	end
+	
+	for _, enemy in ipairs(Enemies) do
+		if(GetDistance(enemy, myHero) < E.Range -10) then
+			for k, barrel in ipairs(self.BarrelData) do
+				if GetDistance(barrel.barrelObj, enemy) < E.Radius then
+					return true, enemy
+				end
+			end
+		end
+	end
+
+	return false
+end
+
 function Gangplank:IsBarrelChainOnUnit(chainBarrels, unit)
 	for _, barrel in ipairs(chainBarrels) do
 		if(GetDistance(barrel.barrelObj, unit) < E.Radius + 30) then
@@ -940,6 +981,7 @@ function Gangplank:GetClosestBarrelToUnit(unit)
 	return closestBarrel
 end
 
+--This version will only check for AoE potential around the orbwalkers target
 function Gangplank:GetPossibleAOEBarrel(tar, connectingBarrel)
 	local barrel = connectingBarrel
 	if(connectingBarrel.barrelObj ~= nil) then
@@ -960,6 +1002,41 @@ function Gangplank:GetPossibleAOEBarrel(tar, connectingBarrel)
 			end
 
 			return true, bestAoEPos
+		end
+	end
+	
+	return false, nil
+end
+
+--This version will consider all possible AoE situations, regardless of who the orbwalker wants to hit
+function Gangplank:GetPossibleAOEBarrel2(tar, connectingBarrel)
+	if(_G.SDK.TargetSelector.Selected ~= nil) then return end
+	
+	local barrel = connectingBarrel
+	if(connectingBarrel.barrelObj ~= nil) then
+		barrel = connectingBarrel.barrelObj
+	end
+	
+	local enemyCluster = nil
+	for _, enemy in ipairs(Enemies) do
+		if(GetDistance(enemy, myHero) < E.Range - 10) or enemy.networkID ~= tar.networkID then
+			enemyCluster = GetEnemiesAtPos(E.Range - 10, E.Radius, enemy.pos, enemy)
+			if(#enemyCluster >= 2) then
+				local bestAoEPos = CalculateBestCirclePosition(enemyCluster, E.Radius*0.66, false, E.Range - 10, E.Speed, E.Delay)
+				if(bestAoEPos) then
+					local dist = GetDistance(barrel, bestAoEPos)
+					local distanceToPlacement = math.min(dist, (E.Radius - 7.5)*2)
+					local placementVec = barrel.pos:Extended(bestAoEPos, distanceToPlacement)
+
+					for _, enemy in ipairs(enemyCluster) do
+						if(GetDistance(enemy, placementVec) > E.Radius*0.66) then
+							return false, nil
+						end
+					end
+
+					return true, bestAoEPos
+				end
+			end
 		end
 	end
 	
@@ -1134,17 +1211,17 @@ function Gangplank:TripleBarrelForceETick()
 			local target = self.forceEData.tar
 			--Do a second pass check on the position to make sure we can't get a better one
 			local distCheck = GetDistance(barrel, target)
-			local distanceToPlacement = math.min(distCheck, (E.Radius - 17.5)*2)
+			local distanceToPlacement = math.min(distCheck, (E.Radius - 10)*2)
 			local secondPos = barrel.pos:Extended(target.pos, distanceToPlacement)
 			if(GetDistance(secondPos, myHero) <= E.Range - 10) then
 				self.forceEData = {pos = secondPos, barrel = self.forceEData.barrel, tar = self.forceEData.tar}
 			end
 			
 			--AoECheck
-			local canAoE, AoEPos = self:GetPossibleAOEBarrel(target, barrel)
+			local canAoE, AoEPos = self:GetPossibleAOEBarrel2(target, barrel)
 			if(canAoE) then
 				local distCheck = GetDistance(barrel, AoEPos)
-				local distanceToPlacement = math.min(distCheck, (E.Radius - 17.5)*2)
+				local distanceToPlacement = math.min(distCheck, (E.Radius - 10)*2)
 				local secondPos = barrel.pos:Extended(AoEPos, distanceToPlacement)
 				if(GetDistance(secondPos, myHero) <= E.Range - 10) then
 					self.forceEData = {pos = secondPos, barrel = self.forceEData.barrel, tar = self.forceEData.tar}
@@ -1327,6 +1404,14 @@ function Gangplank:Combo()
 	if(self.Menu.Combo.EModules.AutoQ:Value()) then
 		if(tar and IsValid(tar)) then
 			local proximityBarrels = self:GetBarrelsAroundUnit(tar, E.Radius)
+			local anyUnitBarrelCheck, anyUnit = self:IsBarrelOnAnyUnit()
+			if(anyUnitBarrelCheck) then
+				if(IsValid(anyUnit)) then
+					tar = anyUnit
+					proximityBarrels = self:GetBarrelsAroundUnit(tar, E.Radius)
+				end
+			end
+			
 			if(#proximityBarrels > 0) then
 				for _, barrel in ipairs(proximityBarrels) do
 					local dist = GetDistance(myHero, barrel.barrelObj)
@@ -1420,6 +1505,14 @@ function Gangplank:Combo()
 	--Q or AA Chain Barrels on Enemies QUICKATTACK
 	if(self.Menu.Combo.EModules.AutoQChain:Value()) then
 		if(tar and IsValid(tar)) then
+		
+			local anyUnitBarrelCheck, anyUnit = self:IsBarrelOnAnyUnit()
+			if(anyUnitBarrelCheck) then
+				if(IsValid(anyUnit)) then
+					tar = anyUnit
+				end
+			end
+			
 			local meleeBarrels = self:GetBarrelsAroundUnit(myHero, self.AARange)
 			local QBarrels = self:GetBarrelsAroundUnit(myHero, Q.Range)
 			local lastCastBarrelPos = self:GetCurrentBarrelPlacementPos()
@@ -1459,6 +1552,14 @@ function Gangplank:Combo()
 	--Q or AA Chain Barrels on Enemies
 	if(self.Menu.Combo.EModules.AutoQChain:Value()) then
 		if(tar and IsValid(tar)) then
+		
+			local anyUnitBarrelCheck, anyUnit = self:IsBarrelOnAnyUnit()
+			if(anyUnitBarrelCheck) then
+				if(IsValid(anyUnit)) then
+					tar = anyUnit
+				end
+			end
+			
 			local chainBarrels = self:GetChainBarrels()
 			if(#chainBarrels > 1) then
 				local EPrediction, isExtended = GetExtendedSpellPrediction(tar, EStaggered)
@@ -1567,7 +1668,7 @@ function Gangplank:Combo()
 								local res = dotProduct(dirVec, backwardVec)
 								--Barrels become easier to attack when they are lower on the screen pos
 								if(res >= 0.75) then
-									forwardVec = Vector(forwardVec.x, forwardVec.y, forwardVec.z - 200)
+									forwardVec = Vector(forwardVec.x, forwardVec.y, forwardVec.z - 275)
 								end
 								
 								Control.CastSpell(HK_E, forwardVec)
@@ -1675,7 +1776,7 @@ function Gangplank:Combo()
 							end
 							
 							--AoECheck
-							local canAoE, AoEPos = self:GetPossibleAOEBarrel(tar, barrel)
+							local canAoE, AoEPos = self:GetPossibleAOEBarrel2(tar, barrel)
 							if(canAoE) then
 								castPos = AoEPos
 							end
@@ -1733,7 +1834,7 @@ function Gangplank:Combo()
 							end
 							
 							--AoECheck
-							local canAoE, AoEPos = self:GetPossibleAOEBarrel(tar, barrel)
+							local canAoE, AoEPos = self:GetPossibleAOEBarrel2(tar, barrel)
 							if(canAoE) then
 								castPos = AoEPos
 							end
@@ -1811,7 +1912,7 @@ function Gangplank:Combo()
 										--We now need to see if we can chain our proximity barrel to the enemy predicted position
 										local distCheck = GetDistance(secondBarrel.barrelObj, castPos)
 										if(distCheck <= (E.Radius*2.75)) then
-											local distanceToPlacement = math.min(distCheck, (E.Radius - 17.5)*2)
+											local distanceToPlacement = math.min(distCheck, (E.Radius - 7.5)*2)
 											local placementVec = secondBarrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
 											if(GetDistance(myHero, placementVec) < E.Range - 10) and GetDistance(placementVec, tar) <= E.Radius*0.85 then
 												self:SetQBarrel(firstBarrel)
@@ -2330,24 +2431,16 @@ function Gangplank:PhantomCombo()
 			end
 		end
 		
-		if(Ready(_E) and Ready(_Q)) then
+		if(Ready(_E)) then
 		
 			--Magnet movement
 			if(self.Menu.Combo.ClampPBMovement:Value() and canMagnet) then
 				local proximityBarrels = self:GetBarrelsAroundUnit(myHero, Q.Range + 125)
 				if(#proximityBarrels == 1) then
 					local barrel = proximityBarrels[1]
-					local magnetHoverDist = 75
-					local extendedPos = barrel.barrelObj.pos:Extended(Game.mousePos(), Q.Range + magnetHoverDist)
-					if(GetDistance(Game.mousePos(), extendedPos) >= 250 and GetDistance(Game.mousePos(), barrel.barrelObj) >= Q.Range + magnetHoverDist) then
-						_G.SDK.Orbwalker.ForceMovement = nil
-					else
-						if(GetDistance(barrel.barrelObj, myHero) <= Q.Range + magnetHoverDist) then
-							_G.SDK.Orbwalker.ForceMovement = extendedPos
-						else
-							_G.SDK.Orbwalker.ForceMovement = nil
-						end
-					end
+					local magnetHoverDist = 15
+					local extendedPos = barrel.barrelObj.pos:Extended(myHero.pos:Extended(Game.mousePos(), 200), Q.Range + magnetHoverDist)
+					_G.SDK.Orbwalker.ForceMovement = extendedPos
 				else
 					_G.SDK.Orbwalker.ForceMovement = nil
 				end
@@ -2374,7 +2467,7 @@ function Gangplank:PhantomCombo()
 									if(self:GetBarrelHealth(barrel, Q.Delay + heroDist/Q.Speed + self.Ping - extraReaction) == 1) then
 										local distCheck = GetDistance(barrel.barrelObj, castPos)
 										if(distCheck <= (E.Radius*2.5)) then
-											local distanceToPlacement = math.min(distCheck, (E.Radius - 15)*2)
+											local distanceToPlacement = math.min(distCheck, (E.Radius - 7.5)*2)
 											local placementVec = barrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
 											if(GetDistance(myHero, placementVec) < E.Range) and GetDistance(placementVec, tar) <= E.Radius*0.75 then 
 												--The second GetDistance call assures that our placed E isn't too close to the edge
@@ -2421,7 +2514,7 @@ function Gangplank:ExecutePhantomCombo(position, barrelTarget, target)
 			if(canAoE) then
 				--Do a second pass check on the position to make sure we can't get a better one
 				local distCheck = GetDistance(AoEPos, barrelTarget)
-				local distanceToPlacement = math.min(distCheck, (E.Radius - 17.5)*2)
+				local distanceToPlacement = math.min(distCheck, (E.Radius - 7.5)*2)
 				local secondPos = barrelTarget.pos:Extended(AoEPos, distanceToPlacement)
 				if(GetDistance(secondPos, myHero) <= E.Range - 10) then
 					position = secondPos
@@ -2464,7 +2557,7 @@ function Gangplank:TripleBarrelSemiManual()
 
 				local barrelPosCheck = self:GetBarrelsAroundUnit(tar, E.Radius)
 				
-				if(#barrelPosCheck == 0) and barrelDist <= Q.Range and barrelTarDist > E.Radius*2 then
+				if(#barrelPosCheck == 0) and barrelDist <= Q.Range then
 					if(self:GetBarrelHealth(barrel, E.Delay + Q.Delay + 0.24 + self.Ping - extraReaction) == 1) then
 						local delayAmnt = Q.Delay + 0.66 + 0.24 + self.Ping
 						local EDelayed = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = delayAmnt, Radius = tar.boundingRadius, Range = 1000 + E.Radius, Speed = math.huge, Collision = false}
@@ -2539,14 +2632,11 @@ function Gangplank:TripleBarrelSemiManual()
 								if(isStrafing) then
 									castPos = avgPos
 								end
-								
 								--We now need to see if we can chain our proximity barrel to the enemy predicted position
 								local distCheck = GetDistance(secondBarrel.barrelObj, castPos)
 								if(distCheck <= (E.Radius*2.75)) then
-									local distanceToPlacement = math.min(distCheck, (E.Radius - 17.5)*2)
+									local distanceToPlacement = math.min(distCheck, (E.Radius - 10)*2)
 									local placementVec = secondBarrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
-									placementVec = myHero.pos:Extended(placementVec, E.Range - 10)
-
 									if(GetDistance(myHero, placementVec) < E.Range - 10) and GetDistance(placementVec, tar) <= E.Radius*0.75 then
 										Control.CastSpell(HK_Q, firstBarrel.barrelObj)
 										self:SetTripleBarrelForceE(placementVec, secondBarrel.barrelObj, tar)
@@ -2884,10 +2974,6 @@ function Gangplank:Draw()
 		alphaLerp = 0
 	end
 	
-	if(self.Menu.Combo.TripleBarrelKey:Value()) then
-		self:DrawTBUI()
-	end
-	
 	if(self.Menu.Drawings.BarrelPlacementVis.DrawBarrelVisualizer:Value() and Ready(_E)) then
 		self:DrawBarrelVisualizer()
 	end
@@ -2992,21 +3078,6 @@ function Gangplank:DrawPhantomBarrelUI()
 	end
 end
 
-function Gangplank:DrawTBUI()
-	local tar = GetTarget(E.Range + E.Radius - 10)
-	if(tar and IsValid(tar)) then
-		local barrel = self:GetClosestBarrelToUnit(tar)
-		local proximityBarrels = self:GetBarrelsAroundUnit(myHero, E.Range)
-		if(#proximityBarrels == 1) then
-			if(GetDistance(barrel.barrelObj, tar) < E.Radius*2 and GetDistance(barrel.barrelObj, tar) > E.Radius) then
-				DrawCircle(barrel.barrelObj, 125, 1, DrawColor(85, 255, 0, 0))
-				local posX, posY = barrel.barrelObj.pos:To2D().x - 35, barrel.barrelObj.pos:To2D().y + 45
-				DrawText("[Too close!]", 20, posX, posY, DrawColor(255, 255, 95, 55))
-			end
-		end
-	end
-end
-
 function Gangplank:DrawBarrelVisualizer()
 	if(self.Menu.Drawings.BarrelPlacementVis.RequireCombo:Value()) then
 		if(GetMode() == "Combo" or self.Menu.Combo.TripleBarrelKey:Value() or self.Menu.Combo.PhantomBarrelKey:Value()) then
@@ -3036,7 +3107,7 @@ function Gangplank:DrawBarrelVisualizer()
 				local placementVec = nearbyBarrel.barrelObj.pos:Extended(tar.pos, distanceToPlacement)
 				
 				--AoECheck
-				local canAoE, AoEPos = self:GetPossibleAOEBarrel(tar, nearbyBarrel)
+				local canAoE, AoEPos = self:GetPossibleAOEBarrel2(tar, nearbyBarrel)
 				if(canAoE) then
 					dist = GetDistance(nearbyBarrel.barrelObj, AoEPos)
 					distanceToPlacement = math.min(dist, (E.Radius - 7.5)*2)
