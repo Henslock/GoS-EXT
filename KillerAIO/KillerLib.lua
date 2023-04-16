@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.25
+local kLibVersion = 2.26
 
 -- [ AutoUpdate ]
 do
@@ -730,19 +730,19 @@ function CalculateBoundingBoxAvg(targets, predSpeed, predDelay)
 		end
 		
 		if(vPos.x >= highestX) then
-			highestX = v.pos.x
+			highestX = vPos.x
 		end
 		
 		if(vPos.z >= highestZ) then
-			highestZ = v.pos.z
+			highestZ = vPos.z
 		end
 		
 		if(vPos.x < lowestX) then
-			lowestX = v.pos.x
+			lowestX = vPos.x
 		end
 		
 		if(vPos.z < lowestZ) then
-			lowestZ = v.pos.z
+			lowestZ = vPos.z
 		end
 	end
 	
