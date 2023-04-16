@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.09
+scriptVersion = 1.10
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -891,7 +891,7 @@ function Veigar:LastHit()
 				local QDam = self:GetRawAbilityDamage("Q")
 				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay + (myHero.pos:DistanceTo(canonMinion.pos)/Q.Speed))
 				
-				if ((hp > 0) and (canonMinion.health + (canonMinion.health*0.05) - QDam <= 0)) then
+				if ((hp > 0) and (hp + (canonMinion.health*0.015) - QDam <= 0)) then
 					Control.CastSpell(HK_Q, canonMinion)
 					gameTick = GameTimer() + 0.2
 					return
@@ -928,7 +928,7 @@ function Veigar:StandardLastHit(minion)
 	if(collisionCount <= Q.MaxCollision) then
 		local QDam = self:GetRawAbilityDamage("Q")
 		local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay + (myHero.pos:DistanceTo(minion.pos)/Q.Speed))
-		if ((hp > 0) and (minion.health + 10 - QDam <= 0)) then
+		if ((hp > 0) and (hp + 25 - QDam <= 0)) then
 			Control.CastSpell(HK_Q, minion)
 			gameTick = GameTimer() + 0.2
 			return
@@ -1051,7 +1051,7 @@ function Veigar:Clear()
 						end
 					end
 					
-					if ((hp > 0) and (canonMinion.health + (canonMinion.health*0.08) - QDam <= 0) and check) then
+					if ((hp > 0) and (hp + (canonMinion.health*0.015) - QDam <= 0) and check) then
 						Control.CastSpell(HK_Q, canonMinion)
 						gameTick = GameTimer() + 0.2
 						return
@@ -1077,7 +1077,7 @@ function Veigar:Clear()
 						if(collisionCount <= Q.MaxCollision) then
 							local QDam = self:GetRawAbilityDamage("Q")
 							local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay + (myHero.pos:DistanceTo(minion.pos)/Q.Speed))
-							if ((hp > 0) and (hp + (minion.health*0.05) - QDam <= 0)) then
+							if ((hp > 0) and (hp + (minion.health*0.02) - QDam <= 0)) then
 								Control.CastSpell(HK_Q, minion)
 								gameTick = GameTimer() + 0.2
 								return
