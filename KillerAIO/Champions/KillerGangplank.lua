@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -1420,7 +1420,7 @@ function Gangplank:Combo()
 				for _, barrel in ipairs(proximityBarrels) do
 					local dist = GetDistance(myHero, barrel.barrelObj)
 					if(self:IsBarrelBehindUnit(barrel, tar) == false) then
-						if(dist < Q.Range and dist > self.AARange and Ready(_Q)) then
+						if dist < Q.Range and (dist > self.AARange or ((myHero.attackData.endTime-Game.Timer())>(Q.Delay + (GetDistance(myHero, barrel.barrelObj)/Q.Speed)-myHero.attackData.windUpTime) and myHero.activeSpell.name~="GangplankBasicAttack" and myHero.activeSpell.name~="GangplankCritAttack")) and Ready(_Q) then
 							--Pred Check
 							local delayAmnt = Q.Delay + GetDistance(myHero, barrel.barrelObj)/Q.Speed
 							local Delay = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = delayAmnt, Radius = tar.boundingRadius, Range = 1000, Speed = math.huge, Collision = false}
