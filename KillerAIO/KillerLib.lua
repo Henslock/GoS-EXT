@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.26
+local kLibVersion = 2.27
 
 -- [ AutoUpdate ]
 do
@@ -910,7 +910,7 @@ function GetExtendedSpellPrediction(target, spellData)
 	local defaultRangeVec = (predVec - myHero.pos):Normalized() * spellData.Range + myHero.pos
 	--DrawCircle(testVec, 150, 3)
 	--Find the difference between these two points as a vector to create a line, and then find a perpendicular bisecting line at the extended cast position using this line
-	local vec = (predVec - defaultRangeVec):Normalized() * 100 + myHero.pos
+	--local vec = (predVec - defaultRangeVec):Normalized() * 100 + myHero.pos
 	local vecNormal = (predVec - defaultRangeVec):Normalized()
 	local perp = Vector(vecNormal.z, 0, -vecNormal.x) * spellData.Radius + predVec
 	local negPerp = Vector(-vecNormal.z, 0, vecNormal.x) * spellData.Radius + predVec
@@ -923,7 +923,7 @@ function GetExtendedSpellPrediction(target, spellData)
 	
 	--We only need one of the intersection points to form our precise circle
 	local intVec = Vector(intersections[0][1], myHero.pos.y, intersections[0][3])
-	local halfVec = Vector((intersections[0][1] + intersections[1][1]) /2, myHero.pos.y, (intersections[0][3] + intersections[1][3])/2)
+	--local halfVec = Vector((intersections[0][1] + intersections[1][1]) /2, myHero.pos.y, (intersections[0][3] + intersections[1][3])/2)
 	
 	local preciseCircRadius = intVec:DistanceTo(predVec)
 	local preciseSpellData = {Type = spellData.Type, Delay = spellData.Delay, Range = spellData.Range + spellData.Radius, Radius = preciseCircRadius, Speed = spellData.Speed, Collision = spellData.Collision}
@@ -982,7 +982,7 @@ function CalculateBestCirclePosition(targets, radius, edgeDetect, spellRange, sp
 		
 		local hitAllCheck = true
 		for _, v in pairs(newCluster) do
-			if(v:GetPrediction(math.huge, 0.25):DistanceTo(checkPos) >= radius + 5) then -- the +5 is to fix a precision issue
+			if(v:GetPrediction(math.huge, spellDelay):DistanceTo(checkPos) >= radius + 5) then -- the +5 is to fix a precision issue
 				hitAllCheck = false
 			end
 		end
