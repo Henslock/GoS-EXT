@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.27
+local kLibVersion = 2.28
 
 -- [ AutoUpdate ]
 do
@@ -336,9 +336,11 @@ end
 function GetEnemyHeroes(range, bbox)
 	local result = {}
 	for _, unit in ipairs(Enemies) do
-		local extrarange = bbox and unit.boundingRadius or 0
-		if unit.distance < range + extrarange then
-			table.insert(result, unit)
+		if(IsValid(unit)) then
+			local extrarange = bbox and unit.boundingRadius or 0
+			if unit.distance < range + extrarange then
+				table.insert(result, unit)
+			end
 		end
 	end
 	return result
@@ -347,9 +349,11 @@ end
 function GetAllyHeroes(range, bbox)
 	local result = {}
 	for _, unit in ipairs(Allies) do
-		local extrarange = bbox and unit.boundingRadius or 0
-		if unit.distance < range + extrarange then
-			table.insert(result, unit)
+		if(IsValid(unit)) then
+			local extrarange = bbox and unit.boundingRadius or 0
+			if unit.distance < range + extrarange then
+				table.insert(result, unit)
+			end
 		end
 	end
 	return result
