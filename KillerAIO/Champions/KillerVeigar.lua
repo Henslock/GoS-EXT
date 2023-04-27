@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.10
+scriptVersion = 1.11
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -89,129 +89,6 @@ local function OnSpellCast(fn)
         _G.SpellCast = SpellCast()
     end
     table.insert(SpellCast.OnSpellCastCallback, fn)
-end
-
---== Strafe Prediction==--
-
-class("StrafePred")
-
-StrafePred.WaypointData = {}
-StrafePred.NewPosData = {}
-
-function StrafePred:__init()
-    _G._STAFEPRED_START = true
-    self.OnStrafePredCallback = {}
-    Callback.Add("Tick", function() self:OnTick() end)
-	
-	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
-		local enemyUnit = args.unit
-		self.WaypointData[enemyUnit.handle] = {}
-		self.NewPosData[enemyUnit.handle] = {x = 0, z = 0}
-		
-	end)
-	
-end
- 
-local waypointLimit = 4
-local strafeMargin = 0.5 --The closer this value is to 1, the more strict the strafe check will be
-local stutterDistMargin = 125
-
-function StrafePred:OnTick()	
-	for _, unit in pairs(Enemies) do
-		if(unit.valid and IsValid(unit)) then
-			if(unit.pathing.hasMovePath) and (self.NewPosData[unit.handle])  then
-				local newPos = self.NewPosData[unit.handle]
-				if(unit.pathing.endPos.x ~= newPos.x and unit.pathing.endPos.z ~= newPos.z ) then
-					self.NewPosData[unit.handle] = unit.pathing.endPos
-					local endPosVec = Vector(unit.pathing.endPos.x, unit.pos.y, unit.pathing.endPos.z)
-					local startPosVec = Vector(unit.pathing.startPos.x, unit.pos.y, unit.pathing.startPos.z)
-					local nVec = Vector(endPosVec - startPosVec):Normalized()
-
-					if(self.WaypointData[unit.handle] ~= nil or self.WaypointData[unit.handle]) then
-						self:AddWaypointData(unit, {nVec, GameTimer(), unit.pos})
-					end
-					
-				end
-			end
-		end
-	end
-	
-end
-
-function StrafePred:AddWaypointData(unit, tbl)
-	local uName = unit.handle
-	for i = #self.WaypointData[uName], 1, -1 do
-		self.WaypointData[uName][i + 1] = self.WaypointData[uName][i]
-	end
-	if(#self.WaypointData[uName] > waypointLimit) then
-		table.remove(self.WaypointData[uName], waypointLimit + 1)
-	end
-	self.WaypointData[uName][1] = tbl
-end
-
-function StrafePred:IsStrafing(tar)
-	local tName = tar.handle
-	if(tar.pathing.hasMovePath == false) then return false end
-	if(self.WaypointData[tName] ~= nil or self.WaypointData[tName]) then
-		if(#self.WaypointData[tName] == waypointLimit) then
-			--Dot product check
-			local res1 = dotProduct(self.WaypointData[tName][1][1], self.WaypointData[tName][2][1])
-			local res2 = dotProduct(self.WaypointData[tName][1][1], self.WaypointData[tName][3][1])
-			local res3 = dotProduct(self.WaypointData[tName][1][1], self.WaypointData[tName][4][1])
-			local timebetweenWaypoints = self.WaypointData[tName][1][2] - self.WaypointData[tName][2][2] -- Time between waypoint update
-			local lastWaypointTime = GameTimer() - self.WaypointData[tName][1][2] --Time between last waypoint and game time
-			
-			local pos1 = self.WaypointData[tName][1][3]
-			local pos2 = self.WaypointData[tName][2][3]
-			local pos3 = self.WaypointData[tName][3][3]
-			local pos4 = self.WaypointData[tName][4][3]
-			local avgPos = (pos1+pos2+pos3+pos4)/4
-
-			if(res1 <= -strafeMargin and res2 >= strafeMargin and res3 <= -strafeMargin and timebetweenWaypoints <= 0.70 and lastWaypointTime <= 0.7) then
-				return true, avgPos
-			else
-				return false
-			end
-		end
-	else
-		return false
-	end
-	
-	return false
-end
-
-function StrafePred:IsStutterDancing(tar)
-	local tName = tar.handle
-	if(tar.pathing.hasMovePath == false) then return false end
-	if(self.WaypointData[tName] ~= nil or self.WaypointData[tName]) then
-		if(#self.WaypointData[tName] == waypointLimit) then
-
-			local pos1 = self.WaypointData[tName][1][3]
-			local pos2 = self.WaypointData[tName][2][3]
-			local pos3 = self.WaypointData[tName][3][3]
-			local pos4 = self.WaypointData[tName][4][3]
-			local avgPos = (pos1+pos2+pos3+pos4)/4
-			
-
-			local timebetweenWaypoints = self.WaypointData[tName][1][2] - self.WaypointData[tName][2][2] -- Time between waypoint update
-			local lastWaypointTime = GameTimer() - self.WaypointData[tName][1][2] --Time between last waypoint and game time
-			
-			if(tar.pos:DistanceTo(avgPos) <= stutterDistMargin and tar.pos:DistanceTo(pos4) <= stutterDistMargin and timebetweenWaypoints <= 0.90 and lastWaypointTime <= 1 ) then
-				return true, avgPos
-			end
-		end
-	else
-		return false
-	end
-	
-	return false
-end
-
-local function OnChampStrafe(fn)
-    if not _STAFEPRED_START then
-        _G.StrafePred = StrafePred()
-    end
-    table.insert(StrafePred.OnStrafePredCallback, fn)
 end
 
 ----------------------------------------------------
