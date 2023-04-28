@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -625,7 +625,6 @@ function Illaoi:Combo()
 				local QPrediction = GGPrediction:SpellPrediction(newQ)
 				QPrediction:GetPrediction(tar, myHero)
 				if QPrediction.CastPosition and QPrediction:CanHit(HITCHANCE_HIGH) then
-					print("here")
 					Control.CastSpell(HK_Q, QPrediction.CastPosition)
 					return
 				end
