@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -218,8 +218,8 @@ function Illaoi:AutoLevel()
 					Control.KeyUp(HK_LUS)
 				elseif level == 8 or level == 10 or level == 12 or level == 13 then
 					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
+					Control.KeyDown(HK_Q)
+					Control.KeyUp(HK_Q)
 					Control.KeyUp(HK_LUS)
 				elseif level == 14 or level == 15 or level == 17 or level == 18 then				
 					Control.KeyDown(HK_LUS)
