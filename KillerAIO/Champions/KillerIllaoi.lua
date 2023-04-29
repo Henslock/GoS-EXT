@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -416,17 +416,19 @@ function Illaoi:Combo()
 			end
 
 			--Dueling R
-			local nearbyEnemies = GetEnemyHeroes(1000)
-			local enemies = GetEnemyHeroes(R.Radius -75)
-			if(#nearbyEnemies == 1 and #enemies == 1) then
-				local enemy = enemies[1]
-				if(enemy and IsValid(enemy) and self:IsUnitASpirit(enemy) == false) then
-					local RPrediction = GGPrediction:SpellPrediction(R)
-					RPrediction:GetPrediction(enemy, myHero)
-					if RPrediction:CanHit(HITCHANCE_HIGH) then
-						if self:ShouldUseR(enemy) then
-							Control.CastSpell(HK_R)
-							return	
+			if(self.Menu.Combo.RSettings.DuelR:Value()) then
+				local nearbyEnemies = GetEnemyHeroes(1000)
+				local enemies = GetEnemyHeroes(R.Radius -75)
+				if(#nearbyEnemies == 1 and #enemies == 1) then
+					local enemy = enemies[1]
+					if(enemy and IsValid(enemy) and self:IsUnitASpirit(enemy) == false) then
+						local RPrediction = GGPrediction:SpellPrediction(R)
+						RPrediction:GetPrediction(enemy, myHero)
+						if RPrediction:CanHit(HITCHANCE_HIGH) then
+							if self:ShouldUseR(enemy) then
+								Control.CastSpell(HK_R)
+								return	
+							end
 						end
 					end
 				end
