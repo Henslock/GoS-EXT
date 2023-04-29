@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.06
+scriptVersion = 1.07
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -443,7 +443,7 @@ function Illaoi:Combo()
 			if(tar and IsValid(tar) and tar.toScreen.onScreen) then
 
 				local shouldUseE = true
-				local fleeCheck = self:IsUnitFleeing(tar)
+				local fleeCheck = self:IsUnitFleeing(tar) and GetDistance(myHero, tar) <= W.Range + 50
 				local WCheck = false
 				local hpCheck = ((tar.health / tar.maxHealth) <= 0.20 and GetDistance(myHero, tar) <= W.Range + 50)
 				if(GetDistance(myHero, tar) <= W.Range + 150 and ((myHero:GetSpellData(_W).cd - myHero:GetSpellData(_W).currentCd) <= 1 or Ready(_W))) then
@@ -513,7 +513,7 @@ function Illaoi:Combo()
 					local PreciseE = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 950, Radius = 37.5, Speed = 1900, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
 					local EPrediction = GGPrediction:SpellPrediction(PreciseE)
 					EPrediction:GetPrediction(tar, myHero)
-					if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_NORMAL) then
+					if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
 						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 220, PreciseE.CollisionTypes, tar.networkID)
 						if(collisionCount < PreciseE.MaxCollision) then
 							Control.CastSpell(HK_E, EPrediction.CastPosition)
