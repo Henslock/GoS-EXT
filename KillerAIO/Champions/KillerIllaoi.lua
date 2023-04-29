@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.03
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -145,6 +145,11 @@ function Illaoi:Tick()
 		self:LastHit()
 	elseif(mode == "LaneClear") then
 		self:Clear()
+	end
+
+	--Reset W AA resetting outside of Combo mode
+	if(mode ~= "Combo") then
+		Illaoi.HoldW = false
 	end
 
 	self:UpdateComboDamage()
@@ -432,13 +437,13 @@ function Illaoi:Combo()
 	--E
 	if(self.Menu.Combo.UseE:Value()) then
 		if(Ready(_E)) then
-			local tar = GetTarget(Q.Range + 25)
+			local tar = GetTarget(Q.Range)
 			if(tar and IsValid(tar) and tar.toScreen.onScreen) then
 
 				local shouldUseE = true
 				local fleeCheck = self:IsUnitFleeing(tar)
 				local WCheck = false
-				local hpCheck = ((tar.health / tar.maxHealth) <= 0.20 and GetDistance(myHero, tar) <= W.Range)
+				local hpCheck = ((tar.health / tar.maxHealth) <= 0.20 and GetDistance(myHero, tar) <= W.Range + 50)
 				if(GetDistance(myHero, tar) <= W.Range + 150 and ((myHero:GetSpellData(_W).cd - myHero:GetSpellData(_W).currentCd) <= 1 or Ready(_W))) then
 					WCheck = true
 				end
@@ -506,7 +511,7 @@ function Illaoi:Combo()
 					local PreciseE = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 950, Radius = 37.5, Speed = 1900, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
 					local EPrediction = GGPrediction:SpellPrediction(PreciseE)
 					EPrediction:GetPrediction(tar, myHero)
-					if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
+					if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_NORMAL) then
 						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 220, PreciseE.CollisionTypes, tar.networkID)
 						if(collisionCount < PreciseE.MaxCollision) then
 							Control.CastSpell(HK_E, EPrediction.CastPosition)
@@ -540,7 +545,7 @@ function Illaoi:Combo()
 	--Q
 	if(self.Menu.Combo.UseQ:Value()) then
 		if(Ready(_Q)) then
-			local tar = GetTarget(Q.Range -15)
+			local tar = GetTarget(Q.Range -30)
 			if(tar and IsValid(tar) and tar.toScreen.onScreen) then
 				local isStrafing, avgPos = StrafePred:IsStrafing(tar)
 				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(tar)
@@ -548,7 +553,7 @@ function Illaoi:Combo()
 				--We don't want to use Q on spirits, we'd rather use it on an actual champion ideally
 				if(self:IsUnitASpirit(tar)) then
 					local nearbyEnemies = {}
-					for _, enemy in ipairs(GetEnemyHeroes(Q.Range - 15)) do
+					for _, enemy in ipairs(GetEnemyHeroes(Q.Range - 30)) do
 						if(enemy and IsValid(enemy)) then
 							table.insert(nearbyEnemies, enemy)
 						end
@@ -899,7 +904,7 @@ function Illaoi:SemiManualE()
 				local PreciseE = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 950, Radius = 37.5, Speed = 1900, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
 				local EPrediction = GGPrediction:SpellPrediction(PreciseE)
 				EPrediction:GetPrediction(tar, myHero)
-				if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
+				if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_NORMAL) then
 					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 220, PreciseE.CollisionTypes, tar.networkID)
 					if(collisionCount < PreciseE.MaxCollision) then
 						Control.CastSpell(HK_E, EPrediction.CastPosition)
