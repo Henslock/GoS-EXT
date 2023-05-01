@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.07
+scriptVersion = 1.08
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -39,7 +39,7 @@ local gameTick = GameTimer()
 Illaoi.AutoLevelCheck = false
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.75, Range = 800, Radius = 200, Speed = math.huge, Collision = false}
+local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.75, Range = 800, Radius = 100, Speed = math.huge, Collision = false}
 local W = {Delay = 0, Range = 450}
 local E = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 950, Radius = 50, Speed = 1900, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
 local R = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.5, Radius = 475, Speed = math.huge}
@@ -269,6 +269,10 @@ function Illaoi:HasWActive()
 	return HasBuff(myHero, "IllaoiW")
 end
 
+function Illaoi:HasRActive()
+	return HasBuff(myHero, "IllaoiR")
+end
+
 function Illaoi:GetSpellbladeDamage()
 	for _, item in pairs({ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}) do
 	   local id = myHero:GetItemData(item).itemID
@@ -299,13 +303,16 @@ function Illaoi:ScanESpirit()
 			end
 		end
 	end
+
 	--Populate GGOrbwalker with the spirit
 	if(Ready(_E) == false) then
-		if(eTar ~= nil and eTar.alive) then
+		if(eTar ~= nil and eTar.alive and eTar.team == TEAM_ENEMY and self:IsUnitASpirit(eTar)) then
 			_G.SDK.Cached:AddCachedHero(eTar)
 		end
 	end
-
+	if(eTar ~= nil)then
+		if(eTar.targetable == false) then eTar = nil end
+	end
 end
 
 function Illaoi:CheckE()
@@ -354,8 +361,8 @@ function Illaoi:Combo()
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
 
 	--Reset hold W if we have no targets near our AA range 
-	local tar = GetTarget(_G.SDK.Data:GetAutoAttackRange(myHero) + 50)
-	if(not tar or IsValid(tar) == false) then
+	local meleeTar = GetTarget(_G.SDK.Data:GetAutoAttackRange(myHero) + 50)
+	if(not meleeTar or IsValid(meleeTar) == false or self:HasRActive()) then
 		Illaoi.HoldW = false
 	end
 
@@ -443,9 +450,9 @@ function Illaoi:Combo()
 			if(tar and IsValid(tar) and tar.toScreen.onScreen) then
 
 				local shouldUseE = true
-				local fleeCheck = self:IsUnitFleeing(tar) and GetDistance(myHero, tar) <= W.Range + 50
+				local fleeCheck = self:IsUnitFleeing(tar) and GetDistance(myHero, tar) <= W.Range
 				local WCheck = false
-				local hpCheck = ((tar.health / tar.maxHealth) <= 0.20 and GetDistance(myHero, tar) <= W.Range + 50)
+				local hpCheck = ((tar.health / tar.maxHealth) <= 0.20 and GetDistance(myHero, tar) <= W.Range)
 				if(GetDistance(myHero, tar) <= W.Range + 150 and ((myHero:GetSpellData(_W).cd - myHero:GetSpellData(_W).currentCd) <= 1 or Ready(_W))) then
 					WCheck = true
 				end
@@ -460,7 +467,7 @@ function Illaoi:Combo()
 					
 					if(isStrafing) then
 						if(avgPos:DistanceTo(myHero.pos) < E.Range) then
-							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, E.Speed, E.Delay, 220, E.CollisionTypes, tar.networkID)
+							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, E.Speed, E.Delay, 115, E.CollisionTypes, tar.networkID)
 							if(collisionCount < E.MaxCollision) then
 								Control.CastSpell(HK_E, avgPos)
 								gameTick = GameTimer() + 0.2
@@ -470,7 +477,7 @@ function Illaoi:Combo()
 					end
 					if(isStutterDancing) then
 						if(avgPos2:DistanceTo(myHero.pos) < E.Range) then
-							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, E.Speed, E.Delay, 220, E.CollisionTypes, tar.networkID)
+							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, E.Speed, E.Delay, 115, E.CollisionTypes, tar.networkID)
 							if(collisionCount < E.MaxCollision) then
 								Control.CastSpell(HK_E, avgPos2)
 								gameTick = GameTimer() + 0.2
@@ -481,7 +488,7 @@ function Illaoi:Combo()
 					
 					--We can use E on targets that are casting spells and are stationary briefly
 					if(tar.activeSpell.valid and tar.pathing.hasMovePath == false) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, tar.pos, E.Speed, E.Delay, 220, E.CollisionTypes, tar.networkID)
+						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, tar.pos, E.Speed, E.Delay, 115, E.CollisionTypes, tar.networkID)
 						if(collisionCount < E.MaxCollision) then
 							Control.CastSpell(HK_E, tar.pos)
 							gameTick = GameTimer() + 0.2
@@ -493,7 +500,7 @@ function Illaoi:Combo()
 					local EPrediction = GGPrediction:SpellPrediction(E)
 					EPrediction:GetPrediction(tar, myHero)
 					if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, E.Speed, E.Delay, 220, E.CollisionTypes, tar.networkID)
+						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, E.Speed, E.Delay, 115, E.CollisionTypes, tar.networkID)
 						if(collisionCount < E.MaxCollision) then
 							--Precision: Let's avoid casting E on perpendicular-moving targets
 							if(tar.pathing.hasMovePath) then
@@ -514,7 +521,7 @@ function Illaoi:Combo()
 					local EPrediction = GGPrediction:SpellPrediction(PreciseE)
 					EPrediction:GetPrediction(tar, myHero)
 					if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 220, PreciseE.CollisionTypes, tar.networkID)
+						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 115, PreciseE.CollisionTypes, tar.networkID)
 						if(collisionCount < PreciseE.MaxCollision) then
 							Control.CastSpell(HK_E, EPrediction.CastPosition)
 							gameTick = GameTimer() + 0.2
@@ -530,7 +537,7 @@ function Illaoi:Combo()
 	if(self.Menu.Combo.UseW:Value()) then
 
 		local AAEndTimer = 	math.max(myHero.attackData.endTime-Game.Timer(), 0)
-		if(myHero:GetSpellData(_W).currentCd <= 0.2 and AAEndTimer <= 0.5 and AAEndTimer > 0) then
+		if((myHero:GetSpellData(_W).currentCd <= 0.2 and AAEndTimer <= 0.5 and AAEndTimer > 0) or (IsValid(meleeTar) and AAEndTimer == 0 and Ready(_W)) and self:HasRActive() == false) then
 			Illaoi.HoldW = true
 		end
 
@@ -576,8 +583,10 @@ function Illaoi:Combo()
 					if(#enemies == 2) then
 						if(IsValid(enemies[1]) and IsValid(enemies[2])) then
 							local avgCastPos = CalculateBoundingBoxAvg(enemies, math.huge, 0.25)
-							local buffer = Q.Radius*0.66
-							if(GetDistance(enemies[1], avgCastPos) < buffer and GetDistance(enemies[2], avgCastPos) < buffer) then
+							local buffer = Q.Radius
+							local point = ClosestPointOnLineSegment(enemies[1].pos, myHero.pos, myHero.pos:Extended(avgCastPos, Q.Range))
+							local point2 = ClosestPointOnLineSegment(enemies[2].pos, myHero.pos, myHero.pos:Extended(avgCastPos, Q.Range))
+							if(GetDistance(enemies[1], point) < buffer and GetDistance(enemies[2], point2) < buffer) then
 								Control.CastSpell(HK_Q, avgCastPos)
 								gameTick = GameTimer() + 0.2
 								return							
@@ -598,16 +607,18 @@ function Illaoi:Combo()
 						end
 
 						if(validTargets[1][1] and validTargets[2][1]) then
-							local isWall, collisionObjects1, collisionCount1 = GGPrediction:GetCollision(myHero.pos, validTargets[1][1].pos, Q.Speed, Q.Delay, Q.Radius, {GGPrediction.COLLISION_ENEMYHERO}, validTargets[1][1].networkID)
-							local isWall, collisionObjects2, collisionCount2 = GGPrediction:GetCollision(myHero.pos, validTargets[2][1].pos, Q.Speed, Q.Delay, Q.Radius, {GGPrediction.COLLISION_ENEMYHERO}, validTargets[2][1].networkID)
-							if(collisionCount1 > collisionCount2) then
-								local avgCastPos = CalculateBoundingBoxAvg(collisionObjects1, math.huge, 0.25)
-								Control.CastSpell(HK_Q, avgCastPos)
-								return
-							else
-								local avgCastPos = CalculateBoundingBoxAvg(collisionObjects2, math.huge, 0.25)
-								Control.CastSpell(HK_Q, avgCastPos)
-								return
+							local isWall, collisionObjects1, collisionCount1 = GGPrediction:GetCollision(myHero.pos, validTargets[1][1].pos, Q.Speed, Q.Delay, Q.Radius, {GGPrediction.COLLISION_ENEMYHERO})
+							local isWall, collisionObjects2, collisionCount2 = GGPrediction:GetCollision(myHero.pos, validTargets[2][1].pos, Q.Speed, Q.Delay, Q.Radius, {GGPrediction.COLLISION_ENEMYHERO})
+							if(collisionCount1 > 0 and collisionCount2 > 0 ) then
+								if(collisionCount1 > collisionCount2) then
+									local avgCastPos = CalculateBoundingBoxAvg(collisionObjects1, math.huge, 0.25)
+									Control.CastSpell(HK_Q, avgCastPos)
+									return
+								else
+									local avgCastPos = CalculateBoundingBoxAvg(collisionObjects2, math.huge, 0.25)
+									Control.CastSpell(HK_Q, avgCastPos)
+									return
+								end
 							end
 						end
 					end
@@ -628,7 +639,7 @@ function Illaoi:Combo()
 					end
 				end
 
-				local newQ = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.75, Range = 800, Radius = 180, Speed = 2800}
+				local newQ = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.75, Range = 800, Radius = 100, Speed = 2800}
 				local QPrediction = GGPrediction:SpellPrediction(newQ)
 				QPrediction:GetPrediction(tar, myHero)
 				if QPrediction.CastPosition and QPrediction:CanHit(HITCHANCE_HIGH) then
@@ -836,16 +847,6 @@ function Illaoi:SemiManualE()
 		if(tar and IsValid(tar) and tar.toScreen.onScreen) then
 
 			local shouldUseE = true
-			local fleeCheck = self:IsUnitFleeing(tar)
-			local WCheck = false
-			local hpCheck = ((tar.health / tar.maxHealth) <= 0.20 and GetDistance(myHero, tar) <= W.Range)
-			if(GetDistance(myHero, tar) <= W.Range + 150 and ((myHero:GetSpellData(_W).cd - myHero:GetSpellData(_W).currentCd) <= 1 or Ready(_W))) then
-				WCheck = true
-			end
-
-			if(WCheck or fleeCheck or hpCheck) then
-				shouldUseE = false
-			end
 
 			if(shouldUseE) then
 				local isStrafing, avgPos = StrafePred:IsStrafing(tar)
@@ -853,7 +854,7 @@ function Illaoi:SemiManualE()
 				
 				if(isStrafing) then
 					if(avgPos:DistanceTo(myHero.pos) < E.Range) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, E.Speed, E.Delay, 220, E.CollisionTypes, tar.networkID)
+						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, E.Speed, E.Delay, 100, E.CollisionTypes, tar.networkID)
 						if(collisionCount < E.MaxCollision) then
 							Control.CastSpell(HK_E, avgPos)
 							gameTick = GameTimer() + 0.2
@@ -863,7 +864,7 @@ function Illaoi:SemiManualE()
 				end
 				if(isStutterDancing) then
 					if(avgPos2:DistanceTo(myHero.pos) < E.Range) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, E.Speed, E.Delay, 220, E.CollisionTypes, tar.networkID)
+						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, E.Speed, E.Delay, 100, E.CollisionTypes, tar.networkID)
 						if(collisionCount < E.MaxCollision) then
 							Control.CastSpell(HK_E, avgPos2)
 							gameTick = GameTimer() + 0.2
@@ -874,7 +875,7 @@ function Illaoi:SemiManualE()
 				
 				--We can use E on targets that are casting spells and are stationary briefly
 				if(tar.activeSpell.valid and tar.pathing.hasMovePath == false) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, tar.pos, E.Speed, E.Delay, 220, E.CollisionTypes, tar.networkID)
+					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, tar.pos, E.Speed, E.Delay, 100, E.CollisionTypes, tar.networkID)
 					if(collisionCount < E.MaxCollision) then
 						Control.CastSpell(HK_E, tar.pos)
 						gameTick = GameTimer() + 0.2
@@ -886,7 +887,7 @@ function Illaoi:SemiManualE()
 				local EPrediction = GGPrediction:SpellPrediction(E)
 				EPrediction:GetPrediction(tar, myHero)
 				if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, E.Speed, E.Delay, 220, E.CollisionTypes, tar.networkID)
+					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, E.Speed, E.Delay, 100, E.CollisionTypes, tar.networkID)
 					if(collisionCount < E.MaxCollision) then
 						--Precision: Let's avoid casting E on perpendicular-moving targets
 						if(tar.pathing.hasMovePath) then
@@ -907,7 +908,7 @@ function Illaoi:SemiManualE()
 				local EPrediction = GGPrediction:SpellPrediction(PreciseE)
 				EPrediction:GetPrediction(tar, myHero)
 				if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_NORMAL) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 220, PreciseE.CollisionTypes, tar.networkID)
+					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 100, PreciseE.CollisionTypes, tar.networkID)
 					if(collisionCount < PreciseE.MaxCollision) then
 						Control.CastSpell(HK_E, EPrediction.CastPosition)
 						gameTick = GameTimer() + 0.2
