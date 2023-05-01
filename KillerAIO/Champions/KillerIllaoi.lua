@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.08
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -238,6 +238,20 @@ function Illaoi:OnPreAttack(args)
 	DelayAction(function ()
 		Illaoi.HoldW = false
 	end, myHero.attackData.windUpTime)
+
+	if myHero.range > 300 then
+        local targets = {}
+        for _, enemy in ipairs(Enemies) do
+            if IsValid(enemy) and enemy.distance <= W.Range  then
+                table.insert(targets, enemy)
+            end
+        end
+        if #targets > 0 then
+            table.sort(targets, _G.SDK.TargetSelector.CurrentSort)
+            args.Target = targets[1]
+            return
+        end
+    end
 end
 
 function Illaoi:OnPostAttack(args)
