@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.09
+scriptVersion = 1.10
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -39,7 +39,7 @@ local gameTick = GameTimer()
 Illaoi.AutoLevelCheck = false
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.75, Range = 800, Radius = 100, Speed = math.huge, Collision = false}
+local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.75, Range = 800, Radius = 100, Speed = 2900, Collision = false}
 local W = {Delay = 0, Range = 450}
 local E = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 950, Radius = 50, Speed = 1900, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
 local R = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.5, Radius = 475, Speed = math.huge}
@@ -111,7 +111,7 @@ function Illaoi:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawQ", name = "Draw Q Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawW", name = "Draw W Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawE", name = "Draw E Range", value = true})
-	self.Menu.Drawings:MenuElement({id = "DrawSpirit", name = "Draw Spirit", value = true})
+	--self.Menu.Drawings:MenuElement({id = "DrawSpirit", name = "Draw Spirit", value = true})
 	self.Menu.Drawings:MenuElement({id = "DamageHPBar", name = "Damage HP Bar", type = MENU})
 
 	self.Menu.Drawings.DamageHPBar:MenuElement({id = "DrawDamageHPBar", name = "Draw Full Combo Damage", value = true})
@@ -653,7 +653,7 @@ function Illaoi:Combo()
 					end
 				end
 
-				local newQ = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.75, Range = 800, Radius = 100, Speed = 2800}
+				local newQ = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.75, Range = 800, Radius = 100, Speed = 2900}
 				local QPrediction = GGPrediction:SpellPrediction(newQ)
 				QPrediction:GetPrediction(tar, myHero)
 				if QPrediction.CastPosition and QPrediction:CanHit(HITCHANCE_HIGH) then
@@ -1222,11 +1222,13 @@ local alphaLerp = 0
 function Illaoi:Draw()
 	if myHero.dead then return end
 	
+	--[[
 	if(self.Menu.Drawings.DrawSpirit:Value()) then
 		if(eTar ~= nil and IsValid(eTar)) then
 			DrawCircle(eTar.pos, 150, 3, DrawColor(255, 46, 255, 140))
 		end
 	end
+	--]]
 
 	if(self.Menu.Drawings.DrawQ:Value()) then
 		if(myHero:GetSpellData(_Q).level > 0) then
