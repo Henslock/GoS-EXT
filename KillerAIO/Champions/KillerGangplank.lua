@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.07
+scriptVersion = 1.08
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -266,7 +266,8 @@ function Gangplank:LoadMenu()
 	self.Menu.Combo:MenuElement({id = "PhantomBarrelKey", name = "Phantom Barrel Combo", key = string.byte("Z")})
 	self.Menu.Combo:MenuElement({id = "TripleBarrelKey", name = "Triple Barrel Semi-Manual", key = string.byte("C")})
 	self.Menu.Combo:MenuElement({id = "ClampPBMovement", name = "Phantom Barrel Movement Assist", value = true})
-	self.Menu.Combo:MenuElement({id = "ProwlersSettings", name = "Prowlers Claw Settings", type = MENU})
+	--NOTE** In patch 13.10, Prowler's claw lost its leap ability, and is no longer used on Gangplank
+	--self.Menu.Combo:MenuElement({id = "ProwlersSettings", name = "Prowlers Claw Settings", type = MENU})
 	
 	--R Dueling
 	self.Menu.Combo.RDuel:MenuElement({id = "UseR", name = "Use R to Duel", value = true})
@@ -285,8 +286,8 @@ function Gangplank:LoadMenu()
 	self.Menu.Combo.EModules:MenuElement({id = "EFleeing", name = "Use E on Fleeing Enemies [Lv. 13+]", value = true})
 	
 	--Prowlers Claw Settings
-	self.Menu.Combo.ProwlersSettings:MenuElement({id = "UseProwlersClaw", name = "Auto Use Prowlers Claw", value = true})
-	self.Menu.Combo.ProwlersSettings:MenuElement({id = "SemiManualProwler", name = "Use Semi-manual Prowlers", value = true})
+	--self.Menu.Combo.ProwlersSettings:MenuElement({id = "UseProwlersClaw", name = "Auto Use Prowlers Claw", value = true})
+	--self.Menu.Combo.ProwlersSettings:MenuElement({id = "SemiManualProwler", name = "Use Semi-manual Prowlers", value = true})
 	
 	-- Harass
 	self.Menu:MenuElement({id = "Harass", name = "Harass", type = MENU})
@@ -336,7 +337,7 @@ function Gangplank:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawPassive", name = "Draw Passive", value = true})
 	self.Menu.Drawings:MenuElement({id = "BarrelPlacementVis", name = "Barrel Placement Visualizer", type = MENU})
 	self.Menu.Drawings:MenuElement({id = "DrawPhantomUI", name = "Draw Phantom Barrel UI",  value = 1, drop = {"Modern", "Legacy", "Disabled"}})
-	self.Menu.Drawings:MenuElement({id = "DrawProwlers", name = "Draw Prowlers Leap Range", value = true})
+	--self.Menu.Drawings:MenuElement({id = "DrawProwlers", name = "Draw Prowlers Leap Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "Debug", name = "Debug Drawings", type = MENU})
 	
 	--Barrel Placement Visualizer
@@ -628,6 +629,7 @@ function Gangplank:HasCollector()
 	return false
 end
 
+--[[
 function Gangplank:HasProwlers()
     for i = ITEM_1, ITEM_7 do
 		local id = myHero:GetItemData(i).itemID
@@ -641,6 +643,7 @@ function Gangplank:HasProwlers()
     end
 	return false
 end
+--]]
 
 function Gangplank:HasPassive()
     for i = 0, myHero.buffCount do
@@ -1824,6 +1827,7 @@ function Gangplank:Combo()
 		end
 	end
 	
+	--[[
 	if(self.Menu.Combo.ProwlersSettings.UseProwlersClaw:Value()) then
 		local hasProwlers, slot = self:HasProwlers()
 		if(hasProwlers) then
@@ -1849,6 +1853,7 @@ function Gangplank:Combo()
 			end
 		end
 	end
+	--]]
 
 end
 
@@ -2870,10 +2875,12 @@ function Gangplank:Draw()
 		end
 	end
 	
+	--[[
 	if(self.Menu.Drawings.DrawProwlers:Value()) then
 		self:DrawProwlersLeap()
 	end
-	
+	--]]
+
 	if(self.Menu.Drawings.Debug.DrawBarrels:Value()) then
 		self:DrawBarrels()
 	end
@@ -3044,6 +3051,7 @@ function Gangplank:DrawBarrels()
 	end
 end
 
+--[[
 function Gangplank:DrawProwlersLeap()
 	if(self:HasProwlers()) then
 		local tar = GetTarget(E.Range)
@@ -3062,6 +3070,7 @@ function Gangplank:DrawProwlersLeap()
 		end
 	end
 end
+--]]
 
 function Gangplank:DrawKillReticle(unit)
 	local reticleRadius = 75
