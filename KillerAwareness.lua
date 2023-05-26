@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.10
+local scriptVersion = 1.13
 ----------------------------------------------------
 --|                    AUTO UPDATE                       |--
 ----------------------------------------------------
@@ -240,6 +240,7 @@ local haloCD = 10
 
 KillerAwareness.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolution().y * 0.5 }
 KillerAwareness.AllowMove = nil
+KillerAwareness.Menu = {}
 
 function KillerAwareness:__init()
 	self:LoadMenu()
@@ -258,13 +259,14 @@ function KillerAwareness:LoadHealthTrackerData()
 end
 
 function KillerAwareness:LoadMenu()
+
 	self.Menu = MenuElement({type = MENU, id = "KillerAwareness", name = "Killer Awareness", leftIcon = scriptIcon})
 	self.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
-	
+	self.Menu.Loaded = true
 	--Champion Tracker
-	self.Menu:MenuElement({id = "ChampTracker", name = "Champion Tracker", type = MENU})
-	self.Menu.ChampTracker:MenuElement({id = "Enabled", name = "Enable", value = true})
-	self.Menu.ChampTracker:MenuElement({id = "LineThickness", name = "Line Thickness", value = 1, min = 1, max = 5, step = 1})
+	self.Menu:MenuElement({id = "ChampLineScan", name = "Champion Line Scan", type = MENU})
+	self.Menu.ChampLineScan:MenuElement({id = "Enabled", name = "Enable", value = true})
+	self.Menu.ChampLineScan:MenuElement({id = "LineThickness", name = "Line Thickness", value = 1, min = 1, max = 5, step = 1})
 	
 	--Awareness HUD
 	self.Menu:MenuElement({id = "AwarenessHUD", name = "Awareness HUD", type = MENU})
@@ -280,10 +282,26 @@ function KillerAwareness:LoadMenu()
 	self.Menu.TurretAwareness:MenuElement({id = "DrawEnemies", name = "Draw Enemy Turret Range", value = true})
 	self.Menu.TurretAwareness:MenuElement({id = "DrawHP", name = "Draw Turret HP on Minimap", value = true})
 	self.Menu.TurretAwareness:MenuElement({id = "DrawRange", name = "Turret Draw Range", value = 500, min = 200, max = 1500, step = 100})
+
+	--Ward Auto Ping
+	self.Menu:MenuElement({id = "WardPing", name = "Ward Auto-Ping", type = MENU})
+	self.Menu.WardPing:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.WardPing:MenuElement({id = "BonusDelay", name = "Extra Humanizer Delay", value = 200, min = 50, max = 750, step = 25})
+
+	--Champion Tracker
+	--[[
+	self.Menu:MenuElement({id = "ChampTracker", name = "Champion Tracker", type = MENU})
+	self.Menu.ChampTracker:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.ChampTracker:MenuElement({id = "TrackAbilities", name = "Track Abilities", value = true})
+	self.Menu.ChampTracker:MenuElement({id = "TrackSummoners", name = "Track Summoners", value = true})
+	self.Menu.ChampTracker:MenuElement({id = "TrackExperience", name = "Track Experience", value = true})
+	self.Menu.ChampTracker:MenuElement({id = "EnableTrackingWidget", name = "Enable Tracking Widget", value = false})
+	--]]
 	
 	--Health Tracker
 	self.Menu:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = false})
 
+	KillerAwareness.Menu = self.Menu
 end
 
 function KillerAwareness:Tick()
@@ -363,13 +381,13 @@ function KillerAwareness:Draw()
 		end
 	end
 
-	if(self.Menu.ChampTracker.Enabled:Value()) then
+	if(self.Menu.ChampLineScan.Enabled:Value()) then
 		-- Draw lines connecting to enemy champions
 		for k, v in pairs(Enemies) do
 			local distMax = 3000
 			local distMin = 1000
 			if(v and IsValid(v) and myHero.pos.DistanceTo(v.pos) <= distMax and myHero.pos.DistanceTo(v.pos) > distMin) then
-				local lineThickness = self.Menu.ChampTracker.LineThickness:Value()
+				local lineThickness = self.Menu.ChampLineScan.LineThickness:Value()
 				local lineAlphaVal = ((myHero.pos.DistanceTo(v.pos) - distMin) / (distMax - distMin)) * 0.9
 				DrawLine(myHero.pos:To2D(), v.pos:To2D(), lineThickness, DrawColor(300 * lineAlphaVal, 255, 0, 0))
 			end
@@ -520,9 +538,157 @@ function KillerAwareness:UpdateHealthData()
 	end
 end
 
+
+local AutoWardPing, ChampionTracker
+
+--Auto Ward Pinger
+
+AutoWardPing = {
+
+	CachedClickedWards = {},
+	WardMenu = nil,
+
+	OnTick = function (self)
+		if not (KillerAwareness.Menu.Loaded) then
+			return
+		else
+			self.WardMenu = KillerAwareness.Menu.WardPing
+		end
+
+		if(self.WardMenu.Enabled:Value()) then
+			self:Scan()
+			if(self.IsActivePinging and self.WardTarget) then
+				self:PingWard()
+			end
+
+			self:ClearGarbage()
+		end
+	end,
+
+	Scan = function(self)
+		if not (myHero.valid or IsValid(myHero)) or GameIsChatOpen() then return end
+		local wards = _G.SDK.ObjectManager:GetOtherEnemyMinions()
+		local nearbyEnemies = _G.SDK.ObjectManager:GetEnemyHeroes(325) --Do not ping when enemies are around
+		if(#wards > 0 and #nearbyEnemies == 0) then
+			for _, ward in ipairs(wards) do
+				if(ward.visible and ward.valid) then
+					if(self:CheckExistingWard(ward) == false and self:IsNewWard(ward)) then
+						local extraDelay = self.WardMenu.BonusDelay:Value() / 1000
+						DelayAction(function()
+							self.OldMousePos = Game.mousePos()
+							self.WardTarget = ward
+							self.IsActivePinging = true
+							self.randomOffset = {x = math.random(-75, 75), y = 0, z = math.random(-75, 75)}
+						end, 0.02 + extraDelay)
+						table.insert(self.CachedClickedWards, ward)
+						return
+					end
+				end
+			end
+		end
+	end,
+
+	PingWard = function (self)
+		if(self.WardTarget.toScreen.onScreen == false) then
+			self.WardTarget = nil
+			self.IsActivePinging = false
+			return	
+		end
+		if not (myHero.valid or IsValid(myHero)) or GameIsChatOpen() then
+			self.WardTarget = nil
+			self.IsActivePinging = false
+			return 
+		end
+
+		local finalClickPos = self.WardTarget.pos + self.randomOffset
+		Control.KeyDown(18)
+		_G.SDK.Cursor:Add(MOUSEEVENTF_LEFTDOWN, finalClickPos)
+		Control.mouse_event(MOUSEEVENTF_LEFTDOWN)
+		Control.mouse_event(MOUSEEVENTF_LEFTUP)
+		DelayAction(function()
+			Control.KeyUp(18)
+			self.IsActivePinging = false
+			if(myHero.pathing.hasMovePath) then
+				_G.SDK.Cursor:Add(MOUSEEVENTF_RIGHTDOWN, self.OldMousePos)
+			else
+				_G.SDK.Cursor:Add(MOUSEEVENTF_LEFTDOWN, self.OldMousePos)
+			end
+		end, 0.008)
+
+	end,
+
+	ClearGarbage = function(self)
+		for i = #self.CachedClickedWards, 1, -1 do
+			local ward = self.CachedClickedWards[i]
+			if(ward == nil or ward.dead or not ward.valid) then
+				table.remove(self.CachedClickedWards, i)
+			end
+		end
+	end,
+
+	CheckExistingWard = function (self, ward)
+		for k, v in ipairs(self.CachedClickedWards) do
+			if(v.networkID == ward.networkID) then
+				return true
+			end
+		end
+		return false
+	end,
+
+	IsNewWard = function(self, ward)
+		if(ward.maxMana - ward.mana <= 5) then
+			return true
+		end
+		return false
+	end
+
+}
+
+--Courtesy of the official champion tracker from GoS
+local summonerSprites = {};
+
+summonerSprites[1] = { Sprite("SpellTracker\\1.png"), "SummonerBarrier" }
+summonerSprites[2] = { Sprite("SpellTracker\\2.png"), "SummonerBoost" }
+summonerSprites[3] = { Sprite("SpellTracker\\3.png"), "SummonerDot" }
+summonerSprites[4] = { Sprite("SpellTracker\\4.png"), "SummonerExhaust" }
+summonerSprites[5] = { Sprite("SpellTracker\\5.png"), "SummonerFlash" }
+summonerSprites[6] = { Sprite("SpellTracker\\6.png"), "SummonerHaste" }
+summonerSprites[7] = { Sprite("SpellTracker\\7.png"), "SummonerHeal" }
+summonerSprites[8] = { Sprite("SpellTracker\\8.png"), "SummonerSmite" }
+summonerSprites[9] = { Sprite("SpellTracker\\9.png"), "SummonerTeleport" }
+summonerSprites[10] = { Sprite("SpellTracker\\10.png"), "S5_SummonerSmiteDuel" }
+summonerSprites[11] = { Sprite("SpellTracker\\11.png"), "S5_SummonerSmitePlayerGanker" }
+summonerSprites[12] = { Sprite("SpellTracker\\12.png"), "SummonerPoroRecall" }
+summonerSprites[13] = { Sprite("SpellTracker\\13.png"), "SummonerPoroThrow" }
+
+ChampionTracker = {
+
+	TrackerMenu = nil,
+
+	OnTick = function (self)
+		if not (KillerAwareness.Menu.Loaded) then
+			return
+		else
+			self.TrackerMenu = KillerAwareness.Menu.ChampTracker
+		end
+	end,
+
+	Draw = function (self)
+	end
+}
+
 Callback.Add("Load", function()
 	LoadUnits()
 	KillerAwareness()
+end)
+
+Callback.Add("Tick", function()
+	AutoWardPing:OnTick()
+	--ChampionTracker:OnTick()
+end)
+
+Callback.Add("Draw", function()
+	--ChampionTracker:Draw()
 end)
 
 if KillerAwareness.OnWndMsg then
