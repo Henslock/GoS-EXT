@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.08
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -386,6 +386,7 @@ function Gangplank:Tick()
 		self:Clear()
 	end
 	
+	self:HoverBarrelCheck()
 	self:UpdateBarrels()
 	self:KillSteal()
 	self:ManualKeys()
@@ -434,7 +435,7 @@ end
 function Gangplank:OnSpellCast(spell)
 	if spell.name == "GangplankE" then
         DelayAction(function()
-            self:CheckBarrels(GameTimer() - 0.03)
+            self:CheckBarrels()
         end, 0.03)
 	end
 	
@@ -514,11 +515,12 @@ function Gangplank:CheckExistingBarrel(obj)
 	return false
 end
 
-function Gangplank:CheckBarrels(passedAge)
+function Gangplank:CheckBarrels()
 	local barrels = self:GetBarrelObjects()
 	for _, barrel in pairs(barrels) do
 		if barrel and self:CheckExistingBarrel(barrel) == false then
-			self.BarrelData[#self.BarrelData + 1] = {barrelObj = barrel, age = passedAge, connections = {}}
+			local buffAge = barrel:GetBuff(0).startTime	
+			self.BarrelData[#self.BarrelData + 1] = {barrelObj = barrel, age = buffAge, connections = {}}
 		end
 	end
 	
@@ -2765,6 +2767,23 @@ function Gangplank:GetRDamagePerWave()
 	end
 	
 	return totalDmg
+end
+
+function Gangplank:HoverBarrelCheck()
+
+	--This is a fallback method that will register barrels if we hover over them.
+	local hoverTar = Game.GetUnderMouseObject()
+	if(hoverTar) then
+		if hoverTar and not hoverTar.dead and hoverTar.charName == ("GangplankBarrel") then
+			if self:CheckExistingBarrel(hoverTar) == false then
+				local buffAge = hoverTar:GetBuff(0).startTime	
+				self.BarrelData[#self.BarrelData + 1] = {barrelObj = hoverTar, age = buffAge, connections = {}}
+				--Adding connections
+				self:UpdateBarrelConnections()
+			end
+		end
+	end
+
 end
 
 function Gangplank:GetBarrelObjects()
