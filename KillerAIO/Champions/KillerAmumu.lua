@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Amumu will exit.")
@@ -15,7 +15,7 @@ end
 
 -- [ AutoUpdate ]
 
---UpdateMyHeroScript()
+UpdateMyHeroScript()
 
 ----------------------------------------------------
 --|                Champion               		|--
