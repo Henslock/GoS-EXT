@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.13
+local scriptVersion = 1.14
 ----------------------------------------------------
 --|                    AUTO UPDATE                       |--
 ----------------------------------------------------
@@ -95,8 +95,12 @@ end
 
 local function IsTurret(unit)
 	if (not unit or unit.valid == false) then return false end
-	
-	for i = 1, Game.TurretCount() do
+
+	for i = 1, #EnemyTurrets do
+		if(unit.networkID == Game.Turret(i).networkID) then return true end
+	end
+
+	for i = 1, #FriendlyTurrets do
 		if(unit.networkID == Game.Turret(i).networkID) then return true end
 	end
 	return false
@@ -240,6 +244,7 @@ local haloCD = 10
 
 KillerAwareness.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolution().y * 0.5 }
 KillerAwareness.AllowMove = nil
+KillerAwareness.ChampionTrackerLoaded = false
 KillerAwareness.Menu = {}
 
 function KillerAwareness:__init()
@@ -286,17 +291,10 @@ function KillerAwareness:LoadMenu()
 	--Ward Auto Ping
 	self.Menu:MenuElement({id = "WardPing", name = "Ward Auto-Ping", type = MENU})
 	self.Menu.WardPing:MenuElement({id = "Enabled", name = "Enabled", value = true})
-	self.Menu.WardPing:MenuElement({id = "BonusDelay", name = "Extra Humanizer Delay", value = 200, min = 50, max = 750, step = 25})
 
 	--Champion Tracker
-	--[[
 	self.Menu:MenuElement({id = "ChampTracker", name = "Champion Tracker", type = MENU})
-	self.Menu.ChampTracker:MenuElement({id = "Enabled", name = "Enabled", value = true})
-	self.Menu.ChampTracker:MenuElement({id = "TrackAbilities", name = "Track Abilities", value = true})
-	self.Menu.ChampTracker:MenuElement({id = "TrackSummoners", name = "Track Summoners", value = true})
-	self.Menu.ChampTracker:MenuElement({id = "TrackExperience", name = "Track Experience", value = true})
-	self.Menu.ChampTracker:MenuElement({id = "EnableTrackingWidget", name = "Enable Tracking Widget", value = false})
-	--]]
+
 	
 	--Health Tracker
 	self.Menu:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = false})
@@ -547,6 +545,9 @@ AutoWardPing = {
 
 	CachedClickedWards = {},
 	WardMenu = nil,
+	CachedWards = {},
+	WardCountTicker = 0,
+	TickUpdateTimer = 1,
 
 	OnTick = function (self)
 		if not (KillerAwareness.Menu.Loaded) then
@@ -560,26 +561,30 @@ AutoWardPing = {
 			if(self.IsActivePinging and self.WardTarget) then
 				self:PingWard()
 			end
-
 			self:ClearGarbage()
 		end
 	end,
 
+	UpdateCachedWards = function (self)
+		if(self.WardCountTicker > GameTimer()) then return end
+		self.CachedWards = _G.SDK.ObjectManager:GetOtherEnemyMinions()
+		self.WardCountTicker = GameTimer() + self.TickUpdateTimer
+	end,
+
 	Scan = function(self)
 		if not (myHero.valid or IsValid(myHero)) or GameIsChatOpen() then return end
-		local wards = _G.SDK.ObjectManager:GetOtherEnemyMinions()
+		self:UpdateCachedWards()
 		local nearbyEnemies = _G.SDK.ObjectManager:GetEnemyHeroes(325) --Do not ping when enemies are around
-		if(#wards > 0 and #nearbyEnemies == 0) then
-			for _, ward in ipairs(wards) do
+		if(#self.CachedWards > 0 and #nearbyEnemies == 0) then
+			for _, ward in ipairs(self.CachedWards) do
 				if(ward.visible and ward.valid) then
 					if(self:CheckExistingWard(ward) == false and self:IsNewWard(ward)) then
-						local extraDelay = self.WardMenu.BonusDelay:Value() / 1000
-						DelayAction(function()
-							self.OldMousePos = Game.mousePos()
-							self.WardTarget = ward
-							self.IsActivePinging = true
-							self.randomOffset = {x = math.random(-75, 75), y = 0, z = math.random(-75, 75)}
-						end, 0.02 + extraDelay)
+
+						self.OldMousePos = Game.mousePos()
+						self.WardTarget = ward
+						self.IsActivePinging = true
+						self.randomOffset = {x = math.random(-75, 75), y = 0, z = math.random(-75, 75)}
+
 						table.insert(self.CachedClickedWards, ward)
 						return
 					end
@@ -644,51 +649,604 @@ AutoWardPing = {
 
 }
 
---Courtesy of the official champion tracker from GoS
-local summonerSprites = {};
-
-summonerSprites[1] = { Sprite("SpellTracker\\1.png"), "SummonerBarrier" }
-summonerSprites[2] = { Sprite("SpellTracker\\2.png"), "SummonerBoost" }
-summonerSprites[3] = { Sprite("SpellTracker\\3.png"), "SummonerDot" }
-summonerSprites[4] = { Sprite("SpellTracker\\4.png"), "SummonerExhaust" }
-summonerSprites[5] = { Sprite("SpellTracker\\5.png"), "SummonerFlash" }
-summonerSprites[6] = { Sprite("SpellTracker\\6.png"), "SummonerHaste" }
-summonerSprites[7] = { Sprite("SpellTracker\\7.png"), "SummonerHeal" }
-summonerSprites[8] = { Sprite("SpellTracker\\8.png"), "SummonerSmite" }
-summonerSprites[9] = { Sprite("SpellTracker\\9.png"), "SummonerTeleport" }
-summonerSprites[10] = { Sprite("SpellTracker\\10.png"), "S5_SummonerSmiteDuel" }
-summonerSprites[11] = { Sprite("SpellTracker\\11.png"), "S5_SummonerSmitePlayerGanker" }
-summonerSprites[12] = { Sprite("SpellTracker\\12.png"), "SummonerPoroRecall" }
-summonerSprites[13] = { Sprite("SpellTracker\\13.png"), "SummonerPoroThrow" }
+local summonerSprites = {}
+local summonerSpirteNames = {"Barrier", "Clarity", "Cleanse", "Exhaust", "Flash", "Ghost", "Heal", "Hexflash", "Ignite", "Mark", "Smite", "Teleport", "UnleashedTeleport"}
 
 ChampionTracker = {
 
 	TrackerMenu = nil,
+	shouldDrawEnemies = true,
+	shouldDrawAllies = true,
+	shouldDrawMyHero = true,
+	cachedSpriteScale = 1,
+	fadedWhite = DrawColor(155, 255, 255, 255),
+	ColorWhite = DrawColor(255, 255, 255, 255),
+	ColorGrey = DrawColor(255, 120, 120, 120),
+	SR_ExpGain = {0,280,660,1140,1720,2400,3180,4060,5040,6120,7300,8580,9960,11440,13020,14700,16480,18360},
+	HA_ExpGain = {0,0,0,478,988,1738,2518,3398,4378,5458,6638,7918,9298,10778,12358,14038,15818,17698},
+	CDFont = Draw.Font("NotoSans-Regular.ttf", "Ubuntu"),
+
+	Init = function (self)
+		self:InitSpirtes()
+	end,
+
+	InitSpirtes = function ()
+		local check = true
+		for i = 1, #summonerSpirteNames do
+			local spriteName = summonerSpirteNames[i]
+			if(FileExists(SPRITE_PATH .. "KillerAwareness/Summoners/" .. spriteName .. ".png") == false) then
+				check = false
+				break
+			end
+		end
+
+		if(check == false) then
+			print("Killer Awareness - Missing Sprites for Champion Tracker")
+
+			DelayAction(function()
+				if (KillerAwareness.Menu.Loaded) then
+					KillerAwareness.Menu.ChampTracker:MenuElement({name = "[WARNING] Sprites Missing", drop = {""}})
+					KillerAwareness.Menu.ChampTracker:MenuElement({name = " ", drop = {"Please download them on the forums."}})
+					KillerAwareness.Menu.ChampTracker:MenuElement({name = " ", drop = {"Directory: Sprites/KillerAwareness/Summoners"}})
+					KillerAwareness.ChampionTrackerLoaded = false
+				end
+			end,  1)
+			return
+		else
+			--Init Sprites
+			summonerSprites = {
+				["SummonerBarrier"] = Sprite("KillerAwareness\\Summoners\\Barrier.png"),
+				["SummonerBoost"] = Sprite("KillerAwareness\\Summoners\\Cleanse.png"),
+				["SummonerMana"] = Sprite("KillerAwareness\\Summoners\\Clarity.png"),
+				["SummonerDot"] = Sprite("KillerAwareness\\Summoners\\Ignite.png"),
+				["SummonerExhaust"] = Sprite("KillerAwareness\\Summoners\\Exhaust.png"),
+				["SummonerFlash"] = Sprite("KillerAwareness\\Summoners\\Flash.png"),
+				["SummonerFlashPerksHextechFlashtraptionV2"] = Sprite("KillerAwareness\\Summoners\\Hexflash.png"),
+				["SummonerHaste"] = Sprite("KillerAwareness\\Summoners\\Ghost.png"),
+				["SummonerHeal"] = Sprite("KillerAwareness\\Summoners\\Heal.png"),
+				["SummonerSmite"] = Sprite("KillerAwareness\\Summoners\\Smite.png"),
+				["SummonerTeleport"] = Sprite("KillerAwareness\\Summoners\\Teleport.png"),
+				["S12_SummonerTeleportUpgrade"] = Sprite("KillerAwareness\\Summoners\\UnleashedTeleport.png"),
+				["SummonerSmiteAvatarOffensive"] = Sprite("KillerAwareness\\Summoners\\Smite.png"),
+				["SummonerSmiteAvatarUtility"] = Sprite("KillerAwareness\\Summoners\\Smite.png"),
+				["SummonerSmiteAvatarDefensive"] = Sprite("KillerAwareness\\Summoners\\Smite.png"),
+				["S5_SummonerSmitePlayerGanker"] = Sprite("KillerAwareness\\Summoners\\Smite.png"),
+				["SummonerSnowball"] = Sprite("KillerAwareness\\Summoners\\Mark.png"),
+				["SummonerPoroRecall"] = Sprite("KillerAwareness\\Summoners\\Mark.png"),
+				["SummonerPoroThrow"] = Sprite("KillerAwareness\\Summoners\\Mark.png")
+				}
+
+				DelayAction(function()
+					if (KillerAwareness.Menu.Loaded) then
+						KillerAwareness.Menu.ChampTracker:MenuElement({id = "Enabled", name = "Enabled", type = MENU})
+						KillerAwareness.Menu.ChampTracker:MenuElement({id = "ClickedTarget", name = "Only Show on Clicked Target", type = MENU})
+						KillerAwareness.Menu.ChampTracker:MenuElement({id = "TrackAbilities", name = "Track Abilities", value = true})
+						KillerAwareness.Menu.ChampTracker:MenuElement({id = "TrackAbilityLevels", name = "Track Ability Levels", value = false})
+						KillerAwareness.Menu.ChampTracker:MenuElement({id = "TrackSummoners", name = "Track Summoners", value = true})
+						KillerAwareness.Menu.ChampTracker:MenuElement({id = "TrackExperience", name = "Track Experience", value = true})
+						KillerAwareness.Menu.ChampTracker:MenuElement({id = "Customize", name = "Customize Elements", type = MENU})
+						KillerAwareness.Menu.ChampTracker:MenuElement({id = "EnableTrackingWidget", name = "Enable Tracking Widget", value = false})
+					
+						--Champion Tracker Enabled
+						KillerAwareness.Menu.ChampTracker.Enabled:MenuElement({id = "Enemies", name = "Enemies", value = true})
+						KillerAwareness.Menu.ChampTracker.Enabled:MenuElement({id = "Allies", name = "Allies", value = false})
+						KillerAwareness.Menu.ChampTracker.Enabled:MenuElement({id = "MyHero", name = "My Hero", value = false})
+					
+						--Hover Over Requirement
+						KillerAwareness.Menu.ChampTracker.ClickedTarget:MenuElement({id = "AbilityLevels", name = "Ability Levels", value = false})
+						KillerAwareness.Menu.ChampTracker.ClickedTarget:MenuElement({id = "Summoners", name = "Summoners", value = false})
+						KillerAwareness.Menu.ChampTracker.ClickedTarget:MenuElement({id = "Experience", name = "Experience", value = false})
+					
+						--Champion Tracker Customization
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "YOffset", name = "Y Offset", value = 50, min = -50, max = 150, step = 1})
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "BarWidth", name = "Bar Width", value = 200, min = 120, max = 350, step = 2})
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "BarHeight", name = "Bar Height", value = 14, min = 6, max = 30, step = 2})
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "BarMargin", name = "Bar Margin", value = 4, min = 2, max = 12, step = 2})
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "DisplayCDs", name = "Display Cooldowns", value = true})
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "DisplayDecimals", name = "Display Decimals on CDs", value = false})
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "DisplayBezel", name = "Display Bezel", value = true})
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "XPBarPos", name = "Experience Bar Position",  value = 1, drop = {"Top", "Bottom"}})
+						KillerAwareness.Menu.ChampTracker.Customize:MenuElement({id = "SummonerSize", name = "Summoner Icon Size", value = 50, min = 25, max = 100, step = 1, identifier = "%"})
+		
+						KillerAwareness.ChampionTrackerLoaded = true
+					end
+				end,  1)
+		end
+	end,
 
 	OnTick = function (self)
+		if not (KillerAwareness.ChampionTrackerLoaded) then return end
 		if not (KillerAwareness.Menu.Loaded) then
 			return
 		else
 			self.TrackerMenu = KillerAwareness.Menu.ChampTracker
 		end
+
+		if(self.TrackerMenu.Enabled.Enemies:Value()) then
+			shouldDrawEnemies = true
+		else
+			shouldDrawEnemies = false
+		end
+
+		if(self.TrackerMenu.Enabled.Allies:Value()) then
+			shouldDrawAllies = true
+		else
+			shouldDrawAllies = false
+		end
+
+		if(self.TrackerMenu.Enabled.MyHero:Value()) then
+			shouldDrawMyHero = true
+		else
+			shouldDrawMyHero = false
+		end
+	end,
+
+	UpdateSpriteScale = function (self)
+		local spriteScale = self.TrackerMenu.Customize.SummonerSize:Value() / 100
+		if(spriteScale ~= self.cachedSpriteScale) then
+			self.cachedSpriteScale = spriteScale
+			for _, sprite in pairs(summonerSprites) do
+				sprite:SetScale(spriteScale)
+			end
+		end
 	end,
 
 	Draw = function (self)
+		if not (KillerAwareness.ChampionTrackerLoaded) then return end
+
+		if(shouldDrawEnemies) then
+			for _, enemy in ipairs(Enemies) do
+				if(IsValid(enemy) and enemy.charName ~= "PracticeTool_TargetDummy") then
+					self:DrawChampionTracker(enemy)
+				end
+			end
+		end
+
+		if(shouldDrawAllies) then
+			for _, ally in ipairs(Allies) do
+				if(IsValid(ally)) then
+					self:DrawChampionTracker(ally)
+				end
+			end
+		end
+
+		if(shouldDrawMyHero) then
+			if(IsValid(myHero)) then
+				self:DrawChampionTracker(myHero)
+			end
+		end
+	end,
+
+	DrawChampionTracker = function (self, unit)
+		local barWidth = self.TrackerMenu.Customize.BarWidth:Value()
+		local yOffset = self.TrackerMenu.Customize.YOffset:Value()
+		local barHeight = self.TrackerMenu.Customize.BarHeight:Value()
+		local barMargin = self.TrackerMenu.Customize.BarMargin:Value()
+		local displayCDs = self.TrackerMenu.Customize.DisplayCDs:Value()
+		local displayDecimals = self.TrackerMenu.Customize.DisplayDecimals:Value()
+		local displayBezel = self.TrackerMenu.Customize.DisplayBezel:Value()
+		local spriteSize = 64
+		local spriteScale = self.cachedSpriteScale
+		local fontSize = barHeight + 2
+		local spellBarWidth = (barWidth - (barMargin*5)) / 4
+		local heroPos = unit.pos2D
+
+		if(heroPos.onScreen) then
+
+
+			--Clicked Target DATA
+			local shouldReveal, hoverExp, hoverSkillLevel, hoverSummoners = false, true, true, true
+			local clickedTar = _G.SDK.TargetSelector.Selected
+			if(clickedTar and IsValid(clickedTar)) then
+				if(clickedTar.networkID == unit.networkID) then
+					shouldReveal = true
+				end
+			end
+
+			if(self.TrackerMenu.ClickedTarget.Experience:Value()) then
+				if(shouldReveal) then
+					hoverExp = true
+				else
+					hoverExp = false
+				end
+			end
+
+			if(self.TrackerMenu.ClickedTarget.AbilityLevels:Value()) then
+				if(shouldReveal) then
+					hoverSkillLevel = true
+				else
+					hoverSkillLevel = false
+				end
+			end
+
+			if(self.TrackerMenu.ClickedTarget.Summoners:Value()) then
+				if(shouldReveal) then
+					hoverSummoners = true
+				else
+					hoverSummoners = false
+				end
+			end
+
+			--Experience Draws
+			if(self.TrackerMenu.TrackExperience:Value() and (Game.mapID == SUMMONERS_RIFT or Game.mapID == HOWLING_ABYSS) and hoverExp) then
+				local lvlData = unit.levelData;
+				local xpBarPos = self.TrackerMenu.Customize.XPBarPos:Value()
+				local barAnchorOffset = 0
+				local widthAdjust = 0
+
+				if(xpBarPos == 1) then
+					barAnchorOffset = -10
+				else
+					barAnchorOffset = barHeight + (barMargin*2) + 4
+				end
+
+				if(displayBezel == false) then
+					widthAdjust = barMargin
+				end
+
+				if (lvlData.lvl > 0) and (lvlData.lvl < 18) then
+					DrawRect(heroPos.x - (barWidth/2) + widthAdjust, heroPos.y + yOffset + barAnchorOffset, barWidth - widthAdjust*2, 6, DrawColor(185, 0, 0, 0))
+
+					if(Game.mapID == SUMMONERS_RIFT) then
+						local totalExp = self.SR_ExpGain[lvlData.lvl+1] - self.SR_ExpGain[lvlData.lvl];
+						local currExp = lvlData.exp - self.SR_ExpGain[lvlData.lvl];
+						DrawRect(heroPos.x - (barWidth/2) + widthAdjust, heroPos.y + yOffset + barAnchorOffset, (currExp / totalExp) * (barWidth - widthAdjust*2), 4, DrawColor(255, 177, 68, 207))
+					else
+						local totalExp = self.HA_ExpGain[lvlData.lvl+1] - self.HA_ExpGain[lvlData.lvl];
+						local currExp = lvlData.exp - self.HA_ExpGain[lvlData.lvl] - 661.5;
+						DrawRect(heroPos.x - (barWidth/2) + widthAdjust, heroPos.y + yOffset + barAnchorOffset, (currExp / totalExp) * (barWidth - widthAdjust*2), 4, DrawColor(255, 177, 68, 207))
+					end
+				end
+			end
+
+			--Skill Draws
+			if(self.TrackerMenu.TrackAbilities:Value()) then
+				local formatToken = "%.0f"
+				if(displayDecimals) then formatToken = "%.1f" end
+
+				if(displayBezel) then
+					DrawRect(heroPos.x - (barWidth/2), heroPos.y + yOffset, barWidth , barHeight + (barMargin*2), DrawColor(185, 0, 0, 0))
+				end
+
+				-- Q DATA
+				local QData = unit:GetSpellData(_Q)
+				if QData.level > 0 then
+					local isOnCd, currCD, cdRatio, specialCase = self:GetSpellCooldownData(QData, unit)
+					if(specialCase) then
+						DrawRect(heroPos.x - (barWidth/2) + barMargin * 1 -1, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 0, 0, 0))
+						DrawRect(heroPos.x - (barWidth/2) + barMargin * 1, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 201, 56, 197))
+					else
+						if isOnCd then
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 1 -1, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 125, 125, 125))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 1, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 0, 0, 0))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 1, heroPos.y + yOffset + barMargin, ((1 - (cdRatio)) * spellBarWidth), barHeight, DrawColor(255, 80, 80, 80))
+							if(displayCDs) then
+								DrawText(string.format(formatToken, currCD), fontSize, heroPos.x - (barWidth/2) + 3 + barMargin * 1, heroPos.y + yOffset + barMargin -2, DrawColor(255, 255, 255, 255), self.CDFont)
+							end
+						else
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 1 -1, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 0, 0, 0))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 1, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 40, 185, 70))
+						end
+					end
+				else
+					DrawRect(heroPos.x - (barWidth/2) + barMargin * 1 -1, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 80, 80, 80))
+					DrawRect(heroPos.x - (barWidth/2) + barMargin * 1, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 0, 0, 0))
+				end
+
+				-- W DATA
+				local WData = unit:GetSpellData(_W)
+				if WData.level > 0 then
+					local isOnCd, currCD, cdRatio, specialCase = self:GetSpellCooldownData(WData, unit)
+					if(specialCase) then
+						DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 -1 + spellBarWidth, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 0, 0, 0))
+						DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 + spellBarWidth, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 201, 56, 197))
+					else
+						if isOnCd then
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 -1 + spellBarWidth, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 125, 125, 125))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 + spellBarWidth, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 0, 0, 0))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 + spellBarWidth, heroPos.y + yOffset + barMargin, ((1 - (cdRatio)) * spellBarWidth), barHeight, DrawColor(255, 80, 80, 80))
+							if(displayCDs) then
+								DrawText(string.format(formatToken, currCD), fontSize, heroPos.x - (barWidth/2) + 3 + barMargin*2 + spellBarWidth, heroPos.y + yOffset + barMargin -2, DrawColor(255, 255, 255, 255), self.CDFont)
+							end
+						else
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 -1 + spellBarWidth, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 0, 0, 0))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 + spellBarWidth, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 40, 185, 70))
+						end
+					end
+				else
+					DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 -1 + spellBarWidth, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 80, 80, 80))
+					DrawRect(heroPos.x - (barWidth/2) + barMargin * 2 + spellBarWidth, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 0, 0, 0))
+				end
+
+				--E DATA
+				local EData = unit:GetSpellData(_E)
+				if EData.level > 0 then
+					local isOnCd, currCD, cdRatio, specialCase = self:GetSpellCooldownData(EData, unit)
+					if(specialCase) then
+						DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 -1 + spellBarWidth*2, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 0, 0, 0))
+						DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 + spellBarWidth*2, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 201, 56, 197))
+					else
+						if isOnCd then
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 -1 + spellBarWidth*2, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 125, 125, 125))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 + spellBarWidth*2, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 0, 0, 0))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 + spellBarWidth*2, heroPos.y + yOffset + barMargin, ((1 - (cdRatio)) * spellBarWidth), barHeight, DrawColor(255, 80, 80, 80))
+							if(displayCDs) then
+								DrawText(string.format(formatToken, currCD), fontSize, heroPos.x - (barWidth/2) + 3 + barMargin*3 + spellBarWidth*2, heroPos.y + yOffset + barMargin -2, DrawColor(255, 255, 255, 255), self.CDFont)
+							end
+						else
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 -1 + spellBarWidth*2, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 0, 0, 0))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 + spellBarWidth*2, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 40, 185, 70))
+						end
+					end
+				else
+					DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 -1 + spellBarWidth*2, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 80, 80, 80))
+					DrawRect(heroPos.x - (barWidth/2) + barMargin * 3 + spellBarWidth*2, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 0, 0, 0))
+				end
+
+				--R DATA
+				local RData = unit:GetSpellData(_R)
+				if RData.level > 0 then
+					local isOnCd, currCD, cdRatio, specialCase = self:GetSpellCooldownData(RData, unit)
+					if(specialCase) then
+						DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 -1 + spellBarWidth*3, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 0, 0, 0))
+						DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 + spellBarWidth*3, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 201, 56, 197))
+					else
+						if isOnCd then
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 -1 + spellBarWidth*3, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 125, 125, 125))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 + spellBarWidth*3, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 0, 0, 0))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 + spellBarWidth*3, heroPos.y + yOffset + barMargin, ((1 - (cdRatio)) * spellBarWidth), barHeight, DrawColor(255, 80, 80, 80))
+							if(displayCDs) then
+								DrawText(string.format(formatToken, currCD), fontSize, heroPos.x - (barWidth/2) + 3 + barMargin*4 + spellBarWidth*3, heroPos.y + yOffset + barMargin -2, DrawColor(255, 255, 255, 255), self.CDFont)
+							end
+						else
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 -1 + spellBarWidth*3, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 0, 0, 0))
+							DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 + spellBarWidth*3, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 183, 222, 54))
+						end
+					end
+				else
+					DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 -1 + spellBarWidth*3, heroPos.y + yOffset + barMargin -1, spellBarWidth +2, barHeight +2, DrawColor(255, 80, 80, 80))
+					DrawRect(heroPos.x - (barWidth/2) + barMargin * 4 + spellBarWidth*3, heroPos.y + yOffset + barMargin, spellBarWidth, barHeight, DrawColor(255, 0, 0, 0))
+				end
+
+				--Ability Levels
+				if(self.TrackerMenu.TrackAbilityLevels:Value() and barWidth >= 150 and hoverSkillLevel) then
+
+					local xpBarPos = self.TrackerMenu.Customize.XPBarPos:Value()
+					local barAnchorOffset = 0
+
+					if(xpBarPos == 1) then
+						barAnchorOffset = barHeight + barMargin - 5
+					else
+						barAnchorOffset = -20 + barMargin - 5
+					end
+
+					--Q
+					DrawText(string.rep(".", QData.level), 20, heroPos.x - (barWidth/2) + barMargin*1, heroPos.y + yOffset + barAnchorOffset, DrawColor(255, 235, 171, 66), self.CDFont)
+
+					--W
+					DrawText(string.rep(".", WData.level), 20, heroPos.x - (barWidth/2) + barMargin * 2 + spellBarWidth, heroPos.y + yOffset + barAnchorOffset, DrawColor(255, 235, 171, 66), self.CDFont)
+				
+					--E
+					DrawText(string.rep(".", EData.level), 20, heroPos.x - (barWidth/2) + barMargin * 3 + spellBarWidth *2, heroPos.y + yOffset + barAnchorOffset, DrawColor(255, 235, 171, 66), self.CDFont)
+
+					--R
+					DrawText(string.rep(".", RData.level), 20, heroPos.x - (barWidth/2) + barMargin * 4 + spellBarWidth *3, heroPos.y + yOffset + barAnchorOffset, DrawColor(255, 235, 171, 66), self.CDFont)
+				end
+			end
+
+			--Summoner Draws
+			if(self.TrackerMenu.TrackSummoners:Value() and hoverSummoners) then
+
+				local formatToken = "%.0f"
+				local centerBarOffset = -(spriteSize * spriteScale) + (barHeight/2) --This is to anchor the summoners in the center of the horizontal spell bar
+				if(displayDecimals) then formatToken = "%.1f" end
+
+				self:UpdateSpriteScale()
+
+				DrawRect(heroPos.x - (barWidth/2) + barMargin + barWidth -2, heroPos.y + yOffset + barMargin + centerBarOffset -2, spriteSize * spriteScale + 4, spriteSize * spriteScale * 2 + 4, DrawColor(255, 0, 0, 0))
+
+				--SUMMONER SLOT 1
+
+				local SummonerSlot1 = unit:GetSpellData(SUMMONER_1)
+				if SummonerSlot1.level > 0 then
+					local spellCD = 0
+
+					if SummonerSlot1.currentCd > 0 then
+						spellCD = math.max(SummonerSlot1.currentCd / SummonerSlot1.cd, 0)
+					end
+
+					local SprIdx1 = summonerSprites[SummonerSlot1.name]
+					local SprIdx1Fill = summonerSprites[SummonerSlot1.name]
+					--Sprite fill animation
+					if SprIdx1 ~= nil and SprIdx1Fill ~= nil then
+						local sprCut = {x = 0, y = spriteSize * spriteScale, w = spriteSize * spriteScale, h = spriteSize * 2 * spriteScale}
+						if(spellCD <= 0) then
+							SprIdx1:SetColor(self.ColorWhite)
+						else
+							SprIdx1:SetColor(self.ColorGrey)
+						end
+						SprIdx1:Draw(sprCut, heroPos.x - (barWidth/2) + barMargin + barWidth, heroPos.y + yOffset + barMargin + centerBarOffset)
+
+						if(spellCD > 0) then
+							local sprCut = {x = 0, y = 0, w = spriteSize * spriteScale, h = spriteSize * spriteScale * spellCD}
+							SprIdx1Fill:SetColor(self.ColorGrey)
+							SprIdx1Fill:Draw(sprCut, heroPos.x - (barWidth/2) + barMargin + barWidth, heroPos.y + yOffset + barMargin + centerBarOffset)
+						end
+					end
+
+					if(displayCDs and spellCD > 0) then
+						local fontSize = (spriteSize * spriteScale) * 0.6
+						DrawText(string.format(formatToken, SummonerSlot1.currentCd), 
+							fontSize, heroPos.x - (barWidth/2) + barMargin + barWidth + (spriteSize * spriteScale) + 5, 
+							heroPos.y + yOffset + barMargin + (spriteSize * spriteScale)/2 - fontSize/2 + centerBarOffset, 
+							self.ColorWhite, self.CDFont)
+					end
+
+					if(spellCD > 0) then
+					--Accent line for visual improvement
+					DrawLine(heroPos.x - (barWidth/2) + barMargin + barWidth, heroPos.y + yOffset + barMargin + centerBarOffset + (spriteSize * spriteScale * spellCD),
+							heroPos.x - (barWidth/2) + barMargin + barWidth + (spriteSize * spriteScale), heroPos.y + yOffset + barMargin + centerBarOffset + (spriteSize * spriteScale * spellCD),
+							self.fadedWhite)
+					end
+				end
+
+				--SUMMONER SLOT 2
+				local SummonerSlot2 = unit:GetSpellData(SUMMONER_2)
+				if SummonerSlot2.level > 0 then
+					local spellCD = 0
+
+					if SummonerSlot2.currentCd > 0 then
+						spellCD = math.max(SummonerSlot2.currentCd / SummonerSlot2.cd, 0)
+					end
+
+					local SprIdx2 = summonerSprites[SummonerSlot2.name]
+					local SprIdx2Fill = summonerSprites[SummonerSlot2.name]
+					--Sprite fill animation
+					if SprIdx2 ~= nil and SprIdx2Fill ~= nil then
+						local sprCut = {x = 0, y = spriteSize * spriteScale, w = spriteSize * spriteScale, h = spriteSize * 2 * spriteScale}
+						if(spellCD <= 0) then
+							SprIdx2:SetColor(self.ColorWhite)
+						else
+							SprIdx2:SetColor(self.ColorGrey)
+						end
+						SprIdx2:Draw(sprCut, heroPos.x - (barWidth/2) + barMargin + barWidth, heroPos.y + yOffset + barMargin + (spriteSize * spriteScale) + centerBarOffset)
+
+						if(spellCD > 0) then
+							local sprCut = {x = 0, y = 0, w = spriteSize * spriteScale, h = spriteSize * spriteScale * spellCD}
+							SprIdx2Fill:SetColor(self.ColorGrey)
+							SprIdx2Fill:Draw(sprCut, heroPos.x - (barWidth/2) + barMargin + barWidth, heroPos.y + yOffset + barMargin + (spriteSize * spriteScale) + centerBarOffset)
+						end
+					end
+
+					if(displayCDs and spellCD > 0) then
+						local fontSize = (spriteSize * spriteScale) * 0.6
+						DrawText(string.format(formatToken, SummonerSlot2.currentCd), 
+							fontSize, heroPos.x - (barWidth/2) + barMargin + barWidth + (spriteSize * spriteScale) + 5, 
+							heroPos.y + yOffset + barMargin + (spriteSize * spriteScale) + (spriteSize * spriteScale)/2 - fontSize/2 + centerBarOffset, 
+							self.ColorWhite, self.CDFont)
+					end
+
+					if(spellCD > 0) then
+					--Accent line for visual improvement
+					DrawLine(heroPos.x - (barWidth/2) + barMargin + barWidth, heroPos.y + yOffset + barMargin + centerBarOffset + (spriteSize * spriteScale) + (spriteSize * spriteScale * spellCD),
+							heroPos.x - (barWidth/2) + barMargin + barWidth + (spriteSize * spriteScale), heroPos.y + yOffset + barMargin + centerBarOffset + (spriteSize * spriteScale) + (spriteSize * spriteScale * spellCD), 
+							self.fadedWhite)
+					end
+				end
+
+			end
+
+		end
+	end,
+
+	GetSpellCooldownData = function(self, spell, spellOwner)
+		if(spell ~= nil and spellOwner ~= nil) then
+			-- Returns IsOnCD, Current CD, CD Ratio, Special
+
+			--Spell Exceptions always first
+			local exceptionData = self:SpellExceptions(spell, spellOwner)
+			if(exceptionData ~= nil) then
+				return exceptionData[1], exceptionData[2], exceptionData[3], exceptionData[4]
+			end
+
+			if(spell.ammo == 0 and spell.ammoCurrentCd > 0) then
+				return true, spell.ammoCurrentCd, spell.ammoCurrentCd / spell.ammoCd, false
+			end
+
+			if(spell.currentCd > 0) then
+				return true, spell.currentCd, spell.currentCd / spell.cd, false
+			end
+
+			return false, 0, 0, false
+		end
+		return false, 0, 0, false
+	end,
+
+	--[[
+		You can alter the way spells are tracked here.
+		Return different information in the form of a table.
+
+		{IsOnCD, Current CD, CD Ratio, SpecialCase}
+
+		SpecialCase is for spells like Ahri's R which uses hudAmmo 
+	]]
+	SpellExceptions = function(self, spell, spellOwner)
+		--Ahri Ultimate
+		if(spellOwner.charName == "Ahri" and spell.name == "AhriR") then
+			if(spellOwner.hudMaxAmmo > 0) then
+				return {true, 0, 1, true}
+			end
+		end
+
+		--Karthus Q
+		if(spellOwner.charName == "Karthus" and (spell.name == "KarthusLayWasteA1" or spell.name == "KarthusLayWasteA2" or spell.name == "KarthusLayWasteA3")) then
+			if(spell.ammoCurrentCd > 0) then
+				return {true, spell.ammoCurrentCd, spell.ammoCurrentCd / spell.ammoCd, false}
+			end
+		end
+
+		--Gwen W
+		if(spellOwner.charName == "Gwen" and (spell.name == "GwenWRecast")) then
+			return {true, 0, 1, true}
+		end
+
+		--Gwen R
+		if(spellOwner.charName == "Gwen" and (spell.name == "GwenRRecast")) then
+			return {true, 0, 1, true}
+		end
+
+		--Shyvana R
+		if(spellOwner.charName == "Shyvana" and (spell.name == "ShyvanaTransformCast")) then
+			if(spellOwner.mana ~= 100) then
+				return {true, spellOwner.mana, 1-spellOwner.mana/spellOwner.maxMana, false}
+			end
+		end
+
+		--Riven R
+		if(spellOwner.charName == "Riven" and (spell.name == "RivenIzunaBlade")) and spellOwner then
+            if spell.cd==0.5 then
+                return {true, 0, 1, true}
+            end
+            if spell.cd==30 then
+                return {true, 30, 1, false}
+            end
+        end
+
+		--Kogmaw W
+        if(spellOwner.charName == "KogMaw" and (spell.name == "KogMawBioArcaneBarrage")) and spell.cd-spell.currentCd<8 then
+            return {true, 8-(spell.cd-spell.currentCd),(spell.cd-spell.currentCd)/8, false}
+        end
+
+		--Darius R
+        if(spellOwner.charName == "Darius" and (spell.name == "DariusExecute")) and spell.castTime + 20 > Game.Timer() and spell.currentCd == 0 and spell.level < 3 then
+            local buffduration=spell.castTime + 20 - Game.Timer()
+            if buffduration > 0 then
+                return {true, buffduration, (20-buffduration)/20, false}
+            end
+        end
+
+		--General Recast Abilities
+		if(spell.name:lower():find("recast")) then
+			return {true, 0, 1, true}
+		end
+
+		return nil
 	end
 }
 
 Callback.Add("Load", function()
 	LoadUnits()
+	ChampionTracker:Init()
 	KillerAwareness()
 end)
 
 Callback.Add("Tick", function()
 	AutoWardPing:OnTick()
-	--ChampionTracker:OnTick()
+	ChampionTracker:OnTick()
 end)
 
 Callback.Add("Draw", function()
-	--ChampionTracker:Draw()
+	ChampionTracker:Draw()
 end)
 
 if KillerAwareness.OnWndMsg then
