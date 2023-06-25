@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.09
+scriptVersion = 1.10
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -25,11 +25,7 @@ UpdateMyHeroScript()
 class "Karthus"
 
 local PassiveBuff = "KarthusDeathDefiedBuff"
-local KarthusIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/30.png"
-local KarthusQIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/KarthusQ.png"
-local KarthusWIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/KarthusW.png"
-local KarthusEIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/KarthusE.png"
-local KarthusRIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/KarthusR.png"
+local KarthusIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/karthus.png"
 
 local UltableChamps = {}
 local MIATimer = 5
@@ -141,8 +137,8 @@ function Karthus:LoadMenu()
 end
 
 function Karthus:Tick()
+
 	if(MyHeroNotReady()) then return end
-	
 	local mode = GetMode()
 	if(mode == "Combo") then
 		self:Combo()
@@ -153,6 +149,7 @@ function Karthus:Tick()
 	elseif(mode == "LaneClear") then
 		self:Clear()
 	end
+	
 	
 	self:AABlock()
 	self:AutoRCheck()
