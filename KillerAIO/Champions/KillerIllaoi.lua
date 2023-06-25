@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.10
+scriptVersion = 1.11
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -23,7 +23,7 @@ UpdateMyHeroScript()
 
 class "Illaoi"
 
-local ChampIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/420.png"
+local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/illaoi.png"
 
 --[[
 ILLAOI Item IDS
