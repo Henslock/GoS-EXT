@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.14
+local scriptVersion = 1.15
 ----------------------------------------------------
 --|                    AUTO UPDATE                       |--
 ----------------------------------------------------
@@ -229,7 +229,7 @@ end
 class "KillerAwareness"
 
 local gameTick = GameTimer()
-local scriptIcon = "https://www.proguides.com/public/media/rlocal/rune/reforged/thumbnail/8128.png"
+local scriptIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/killerawarenessicon.png"
 local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/"
 
 TOP_LEFT, BOTTOM_LEFT, TOP_RIGHT, BOTTOM_RIGHT = {x = 0, y = 0}, {x = 0, y = GameResolution.y}, {x = GameResolution.x, y = 0}, {x = GameResolution.x , y = GameResolution.y}
