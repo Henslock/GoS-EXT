@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Amumu will exit.")
@@ -15,7 +15,7 @@ end
 
 -- [ AutoUpdate ]
 
-UpdateMyHeroScript()
+--UpdateMyHeroScript()
 
 ----------------------------------------------------
 --|                Champion               		|--
@@ -23,7 +23,7 @@ UpdateMyHeroScript()
 
 class "Amumu"
 
-local ChampIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/32.png"
+local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/amumu.png"
 
 local gameTick = GameTimer()
 Amumu.AutoLevelCheck = false
