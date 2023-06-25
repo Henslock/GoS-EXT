@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.11
+scriptVersion = 1.12
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -97,7 +97,7 @@ end
 
 class "Veigar"
 
-local ChampIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/45.png"
+local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/veigar.png"
 
 local gameTick = GameTimer()
 local WBufferTick = GameTimer()
