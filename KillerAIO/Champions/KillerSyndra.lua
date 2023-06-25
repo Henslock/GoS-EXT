@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.10
+scriptVersion = 1.11
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -99,7 +99,7 @@ end
 
 class "Syndra"
 
-local SyndraIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/134.png"
+local SyndraIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/syndra.png"
 
 local gameTick = GameTimer()
 Syndra.AutoLevelCheck = false
@@ -1402,7 +1402,8 @@ end
 
 function Syndra:GetTotalComboDamage(unit)
 	local totalDmg = 0
-	
+	local dmgBuffer = 80
+
 	if(Ready(_Q)) then
 		local QDmg = self:GetRawAbilityDamage("Q")
 		QDmg = CalcMagicalDamage(myHero, unit, QDmg)
@@ -1444,7 +1445,7 @@ function Syndra:GetTotalComboDamage(unit)
 		totalDmg = totalDmg + RDmg
 	end
 
-	return totalDmg
+	return totalDmg - dmgBuffer
 end
 
 function Syndra:GetTrueOrbPos(orb)
