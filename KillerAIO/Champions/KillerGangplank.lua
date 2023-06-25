@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.09
+scriptVersion = 1.10
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -179,7 +179,7 @@ end
 
 class "Gangplank"
 
-local ChampIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/41.png"
+local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/gangplank.png"
 
 local gameTick = GameTimer()
 Gangplank.AutoLevelCheck = false
