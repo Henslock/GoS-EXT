@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Teemo will exit.")
@@ -95,7 +95,7 @@ local nearbyShroomSpots = {}
 
 class "Teemo"
 
-local ChampIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/17.png"
+local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/teemo.png"
 
 local gameTick = GameTimer()
 Teemo.AutoLevelCheck = false
