@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.29
+scriptVersion = 1.31
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -26,7 +26,7 @@ class "Annie"
 local AnniePassiveStacksBuff = "anniepassivestack"
 local AnniePassivePrimedBuff = "anniepassiveprimed"
 local AnnieTibbersBuff = "AnnieRController"
-local AnnieIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/1.png"
+local AnnieIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/Annie.png"
 
 local COMBO_MODE_ALLIN = 1
 local COMBO_MODE_SPAM = 2
