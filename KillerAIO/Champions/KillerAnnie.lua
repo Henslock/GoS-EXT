@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.32
+scriptVersion = 1.33
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -392,7 +392,7 @@ end
 
 function Annie:GetRawAbilityDamage(spell)
 	if(spell == "Q") then
-		 return ({80, 115, 150, 185, 220})[myHero:GetSpellData(_Q).level] + (0.8 * myHero.ap)
+		 return ({70, 105, 140, 175, 210})[myHero:GetSpellData(_Q).level] + (0.75 * myHero.ap)
 	end
 	
 	if(spell == "W") then
