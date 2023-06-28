@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.13
+scriptVersion = 1.14
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -194,6 +194,7 @@ function Syndra:LoadMenu()
 	-- Kill Steal
 	self.Menu:MenuElement({id = "KillSteal", name = "Kill Steal", type = MENU})
 	self.Menu.KillSteal:MenuElement({id = "UseR", name = "Use R", value = true})
+	self.Menu.KillSteal:MenuElement({id = "UseE", name = "Use E", value = true})
 	self.Menu.KillSteal:MenuElement({id = "RBlacklist", name = "R Killsteal Blacklist (Unless Solo)", type = MENU})
 
 	self.Menu:MenuElement({id = "EInterrupter", name = "E Interrupter", type = MENU})
@@ -373,6 +374,10 @@ function Syndra:GetRawAbilityDamage(spell)
 	
 	if(spell == "W") then
 		return ({70, 110, 150, 190, 230})[myHero:GetSpellData(_W).level] + (0.7 * myHero.ap)
+	end
+
+	if(spell == "E") then
+		return ({75, 115, 155, 195, 235})[myHero:GetSpellData(_E).level] + (0.45 * myHero.ap)
 	end
 	
 	if(spell == "R") then
@@ -589,7 +594,7 @@ function Syndra:Harass()
 			local canonMinion = GetCanonMinion(minions)
 			--Prioritize the canon minion if its low
 			if(canonMinion ~= nil) and IsValid(canonMinion) then
-				local QDam = getdmg("Q", canonMinion, myHero)
+				local QDam = self:GetRawAbilityDamage("Q")
 				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
 				
 				if ((hp > 0) and (hp + (canonMinion.health*0.05) < QDam) or (canonMinion.health + 5 < QDam)) then
@@ -685,7 +690,7 @@ function Syndra:LastHit()
 								Control.CastSpell(HK_W, minion)
 							end
 							--Active turret target
-							local QDam = getdmg("Q", minion, myHero)
+							local QDam = self:GetRawAbilityDamage("Q")
 							local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 							local turrDmg = (GetTurretDamage())
 							
@@ -730,7 +735,7 @@ function Syndra:LastHit()
 			
 				local prediction = _G.PremiumPrediction:GetPrediction(myHero, canonMinion, QPremium)
 				if prediction.CastPos and prediction.HitChance >= 0.15 then
-					local QDam = getdmg("Q", canonMinion, myHero)
+					local QDam = self:GetRawAbilityDamage("Q")
 					local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
 					
 					if ((hp > 0) and (hp + canonMinion.health*0.07 - QDam <= 0)) then
@@ -752,7 +757,7 @@ function Syndra:LastHit()
 					if(isUnderTurret) then
 						if(turretUnit.targetID == minion.networkID) then
 							--Active turret target
-							local QDam = getdmg("Q", minion, myHero)
+							local QDam = self:GetRawAbilityDamage("Q")
 							local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 							local turrDmg = (GetTurretDamage())
 							
@@ -764,7 +769,7 @@ function Syndra:LastHit()
 					else
 						local prediction = _G.PremiumPrediction:GetPrediction(myHero, minion, QPremium)
 						if prediction.CastPos and prediction.HitChance >= 0.15 then
-							local QDam = getdmg("Q", minion, myHero)
+							local QDam = self:GetRawAbilityDamage("Q")
 							local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 							
 							if ((hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 5 < QDam)) then
@@ -786,7 +791,7 @@ function Syndra:LastHit()
 				if IsValid(minion) and myHero.pos:DistanceTo(minion.pos) <= Q.Range and myHero.pos:DistanceTo(minion.pos) > myHero.range + 75 then
 					local prediction = _G.PremiumPrediction:GetPrediction(myHero, minion, QPremium)
 					if prediction.CastPos and prediction.HitChance >= 0.15 then
-						local QDam = getdmg("Q", minion, myHero)
+						local QDam = self:GetRawAbilityDamage("Q")
 						local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay + 0.5)
 						if (hp < 0) then
 							Control.CastSpell(HK_Q, prediction.CastPos)
@@ -804,7 +809,7 @@ function Syndra:LastHit()
 							if(tar.networkID ~= minion.networkID) then
 								local prediction = _G.PremiumPrediction:GetPrediction(myHero, minion, QPremium)
 								if prediction.CastPos and prediction.HitChance >= 0.15 then
-									local QDam = getdmg("Q", minion, myHero)
+									local QDam = self:GetRawAbilityDamage("Q")
 									local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay + 0.5)
 									if ((hp < 0) or (hp + (minion.health*0.05) < QDam*0.9) or (minion.health + 5 < QDam*0.9)) then
 										Control.CastSpell(HK_Q, prediction.CastPos)
@@ -834,7 +839,7 @@ function Syndra:Clear()
 	if(self.Menu.Clear.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.QMana:Value() / 100)) then
 		if(Ready(_Q)) then
 			if(canonMinion ~= nil) and IsValid(canonMinion) then
-				local QDam = getdmg("Q", canonMinion, myHero)
+				local QDam = self:GetRawAbilityDamage("Q")
 				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
 
 				if (hp > 0) and (hp + (canonMinion.health*0.05) < QDam) or (canonMinion.health + 15 < QDam) then
@@ -955,7 +960,7 @@ function Syndra:Clear()
 					
 					-- Q to kill out of range minions
 					if(myHero.pos:DistanceTo(minion.pos) < Q.Range and myHero.pos:DistanceTo(minion.pos) > myHero.range) then
-						local QDam = getdmg("Q", minion, myHero)
+						local QDam = self:GetRawAbilityDamage("Q")
 						local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 						if (hp > 0) and (hp + (minion.health*0.05) < QDam) or (minion.health + 15 < QDam) then
 							Control.CastSpell(HK_Q, minion)
@@ -976,7 +981,7 @@ function Syndra:Clear()
 				local minion = minions[i]
 				if IsValid(minion) then
 					if(myHero.pos:DistanceTo(minion.pos) < Q.Range) then
-						local QDam = getdmg("Q", minion, myHero)
+						local QDam = self:GetRawAbilityDamage("Q")
 						local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 						local hpBuffer = 120
 						
@@ -1055,6 +1060,27 @@ function Syndra:KillSteal()
 									end
 								end
 								
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	--E
+	if(self.Menu.KillSteal.UseE:Value()) then
+		if(Ready(_E)) then
+			local enemies = GetEnemyHeroes(E.Range)
+			if(#enemies > 0) then
+				for _, enemy in pairs (enemies) do
+					if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
+						if(self:CantKill(enemy, true, true, false)==false) then
+							local eDmg = self:GetRawAbilityDamage("E")
+							eDmg = CalcMagicalDamage(myHero, enemy, eDmg)
+
+							if(enemy.health - eDmg <= 0) then
+								Control.CastSpell(HK_E, enemy)
 							end
 						end
 					end
@@ -1378,7 +1404,9 @@ function Syndra:GetTotalDamage(unit)
 	local totalDmg = 0
 	local dmgBuffer = 80
 	if(Ready(_R)) then
-		totalDmg = totalDmg + getdmg("R", unit, myHero)
+		local rDmg = self:GetRawAbilityDamage("R")
+		rDmg = CalcMagicalDamage(myHero, unit, rDmg)
+		totalDmg = totalDmg + rDmg
 	end
 	
 	if self:HasElectrocute(myHero) then
