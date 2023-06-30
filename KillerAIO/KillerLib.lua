@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.29
+local kLibVersion = 2.32
 
 -- [ AutoUpdate ]
 do
@@ -226,6 +226,214 @@ local function OnChampStrafe(fn)
         _G.StrafePred = StrafePred()
     end
     table.insert(StrafePred.OnStrafePredCallback, fn)
+end
+
+
+
+--[[ DELAY ACTION ]]--
+
+if not unpack then unpack = table.unpack end
+local delayedActions, delayedActionsExecuter = {}, nil
+function DelayEvent(func, delay, args) --delay in seconds
+	if not delayedActionsExecuter then
+		function delayedActionsExecuter()
+			for t, funcs in pairs(delayedActions) do
+				if t <= os.clock() then
+					for _, f in ipairs(funcs) do f.func(unpack(f.args or {})) end
+					delayedActions[t] = nil
+				end
+			end
+		end
+		Callback.Add("Tick", delayedActionsExecuter)
+	end
+	local t = os.clock() + (delay or 0)
+	if delayedActions[t] then table.insert(delayedActions[t], { func = func, args = args })
+	else delayedActions[t] = { { func = func, args = args } }
+	end
+end
+
+
+-- [[AUTO LEVELER]] --
+
+function GenerateSkillPriority(input1, input2)
+
+	local input3 = 0
+	local enumTable = {1, 2, 3}
+	enumTable[input1] = nil
+	enumTable[input2] = nil
+	for k, v in pairs(enumTable) do
+		input3 = v
+	end
+
+	local skillPriority = {
+		["firstSkill"] = FetchQWESkillOrder(input1),
+		["secondSkill"] = FetchQWESkillOrder(input2),
+		["thirdSkill"] = FetchQWESkillOrder(input3)
+	}
+
+	return skillPriority
+end
+
+function FetchQWEByValue(input)
+	if(input == 1) then
+		return "Q"
+	end
+	if(input == 2) then
+		return "W"
+	end
+	return "E"
+end
+
+function FetchQWESkillOrder(input)
+	if(input == 1) then
+		return {_Q, HK_Q}
+	end
+	if(input == 2) then
+		return {_W, HK_W}
+	end
+	return {_E, HK_E}
+end
+
+local AutoLevelCheck = false
+function AutoLeveler(skillPriority)
+	if AutoLevelCheck then return end
+	
+	local level = myHero.levelData.lvl
+	local levelPoints = myHero.levelData.lvlPts
+
+	if (levelPoints == 0) or (level == 1) then return end
+	if (Game.mapID == HOWLING_ABYSS and level <= 3) then return end
+	--[[
+	Rules:
+	- Prioritize Ult when it's attainable [6, 11, 16]
+	- Make sure we have at least one rank of every ability by level 3
+	- Funnel skill points into the primary skill, and if we cannot, overflow to the secondary
+	- A skill cannot be leveled up if it's level will be greater than HALF of our champion level ROUNDED UP
+	--]]
+	if(levelPoints > 0) then
+		local rLevel = myHero:GetSpellData(_R).level
+
+		if (rLevel == 0 and level >= 6) or (rLevel == 1 and level >= 11) or (rLevel == 2 and level >= 16) then
+			AutoLevelCheck = true
+			DelayEvent(function()		
+				Control.KeyDown(HK_LUS)
+				Control.KeyDown(HK_R)
+				Control.KeyUp(HK_R)
+				Control.KeyUp(HK_LUS)
+				AutoLevelCheck = false
+			end, math.random(0.1, 0.15))
+			return
+		end
+
+		local firstSkill = myHero:GetSpellData(skillPriority["firstSkill"][1])
+		local secondSkill = myHero:GetSpellData(skillPriority["secondSkill"][1])
+		local thirdSkill = myHero:GetSpellData(skillPriority["thirdSkill"][1])
+
+		--First 3 skill levels
+		if(firstSkill.level == 0) then
+			AutoLevelCheck = true
+			local cachedLevel = firstSkill.level
+			DelayEvent(function()
+				if(cachedLevel == firstSkill.level) then
+					Control.KeyDown(HK_LUS)
+					Control.KeyDown(skillPriority["firstSkill"][2])
+					Control.KeyUp(skillPriority["firstSkill"][2])
+					Control.KeyUp(HK_LUS)
+				end
+				DelayEvent(function()
+					AutoLevelCheck = false
+				end, 0.05)
+			end, math.random(0.1, 0.15))
+			return
+		end
+		if(secondSkill.level == 0) then
+			AutoLevelCheck = true
+			local cachedLevel = secondSkill.level
+			DelayEvent(function()
+				if(cachedLevel == secondSkill.level) then
+					Control.KeyDown(HK_LUS)
+					Control.KeyDown(skillPriority["secondSkill"][2])
+					Control.KeyUp(skillPriority["secondSkill"][2])
+					Control.KeyUp(HK_LUS)
+				end
+				DelayEvent(function()
+					AutoLevelCheck = false
+				end, 0.05)
+			end, math.random(0.1, 0.15))
+			return
+		end
+		if(thirdSkill.level == 0) then
+			AutoLevelCheck = true
+			local cachedLevel = thirdSkill.level
+			DelayEvent(function()
+				if(cachedLevel == thirdSkill.level) then
+					Control.KeyDown(HK_LUS)
+					Control.KeyDown(skillPriority["thirdSkill"][2])
+					Control.KeyUp(skillPriority["thirdSkill"][2])
+					Control.KeyUp(HK_LUS)
+				end
+				DelayEvent(function()
+					AutoLevelCheck = false
+				end, 0.05)
+			end, math.random(0.1, 0.15))
+			return
+		end
+
+
+		-- Standard leveling
+		if(firstSkill.level ~= 5) then
+			if(firstSkill.level + 1 <= math.ceil(level/2)) then
+				AutoLevelCheck = true
+				local cachedLevel = firstSkill.level
+				DelayEvent(function()
+					if(cachedLevel == firstSkill.level) then
+						Control.KeyDown(HK_LUS)
+						Control.KeyDown(skillPriority["firstSkill"][2])
+						Control.KeyUp(skillPriority["firstSkill"][2])
+						Control.KeyUp(HK_LUS)
+					end
+					AutoLevelCheck = false
+				end, math.random(0.1, 0.15))
+				return
+			end
+		end
+
+		if(secondSkill.level ~= 5) then
+			if(secondSkill.level + 1 <= math.ceil(level/2)) then
+				AutoLevelCheck = true
+				local cachedLevel = secondSkill.level
+				DelayEvent(function()
+					if(cachedLevel == secondSkill.level) then
+						Control.KeyDown(HK_LUS)
+						Control.KeyDown(skillPriority["secondSkill"][2])
+						Control.KeyUp(skillPriority["secondSkill"][2])
+						Control.KeyUp(HK_LUS)
+					end
+					AutoLevelCheck = false
+				end, math.random(0.1, 0.15))
+				return
+			end
+		end
+
+		if(thirdSkill.level ~= 5) then
+			if(thirdSkill.level + 1 <= math.ceil(level/2)) then
+				AutoLevelCheck = true
+				local cachedLevel = thirdSkill.level
+				DelayEvent(function()	
+					if(cachedLevel == thirdSkill.level) then
+						Control.KeyDown(HK_LUS)
+						Control.KeyDown(skillPriority["thirdSkill"][2])
+						Control.KeyUp(skillPriority["thirdSkill"][2])
+						Control.KeyUp(HK_LUS)
+					end
+					AutoLevelCheck = false
+				end, math.random(0.1, 0.15))
+				return
+			end
+		end
+	else
+		AutoLevelCheck = false
+	end
 end
 
 
@@ -914,7 +1122,7 @@ end
 function CalcMagicalDamage(source, target, amount, time)
     local passiveMod = 0
     
-    local totalMR = target.magicResist + target.bonusMagicResist
+    local totalMR = target.magicResist
 
     if totalMR < 0 then
         passiveMod = 2 - 100 / (100 - totalMR)
