@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.32
+local kLibVersion = 2.33
 
 -- [ AutoUpdate ]
 do
@@ -1336,7 +1336,7 @@ function GetUnitRunDirection(unit, target)
 	if(target.pathing.hasMovePath) then
 		local meVec = (unit.pos - target.pos):Normalized()
 		local pathVec = (target.pathing.endPos - target.pos):Normalized()
-		if(dotProduct(meVec, pathVec) <= -0.5) then
+		if(dotProduct3D(meVec, pathVec) <= -0.5) then
 			return RUNNING_AWAY
 		else
 			return RUNNING_TOWARDS
