@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.10
+scriptVersion = 1.12
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -59,7 +59,7 @@ function SpellCast:OnTick()
 			self.EDidCast = true
 			local spell = myHero:GetSpellData(_E)
 			local delay = (myHero.activeSpell.castEndTime - GameTimer())
-			DelayAction(function()
+			DelayEvent(function()
 				for i, Emit in pairs(self.OnSpellCastCallback) do
 					Emit(spell)
 				end
@@ -243,8 +243,8 @@ function Gangplank:__init()
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
 	StrafePred()
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Gangplank:OnPreAttack(...) end)
-	
-	DelayAction(function()
+
+	DelayEvent(function()
 		self.ComboKey = _G.SDK.Menu.Orbwalker.Keys.Combo:Key()
 	end, 0.05)
 end
@@ -311,6 +311,8 @@ function Gangplank:LoadMenu()
 	-- Kill Steal
 	self.Menu:MenuElement({id = "KillSteal", name = "Kill Steal", type = MENU})
 	self.Menu.KillSteal:MenuElement({id = "UseQ", name = "Use Q", value = true})
+	self.Menu.KillSteal:MenuElement({id = "UseQIgnite", name = "Use Ignite with Q", value = true})
+	self.Menu.KillSteal:MenuElement({id = "UseSoloIgnite", name = "Use Ignite to Kill Distant Enemies (Solo)", value = true})
 	
 	--Auto W
 	self.Menu:MenuElement({id = "AutoWMenu", name = "Auto W", type = MENU})
@@ -328,6 +330,7 @@ function Gangplank:LoadMenu()
 	
 	--
 	self.Menu:MenuElement({id = "AutoPrimeBarrels", name = "AA Barrels to Ready Them [Lv. 1~6]", value = true, tooltip = "Will stop doing this at level 7"})
+	self.Menu:MenuElement({id = "InnerRingPred", name = "Barrel Safe Hit Zone", value = 70, min = 45, max = 100, step = 5, identifier = "%"})
 	
 	-- Draws
 	self.Menu:MenuElement({id = "Drawings", name = "Draws", type = MENU})
@@ -353,12 +356,68 @@ function Gangplank:LoadMenu()
 	self.Menu.Drawings.Debug:MenuElement({id = "DrawParticles", name = "Draw Particles", value = false})
 	self.Menu.Drawings.Debug:MenuElement({id = "DrawObjects", name = "Draw Objects", value = false})
 		
-	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - E - W)", value = false})
+	--AutoLeveler	
+	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
+	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.AutoLevel:MenuElement({id = "StartingLevel", name = "Start Using At Level:", value = 3, min = 2, max = 18, step = 1})
+	self.Menu.AutoLevel:MenuElement({id = "FirstSkill", name = "First Skill Priority", drop = {"Q", "W", "E"}, value = 1, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.SecondSkill:Value() == 3) then
+					self.Menu.AutoLevel.SecondSkill:Value(1)
+				else
+					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+
+	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 3, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.FirstSkill:Value() == 3) then
+					self.Menu.AutoLevel.FirstSkill:Value(1)
+				else
+					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
+
 	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
 	self.Menu:MenuElement({id = "ExtraReactionTime", name = "Extra Reaction Time Delay [ms]", value = 0, min = 0, max = 500, step = 5})
 	
+	self:UpdateGoSMenuAutoLevel()
 end
 
+function Gangplank:UpdateGoSMenuAutoLevel()
+	self.Menu.AutoLevel.InfoText:Remove()
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	local thirdSkill = 0
+	local enumTable = {1, 2, 3}
+	enumTable[firstSkill] = nil
+	enumTable[secondSkill] = nil
+	for k, v in pairs(enumTable) do
+		thirdSkill = v
+	end
+
+	local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
+end
+
+function Gangplank:AutoLevel()
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	skillPriority = GenerateSkillPriority(firstSkill, secondSkill)
+
+	AutoLeveler(skillPriority)
+end
 
 function Gangplank:Tick()
 	if(MyHeroNotReady()) then return end
@@ -427,16 +486,16 @@ function Gangplank:Tick()
 		self:AutoWHeal()
 	end
 	
-	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
+	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
 	end	
 end
 
 function Gangplank:OnSpellCast(spell)
 	if spell.name == "GangplankE" then
-        DelayAction(function()
+        DelayEvent(function()
             self:CheckBarrels()
-        end, 0.03)
+        end, 0.02)
 	end
 	
 	if spell.name == "GangplankQ" or spell.name == "GangplankQWrapper" or spell.name == "GangplankQProceed" or spell.name == "GangplankQProceedCrit" then
@@ -458,7 +517,7 @@ function Gangplank:OnPreAttack(args)
 			--This allows us to make the orbwalker AA barrels
 			Control.KeyUp(self.ComboKey)
 			args.Target = _G.SDK.Orbwalker.ForceTarget
-			DelayAction(function()
+			DelayEvent(function()
 			Control.KeyDown(self.ComboKey)
 			end, 0.01)
 		else
@@ -874,14 +933,15 @@ function Gangplank:GetPossibleAOEBarrel(tar, connectingBarrel)
 	end
 	local enemyCluster = GetEnemiesAtPos(E.Range - 10, E.Radius, tar.pos, tar)
 	if(#enemyCluster >= 2) then
-		local bestAoEPos = CalculateBestCirclePosition(enemyCluster, E.Radius*0.66, false, E.Range - 10, E.Speed, E.Delay)
+		local safeRadius = self.Menu.InnerRingPred:Value()/100
+		local bestAoEPos = CalculateBestCirclePosition(enemyCluster, E.Radius*safeRadius, false, E.Range - 10, E.Speed, E.Delay)
 		if(bestAoEPos) then
 			local dist = GetDistance(barrel, bestAoEPos)
 			local distanceToPlacement = math.min(dist, (E.Radius - 15)*2)
 			local placementVec = barrel.pos:Extended(bestAoEPos, distanceToPlacement)
 
 			for _, enemy in ipairs(enemyCluster) do
-				if(GetDistance(enemy, placementVec) > E.Radius*0.66) then
+				if(GetDistance(enemy, placementVec) > E.Radius*safeRadius) then
 					return false, nil
 				end
 			end
@@ -907,14 +967,15 @@ function Gangplank:GetPossibleAOEBarrel2(tar, connectingBarrel)
 		if(GetDistance(enemy, myHero) < E.Range - 10) or enemy.networkID ~= tar.networkID then
 			enemyCluster = GetEnemiesAtPos(E.Range - 10, E.Radius, enemy.pos, enemy)
 			if(#enemyCluster >= 2) then
-				local bestAoEPos = CalculateBestCirclePosition(enemyCluster, E.Radius*0.66, false, E.Range - 10, E.Speed, E.Delay)
+				local safeRadius = self.Menu.InnerRingPred:Value()/100
+				local bestAoEPos = CalculateBestCirclePosition(enemyCluster, E.Radius*safeRadius, false, E.Range - 10, E.Speed, E.Delay)
 				if(bestAoEPos) then
 					local dist = GetDistance(barrel, bestAoEPos)
 					local distanceToPlacement = math.min(dist, (E.Radius - 7.5)*2)
 					local placementVec = barrel.pos:Extended(bestAoEPos, distanceToPlacement)
 
 					for _, enemy in ipairs(enemyCluster) do
-						if(GetDistance(enemy, placementVec) > E.Radius*0.66) then
+						if(GetDistance(enemy, placementVec) > E.Radius*safeRadius) then
 							return false, nil
 						end
 					end
@@ -1148,46 +1209,6 @@ end
 
 function Gangplank:SetQBarrel(barrel)
 	self.barrelQTarget = barrel.barrelObj
-end
-
-function Gangplank:AutoLevel()
-	if self.AutoLevelCheck then return end
-	
-	local level = myHero.levelData.lvl
-	local levelPoints = myHero.levelData.lvlPts
-
-	if (levelPoints == 0) or (level == 1) then return end
-	if (Game.mapID == HOWLING_ABYSS and level <= 3) then return end
-	--Order = Q > E > W
-	if(levelPoints >0) then
-		self.AutoLevelCheck = true
-		DelayAction(function()				
-				
-				if level == 6 or level == 11 or level == 16 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_R)
-					Control.KeyUp(HK_R)
-					Control.KeyUp(HK_LUS)
-				elseif level == 1 or level == 4 or level == 5 or level == 7 or level == 9 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_Q)
-					Control.KeyUp(HK_Q)
-					Control.KeyUp(HK_LUS)
-				elseif level == 2 or level == 8 or level == 10 or level == 12 or level == 13 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
-					Control.KeyUp(HK_LUS)
-				elseif level == 3 or level == 14 or level == 15 or level == 17 or level == 18 then				
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_W)
-					Control.KeyUp(HK_W)
-					Control.KeyUp(HK_LUS)
-				end
-		
-			self.AutoLevelCheck = false
-		end, 0.5)
-	end
 end
 
 function Gangplank:Combo()
@@ -1677,17 +1698,18 @@ function Gangplank:Combo()
 							if(self:GetBarrelHealth(barrel, E.Delay + Q.Delay + GetDistance(myHero, barrel.barrelObj)/Q.Speed + self.Ping - extraReaction) == 1) and overstackingCheck == false then
 								--We now need to see if we can chain our proximity barrel to the enemy predicted position
 								local distCheck = GetDistance(barrel.barrelObj, castPos)
-								if(distCheck <= (E.Radius*2.6)) then
+								if(distCheck <= (E.Radius*3)) then
 									local distanceToPlacement = math.max(math.min(distCheck, (E.Radius - 16)*2), E.Radius*1.60)
 									local placementVec = barrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
-									if(GetDistance(placementVec, myHero) <= E.Range -10) then
+									local safeRadius = self.Menu.InnerRingPred:Value()/100
+									if(GetDistance(placementVec, myHero) <= E.Range -10) and (GetDistance(placementVec, castPos) <= E.Radius*safeRadius) then
 										Control.CastSpell(HK_E, placementVec)
 										return
 									else
 										--Try a closer range in case our extended one goes too far
 										distanceToPlacement = math.min(distCheck, (E.Radius - 7.5)*2)
 										placementVec = barrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
-										if(GetDistance(placementVec, myHero) <= E.Range -10) then
+										if(GetDistance(placementVec, myHero) <= E.Range -10) and (GetDistance(placementVec, castPos) <= E.Radius*safeRadius) then
 											Control.CastSpell(HK_E, placementVec)
 											return
 										end
@@ -1735,10 +1757,11 @@ function Gangplank:Combo()
 							if(self:GetBarrelHealth(barrel, E.Delay + myHero.attackData.windUpTime + self.Ping - extraReaction) == 1) and overstackingCheck == false then
 								--We now need to see if we can chain our proximity barrel to the enemy predicted position
 								local distCheck = GetDistance(barrel.barrelObj, castPos)
-								if(distCheck <= (E.Radius*2.6)) then
+								if(distCheck <= (E.Radius*3)) then
 									local distanceToPlacement = math.max(math.min(distCheck, (E.Radius - 7.5)*2), E.Radius*1.60)
 									local placementVec = barrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
-									if(GetDistance(placementVec, myHero) <= E.Range -10) then
+									local safeRadius = self.Menu.InnerRingPred:Value()/100
+									if(GetDistance(placementVec, myHero) <= E.Range -10) and (GetDistance(placementVec, castPos) <= E.Radius*safeRadius) then
 										Control.CastSpell(HK_E, placementVec)
 										return
 									end
@@ -1796,10 +1819,10 @@ function Gangplank:Combo()
 										
 										--We now need to see if we can chain our proximity barrel to the enemy predicted position
 										local distCheck = GetDistance(secondBarrel.barrelObj, castPos)
-										if(distCheck <= (E.Radius*2.75)) then
+										if(distCheck <= (E.Radius*3)) then
 											local distanceToPlacement = math.min(distCheck, (E.Radius - 7.5)*2)
 											local placementVec = secondBarrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
-											if(GetDistance(myHero, placementVec) < E.Range - 10) and GetDistance(placementVec, tar) <= E.Radius*0.85 then
+											if(GetDistance(myHero, placementVec) < E.Range - 10) and (GetDistance(placementVec, tar) <= E.Radius*0.85) then
 												self:SetQBarrel(firstBarrel)
 												self:SetTripleBarrelForceE(placementVec, secondBarrel.barrelObj, tar)
 												return
@@ -2581,7 +2604,68 @@ end
 
 function Gangplank:KillSteal()
 	if(gameTick > GameTimer()) then return end
-	
+
+	if(self.Menu.KillSteal.UseQIgnite:Value()) then
+		if(Ready(_Q) and HasIgnite()) then
+			local enemies = GetEnemyHeroes(600) --Ignite range
+			if(#enemies > 0) then
+				for _, enemy in pairs (enemies) do
+					if(enemy and IsValid(enemy)) then
+						if(self:CantKill(enemy, true, true, false)==false) then
+							local dmgCheck = self:GetQDamage()
+							local phsDmg = CalcPhysicalDamage(myHero, enemy, dmgCheck)
+							local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+							if(self:HasCollector()) then --Execute at 5%
+								if(enemy.health - phsDmg - igniteDmg <= enemy.maxHealth*0.05 and enemy.health - igniteDmg > 0) then
+									UseIgnite(enemy)
+									DelayEvent(function ()
+										Control.CastSpell(HK_Q, enemy)
+									end, 0.1)
+									return
+								end
+							else
+								if(enemy.health - phsDmg - igniteDmg <= 0 and enemy.health - igniteDmg > 0) then
+									UseIgnite(enemy)
+									DelayEvent(function ()
+										Control.CastSpell(HK_Q, enemy)
+									end, 0.1)
+									return
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if(self.Menu.KillSteal.UseSoloIgnite:Value()) then
+		if(Ready(_Q) == false and HasIgnite()) then
+			local enemies = GetEnemyHeroes(600) --Ignite range
+			local allies = GetAllyHeroes(E.Range)
+			if(#enemies > 0 and #allies == 0) then
+				for _, enemy in pairs (enemies) do
+					if(enemy and IsValid(enemy)) then
+						if(self:CantKill(enemy, true, true, false)==false) and GetDistance(myHero.pos, enemy.pos) >= self.AARange + 100 then
+							local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+							if(self:HasCollector()) then --Execute at 5%
+								if(enemy.health - igniteDmg <= enemy.maxHealth*0.05) then
+									UseIgnite(enemy)
+									return
+								end
+							else
+								if(enemy.health - igniteDmg <= 0) then
+									UseIgnite(enemy)
+									return
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
 	if(self.Menu.KillSteal.UseQ:Value()) then
 		if(Ready(_Q)) then
 			local enemies = GetEnemyHeroes(Q.Range)
@@ -2668,7 +2752,7 @@ function Gangplank:AutoWCleanse()
 	end
 	
 	if(Ready(_W) and (IsHardCCd(myHero) >= 0.5)) then
-		DelayAction(function()
+		DelayEvent(function()
 			Control.CastSpell(HK_W)					
 		end, delayAmnt/1000)
 		return
@@ -3028,7 +3112,8 @@ function Gangplank:DrawBarrelVisualizer()
 				end
 				
 				if(self.Menu.Drawings.BarrelPlacementVis.InnerRing:Value()) then
-					DrawCircle(placementVec, E.Radius*0.66, 5, DrawColor(215 * alphaMult, color.r, color.g, color.b))
+					local ringRadius = self.Menu.InnerRingPred:Value() / 100
+					DrawCircle(placementVec, E.Radius*ringRadius, 5, DrawColor(215 * alphaMult, color.r, color.g, color.b))
 				end
 				
 				if(self.Menu.Drawings.BarrelPlacementVis.Lines:Value()) then
