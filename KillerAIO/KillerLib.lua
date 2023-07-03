@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.33
+local kLibVersion = 2.34
 
 -- [ AutoUpdate ]
 do
@@ -111,6 +111,7 @@ class("StrafePred")
 
 StrafePred.WaypointData = {}
 StrafePred.NewPosData = {}
+StrafePred.StandingData = {}
 
 function StrafePred:__init()
     _G._STRAFEPRED_START = true
@@ -121,6 +122,7 @@ function StrafePred:__init()
 		local enemyUnit = args.unit
 		self.WaypointData[enemyUnit.handle] = {}
 		self.NewPosData[enemyUnit.handle] = {x = 0, z = 0}
+		self.StandingData[enemyUnit.handle] = GameTimer()
 		
 	end)
 	
@@ -135,6 +137,7 @@ function StrafePred:OnTick()
 		if(unit.valid and IsValid(unit)) then
 			if(unit.pathing.hasMovePath) and (self.NewPosData[unit.handle])  then
 				local newPos = self.NewPosData[unit.handle]
+				self.StandingData[unit.handle] = GameTimer()
 				if(unit.pathing.endPos.x ~= newPos.x and unit.pathing.endPos.z ~= newPos.z ) then
 					self.NewPosData[unit.handle] = unit.pathing.endPos
 					local endPosVec = Vector(unit.pathing.endPos.x, unit.pos.y, unit.pathing.endPos.z)
@@ -147,6 +150,20 @@ function StrafePred:OnTick()
 					
 				end
 			end
+		end
+	end
+
+	for _, unit in pairs(Allies) do
+		if(unit.valid and IsValid(unit)) then
+			if(unit.pathing.hasMovePath)  then
+				self.StandingData[unit.handle] = GameTimer()
+			end
+		end
+	end
+
+	if(myHero.valid and IsValid(myHero)) then
+		if(myHero.pathing.hasMovePath)  then
+			self.StandingData[myHero.handle] = GameTimer()
 		end
 	end
 	
@@ -219,6 +236,21 @@ function StrafePred:IsStutterDancing(tar)
 	end
 	
 	return false
+end
+
+function StrafePred:GetIdleStandingTime(tar)
+	if(self.StandingData[tar.handle] == nil or self.StandingData[tar.handle] == {}) then
+		self.StandingData[tar.handle] = GameTimer()
+	end
+
+	if(IsValid(tar)) then
+		if(self.StandingData[tar.handle] ~= nil) then
+			local result = GameTimer() - self.StandingData[tar.handle]
+			if(result <= 0.1) then result = 0 end
+			return result
+		end
+	end
+	return 0
 end
 
 local function OnChampStrafe(fn)
