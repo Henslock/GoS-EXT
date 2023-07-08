@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.15
+local scriptVersion = 1.16
 ----------------------------------------------------
 --|                    AUTO UPDATE                       |--
 ----------------------------------------------------
@@ -95,7 +95,7 @@ end
 
 local function IsTurret(unit)
 	if (not unit or unit.valid == false) then return false end
-
+	if (unit.type == "AITurretClient") then return true end
 	for i = 1, #EnemyTurrets do
 		if(unit.networkID == Game.Turret(i).networkID) then return true end
 	end
@@ -289,8 +289,14 @@ function KillerAwareness:LoadMenu()
 	self.Menu.TurretAwareness:MenuElement({id = "DrawRange", name = "Turret Draw Range", value = 500, min = 200, max = 1500, step = 100})
 
 	--Ward Auto Ping
+	--[[
 	self.Menu:MenuElement({id = "WardPing", name = "Ward Auto-Ping", type = MENU})
+	self.Menu.WardPing:MenuElement({name = "MANDATORY:", type = SPACE})
+	self.Menu.WardPing:MenuElement({name = "Options > Hotkeys > Communication", type = SPACE})
+	self.Menu.WardPing:MenuElement({name = "Match Quick Alert Ping with THIS Key!", type = SPACE})
 	self.Menu.WardPing:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.WardPing:MenuElement({id = "Key", name = "Quick Alert Ping Key", key = string.byte("H")})
+	--]]
 
 	--Champion Tracker
 	self.Menu:MenuElement({id = "ChampTracker", name = "Champion Tracker", type = MENU})
@@ -398,7 +404,7 @@ function KillerAwareness:Draw()
 		self:UpdateHealthData()
 		self:DrawHealthTracker()
 	end
-	
+
 end
 
 function KillerAwareness:DrawHalo(enemy, x, y, scale)
@@ -567,7 +573,7 @@ AutoWardPing = {
 
 	UpdateCachedWards = function (self)
 		if(self.WardCountTicker > GameTimer()) then return end
-		self.CachedWards = _G.SDK.ObjectManager:GetOtherEnemyMinions()
+		self.CachedWards = _G.SDK.ObjectManager:GetOtherAllyMinions()
 		self.WardCountTicker = GameTimer() + self.TickUpdateTimer
 	end,
 
@@ -606,20 +612,15 @@ AutoWardPing = {
 		end
 
 		local finalClickPos = self.WardTarget.pos + self.randomOffset
-		Control.KeyDown(18)
-		_G.SDK.Cursor:Add(MOUSEEVENTF_LEFTDOWN, finalClickPos)
-		Control.mouse_event(MOUSEEVENTF_LEFTDOWN)
-		Control.mouse_event(MOUSEEVENTF_LEFTUP)
-		DelayAction(function()
-			Control.KeyUp(18)
+		--_G.SDK.Cursor:Add(self.WardMenu.Key:Key(), finalClickPos)
+		--Control.CastSpell(1, finalClickPos)
+		--Control.CastSpell(self.WardMenu.Key:Key())
+		--Control.CastSpell(1, finalClickPos)
+		DelayAction( function ()
+			--Control.CastSpell(2)
 			self.IsActivePinging = false
-			if(myHero.pathing.hasMovePath) then
-				_G.SDK.Cursor:Add(MOUSEEVENTF_RIGHTDOWN, self.OldMousePos)
-			else
-				_G.SDK.Cursor:Add(MOUSEEVENTF_LEFTDOWN, self.OldMousePos)
-			end
-		end, 0.008)
-
+		end, 0.1)
+		--Control.CastSpell(1, finalClickPos)
 	end,
 
 	ClearGarbage = function(self)
@@ -1241,7 +1242,7 @@ Callback.Add("Load", function()
 end)
 
 Callback.Add("Tick", function()
-	AutoWardPing:OnTick()
+	--AutoWardPing:OnTick()
 	ChampionTracker:OnTick()
 end)
 
