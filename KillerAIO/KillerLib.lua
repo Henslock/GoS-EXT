@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.34
+local kLibVersion = 2.35
 
 -- [ AutoUpdate ]
 do
@@ -807,6 +807,12 @@ function GetBuffData(unit, buffname)
 end
 
 function IsRecalling(unit)
+	if(unit.activeSpell.valid) then
+		if(unit.activeSpell.name == "recall") then
+			return true 
+		end
+	end
+
 	local buff = GetBuffData(unit, "recall")
 	if buff and buff.duration > 0 then
 		return true, GameTimer() - buff.startTime
@@ -1375,4 +1381,58 @@ function GetUnitRunDirection(unit, target)
 		end
 	end
 	return nil
+end
+
+function CantKill(unit, kill, ss, aa)
+	--set kill to true if you dont want to waste on undying/revive targets
+	--set ss to true if you dont want to cast on spellshield
+	--set aa to true if ability applies onhit (yone q, ez q etc)
+	
+	for i = 0, unit.buffCount do
+	
+		local buff = unit:GetBuff(i)
+		if buff.name:lower():find("kayler") and buff.count==1 then
+			return true
+		end
+	
+		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
+			return true
+		end
+		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
+			return true
+		end	
+		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
+			return true
+		end			
+		
+		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
+			return true
+		end
+
+		if  buff.name:lower():find("morganae") and ss and buff.count==1 then
+			return true
+		end
+		
+		if (buff.name:lower():find("fioraw") or buff.name:lower():find("pantheone")) and buff.count==1 then
+			return true
+		end
+		
+		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
+			return true
+		end
+		
+		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
+			return true
+		end
+		
+		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
+			return true
+		end	
+	end
+	
+	if HasBuffType(unit, 4) and ss then
+		return true
+	end
+	
+	return false
 end
