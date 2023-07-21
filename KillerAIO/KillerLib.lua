@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.35
+local kLibVersion = 2.36
 
 -- [ AutoUpdate ]
 do
@@ -734,6 +734,18 @@ function IsUnderTurret(unit)
     return false
 end
 
+function IsPositionUnderTurret(pos)
+	for i, turret in ipairs(GetEnemyTurrets()) do
+        local range = (turret.boundingRadius + 750)
+        if not turret.dead then 
+            if turret.pos:DistanceTo(pos) < range then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 function IsUnderFriendlyTurret(unit)
 	for i, turret in ipairs(GetFriendlyTurrets()) do
         local range = (turret.boundingRadius + 750 + unit.boundingRadius / 2)
@@ -1214,6 +1226,17 @@ function HasIgnite()
 		return true
 	end
 	
+	return false
+end
+
+function HasElectrocute()
+    for i = 0, myHero.buffCount do
+        local buff = myHero:GetBuff(i)
+        if buff and buff.count>0 and buff.name:lower():find("electrocute.lua") then
+			return true
+        end
+    end
+
 	return false
 end
 
