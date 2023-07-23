@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.12
+scriptVersion = 1.13
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -452,7 +452,7 @@ function Gangplank:Tick()
 	self:AABarrelTick()
 	self:QBarrelTick()
 	self:TripleBarrelForceETick()
-	
+
 	if (self.Menu.AutoRMenu.UseR:Value()) then
 		self:AutoR()
 	end
@@ -2598,6 +2598,105 @@ function Gangplank:TripleBarrelSemiManual()
 			end
 		end
 	end
+
+	--Fallback Q for single
+	if(Ready(_Q)) then
+		if(tar and IsValid(tar)) then
+			local proximityBarrels = self:GetBarrelsAroundUnit(tar, E.Radius)
+			local anyUnitBarrelCheck, anyUnit = self:IsBarrelOnAnyUnit()
+			if(anyUnitBarrelCheck) then
+				if(IsValid(anyUnit)) then
+					tar = anyUnit
+					proximityBarrels = self:GetBarrelsAroundUnit(tar, E.Radius)
+				end
+			end
+			
+			if(#proximityBarrels > 0) then
+				for _, barrel in ipairs(proximityBarrels) do
+					local dist = GetDistance(myHero, barrel.barrelObj)
+					if(self:IsBarrelBehindUnit(barrel, tar) == false) then
+						if dist < Q.Range and (dist > self.AARange or ((myHero.attackData.endTime-Game.Timer())>(Q.Delay + (GetDistance(myHero, barrel.barrelObj)/Q.Speed)-myHero.attackData.windUpTime) and myHero.activeSpell.name~="GangplankBasicAttack" and myHero.activeSpell.name~="GangplankCritAttack")) and Ready(_Q) then
+							--Pred Check
+							local delayAmnt = Q.Delay + GetDistance(myHero, barrel.barrelObj)/Q.Speed
+							local Delay = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = delayAmnt, Radius = tar.boundingRadius, Range = 1000, Speed = math.huge, Collision = false}
+							local Pred = GGPrediction:SpellPrediction(Delay) --Get the targets predicted position
+							local predCheck = true
+							Pred:GetPrediction(tar, myHero)
+							if(Pred.CastPosition) then
+								if(GetDistance(barrel.barrelObj, Pred.CastPosition) > E.Radius) then
+									predCheck = false
+								end
+							end
+							--
+							if(self:GetBarrelHealth(barrel, Q.Delay + dist/Q.Speed + self.Ping - extraReaction) == 1) and predCheck then
+								Control.CastSpell(HK_Q, barrel.barrelObj)
+								return
+							end
+							
+						elseif(dist < self.AARange) then
+							--Pred Check
+							local delayAmnt = myHero.attackData.windUpTime
+							local Delay = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = delayAmnt, Radius = tar.boundingRadius, Range = 1000, Speed = math.huge, Collision = false}
+							local Pred = GGPrediction:SpellPrediction(Delay) --Get the targets predicted position
+							local predCheck = true
+							Pred:GetPrediction(tar, myHero)
+							if(Pred.CastPosition) then
+								if(GetDistance(barrel.barrelObj, Pred.CastPosition) > E.Radius) then
+									predCheck = false
+								end
+							end
+							--
+							if(self:GetBarrelHealth(barrel, myHero.attackData.windUpTime + self.Ping - extraReaction) == 1) and predCheck then
+								Control.CastSpell(HK_Q, barrel.barrelObj)
+								return
+							end
+						else --
+							--Pred Check
+							local delayAmnt = Q.Delay + GetDistance(myHero, barrel.barrelObj)/Q.Speed
+							local Delay = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = delayAmnt, Radius = tar.boundingRadius, Range = 1000, Speed = math.huge, Collision = false}
+							local Pred = GGPrediction:SpellPrediction(Delay) --Get the targets predicted position
+							local predCheck = true
+							Pred:GetPrediction(tar, myHero)
+							if(Pred.CastPosition) then
+								if(GetDistance(barrel.barrelObj, Pred.CastPosition) > E.Radius) then
+									predCheck = false
+								end
+							end
+							--
+							
+							if(self:GetBarrelHealth(barrel, Q.Delay + dist/Q.Speed + self.Ping - extraReaction) == 1 and Ready(_Q)) and predCheck then
+								if(dist < Q.Range) then
+									Control.CastSpell(HK_Q, barrel.barrelObj)
+									return
+								end
+							end	
+						end
+					else
+						if(self:GetBarrelHealth(barrel) == 1 and Ready(_Q)) then
+							--Pred Check
+							local delayAmnt = Q.Delay + GetDistance(myHero, barrel.barrelObj)/Q.Speed
+							local Delay = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = delayAmnt, Radius = tar.boundingRadius, Range = 1000, Speed = math.huge, Collision = false}
+							local Pred = GGPrediction:SpellPrediction(Delay) --Get the targets predicted position
+							local predCheck = true
+							Pred:GetPrediction(tar, myHero)
+							if(Pred.CastPosition) then
+								if(GetDistance(barrel.barrelObj, Pred.CastPosition) > E.Radius) then
+									predCheck = false
+								end
+							end
+							--
+							
+							if(dist < Q.Range) and predCheck then
+								Control.CastSpell(HK_Q, barrel.barrelObj)
+								return
+							end
+						end						
+					end
+				end
+			end
+		end
+	end
+
 	
 	_G.SDK.Orbwalker:Orbwalk()
 end
