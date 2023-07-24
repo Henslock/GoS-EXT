@@ -11,7 +11,7 @@ You can brush in new data points by holding the brush key (Z by default) and hol
 You can erase data points by holding the brush key (C by default) and holding left click.
 
 Once you are finished, click "Save Data" in your menu. This will output your data to OutputMapData.lua
-"Reset to Live Data" will reset your data to the CURRENT live data from MapPosition
+"Reset to Live Data" will reset your data to the CURRENT live data from MapPosition. When swapping maps, it's a good idea to press this first.
 "Load Output Data" will load the current data from OutputMapData.lua
 
 For best and most accurate results, make sure you are on the same Y-axis as where you are painting!
@@ -38,6 +38,16 @@ local function GetDistance(pos1, pos2)
 	local a = pos1.pos or pos1
 	local b = pos2.pos or pos2
 	return math. sqrt(GetDistanceSqr(a, b))
+end
+
+local function FileExists(path)
+	local file = io.open(path, "r")
+	if file ~= nil then 
+		io.close(file) 
+		return true 
+	else 
+		return false 
+	end
 end
 
 --[[ DELAY ACTION ]]--
@@ -129,7 +139,7 @@ local reverse
 local walls, bushes, water
 local bWalls, bBushes, bWater
 
-local mapData2 = require 'OutputMapData'
+local mapData2
 
 if mapID == HOWLING_ABYSS then
 	local mapData = require 'MapPositionData_HA'
@@ -424,7 +434,20 @@ mapDevTool = {
 
 
 Callback.Add("Load", function()
-	mapDevTool:Init()
+	if(FileExists(COMMON_PATH .. "OutputMapData.lua")) then
+		mapData2 = require 'OutputMapData'
+		mapDevTool:Init()
+	else
+		local File = io.open(COMMON_PATH.. "OutputMapData.lua", "w")
+		if not File then 
+			print("Can't create OutputMapData file. Path not valid.")
+			return
+		end
+		File:write("return {}")
+		File:close()
+
+		print("OutputMapData.lua was missing. Created the file! Please reload with F6")
+	end
 end)
 
 
