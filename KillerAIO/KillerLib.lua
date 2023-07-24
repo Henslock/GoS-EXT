@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.36
+local kLibVersion = 2.37
 
 -- [ AutoUpdate ]
 do
@@ -1245,6 +1245,40 @@ function UseIgnite(unit)
 		Control.CastSpell(HK_SUMMONER_1, unit)
 	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerDot" and Ready(SUMMONER_2) then
 		Control.CastSpell(HK_SUMMONER_2, unit)
+	end
+end
+
+function CanFlash()
+	local slot = nil
+	local hasFlash = false
+	if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_1).name == "SummonerCherryFlash" then
+		slot = SUMMONER_1
+		hasFlash = true
+	end
+	if myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_2).name == "SummonerCherryFlash" then
+		slot = SUMMONER_2
+		hasFlash = true
+	end
+
+	if not hasFlash then
+		return false
+	end
+	if myHero:GetSpellData(slot).currentCd > 0 or myHero:GetSpellData(slot).name == "SummonerCherryFlash_CD" then
+		return false
+	end
+	if GameCanUseSpell(slot) ~= 0 then
+		return false
+	end
+
+	return true
+end
+
+function UseFlash(pos)
+	if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_1).name == "SummonerCherryFlash" then
+		Control.CastSpell(HK_SUMMONER_1, pos)
+	end
+	if myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_2).name == "SummonerCherryFlash" then
+		Control.CastSpell(HK_SUMMONER_2, pos)
 	end
 end
 
