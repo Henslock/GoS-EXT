@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.00
+scriptVersion = 1.01
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -110,19 +110,21 @@ local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champ
 local gameTick = GameTimer()
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 900, Radius = 50, Speed = 950}
-local E = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0, Range = 350, Radius = 210, Speed = 900}
+local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 900, Radius = 50, Speed = 1100}
+local E = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0, Range = 350, Radius = 210, Speed = 1600}
 
 --[[
 NAAFIRI Item IDS
 (Most commonly used items with Naafiri)
 
 6693 = PROWLERS CLAW
-6676 = THE COLLECTOR
-6692 = ECLIPSE
 6691 = DUSKBLADE
 
 --]]
+
+local ITEM_DUSKBLADE = 6691
+local ITEM_PROWLERSCLAW = 6693
+local ITEM_SANDSHRIKESCLAW = 7000
 
 --Main Menu
 Naafiri.Menu = MenuElement({type = MENU, id = "KillerNaafiri", name = "Killer Naafiri", leftIcon = ChampIcon})
@@ -139,14 +141,12 @@ function Naafiri:__init()
 	--Custom Callbacks
 	StrafePred()
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
-	_G.SDK.Orbwalker:OnPostAttack(function(...) Naafiri:OnPostAttack(...) end)
-	_G.SDK.Orbwalker:OnPreAttack(function(...) Naafiri:OnPreAttack(...) end)
+	_G.SDK.Orbwalker:OnPreMovement(function(...) Naafiri:OnPreMovement(...) end)
 
 	self:UpdateGoSMenuAutoLevel()
 end
 
 function Naafiri:LoadMenu()                     	
-	self.Menu:MenuElement({id = "AlphaWarning", name = "[[ Early Alpha Release ]]", type = SPACE})
 	-- Combo
 	self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
 
@@ -181,6 +181,10 @@ function Naafiri:LoadMenu()
 	self.Menu:MenuElement({id = "Harass", name = "Harass", type = MENU})
 	self.Menu.Harass:MenuElement({id = "UseQ", name = "Use Q", value = true})
 	self.Menu.Harass:MenuElement({id = "QMana", name = "Q Min Mana", value = 15, min = 0, max = 100, step = 5, identifier = "%"})
+
+	-- Flee
+	self.Menu:MenuElement({id = "Flee", name = "Flee", type = MENU})
+	self.Menu.Flee:MenuElement({id = "UseWallHop", name = "Use Wall Hop Assist", value = true})
 
 	-- Last Hit
 	self.Menu:MenuElement({id = "LastHit", name = "Last Hit", type = MENU})
@@ -308,6 +312,8 @@ function Naafiri:Tick()
 		self:Combo()
 	elseif(mode == "Harass") then
 		self:Harass()
+	elseif(mode == "Flee") then
+		self:Flee()
 	elseif(mode == "LastHit") then
 		self:LastHit()
 	elseif(mode == "LaneClear") then
@@ -333,10 +339,59 @@ function Naafiri:Tick()
 	end	
 end
 
-function Naafiri:OnPreAttack(args)
-end
+Naafiri.hopSPos, Naafiri.hopEPos = nil, nil
+function Naafiri:OnPreMovement(args) --args.Target | args.Process
 
-function Naafiri:OnPostAttack(args)
+	if(GetMode() == "Flee") and Ready(_E) then
+		if(self.Menu.Flee.UseWallHop:Value()) then
+			local p1 = myHero.pos
+			local p2 = Game.mousePos()
+	
+			if(MapPosition:intersectsWall(p1, p2)) then
+				local wallCheckPos = MapPosition:getIntersectionPoint3D(p1, p2)
+				if(wallCheckPos) then
+					local thicknessCheck = wallCheckPos:Extended(p2, E.Range + E.Radius * 0.4)
+					local inWallCheck = (MapPosition:inWall(thicknessCheck) == 1)
+					if(not inWallCheck) then
+
+						--Calculate wall thickness by using an inverse intersection check
+						local isWallThickEnough = false
+						local invWallCheckPos = nil
+						if(MapPosition:intersectsWall(thicknessCheck, p1)) then
+							invWallCheckPos = MapPosition:getIntersectionPoint3D(thicknessCheck, p1)
+							if(invWallCheckPos) then
+								local dist = GetDistance(invWallCheckPos, wallCheckPos)
+								if(dist > 100) then isWallThickEnough = true end
+							end
+						end
+
+						if(GetDistance(wallCheckPos, myHero) <= 850 and isWallThickEnough) then
+							args.Target = wallCheckPos
+
+							self.hopSPos = wallCheckPos
+							if(GetDistance(invWallCheckPos, wallCheckPos) > E.Range) then
+								self.hopEPos = thicknessCheck
+							else
+								self.hopEPos = wallCheckPos:Extended(p2, E.Range)
+							end
+
+							if(GetDistance(wallCheckPos, myHero) <= 100) then
+								Control.CastSpell(HK_E, p2)
+								self.hopSPos = nil
+								self.hopEPos = nil
+							end
+						end
+					end
+				end
+			end
+		else
+			self.hopSPos = nil
+			self.hopEPos = nil
+		end
+	else
+		self.hopSPos = nil
+		self.hopEPos = nil
+	end
 end
 
 function Naafiri:OnSpellCast(spell)
@@ -587,6 +642,9 @@ function Naafiri:LastHit()
 end
 
 function Naafiri:Harass()
+	if(gameTick > GameTimer()) then return end	
+	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+
 	if(self.Menu.Harass.UseQ:Value()) then
 		if(Ready(_Q) and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
 			
@@ -642,6 +700,11 @@ function Naafiri:Harass()
 
 		end
 	end
+end
+
+function Naafiri:Flee()
+	if(gameTick > GameTimer()) then return end	
+	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
 end
 
 function Naafiri:Clear()
@@ -1140,9 +1203,21 @@ function Naafiri:GetTotalDamage(unit)
 		totalDmg= totalDmg + ElecDmg
 	end
 
+	if(self:HasItem(ITEM_PROWLERSCLAW)) then
+		local prowlersDmg = 85 + (0.45 * myHero.bonusDamage)
+		prowlersDmg = CalcPhysicalDamage(myHero, unit, prowlersDmg)
+		totalDmg= totalDmg + prowlersDmg
+	end
+
 	--Bonus AA Calc
 	local AADmg = CalcPhysicalDamage(myHero, unit, myHero.totalDamage)
 	totalDmg = totalDmg + AADmg
+
+	--This is not an accurate calculation of Duskblade since your damage would be dynamically updating with their health, but it's better than no calculation at all
+	if(self:HasItem(ITEM_DUSKBLADE)) then
+		local duskMult = math.min(((1 - (unit.health / unit.maxHealth)) / 7) * 2, 0.2)
+		totalDmg= totalDmg * (1 + duskMult)
+	end
 
 	return totalDmg
 end
@@ -1234,16 +1309,31 @@ function Naafiri:GetPassiveCooldown()
 	return myHero:GetSpellData(63).currentCd
 end
 
+function Naafiri:HasItem(itemId)
+    for i = ITEM_1, ITEM_7 do
+		local id = myHero:GetItemData(i).itemID
+        if id == itemId then
+			if(myHero:GetSpellData(i).currentCd == 0) then
+				return true, i
+			else
+				return false
+			end
+        end
+    end
+	return false
+end
+
+
+function Naafiri:HasRActive()
+	local rBuff = GetBuffData(myHero, "NaafiriR")
+	return rBuff.count > 0
+end
+
 function Naafiri:GetMaxPossiblePackmateCount()
 	if(myHero.levelData.lvl >= 9) then
 		return 3
 	end
 	return 2
-end
-
-function Naafiri:HasRActive()
-	local rBuff = GetBuffData(myHero, "NaafiriR")
-	return rBuff.count > 0
 end
 
 function Naafiri:GetNumberPackmates()
@@ -1363,6 +1453,7 @@ function Naafiri:CheckForPackmateChanges()
 end
 
 local alphaLerp = 0
+local lerpS, lerpE = nil, nil
 function Naafiri:Draw()
 	if myHero.dead then return end
 
@@ -1373,6 +1464,32 @@ function Naafiri:Draw()
 			else
 				DrawCircle(myHero, Q.Range, 1, DrawColor(30, 235, 64, 52))
 			end
+		end
+	end
+
+	if(self.Menu.Flee.UseWallHop:Value()) then
+		if(GetMode() == "Flee") then
+			if(self.hopEPos ~= nil and self.hopSPos ~= nil) then
+				if(lerpS == nil) then
+					lerpS = self.hopSPos
+				end
+
+				if(lerpE == nil) then
+					lerpE = self.hopEPos
+				end
+				local col = DrawColor(255, 215, 215, 0)
+
+				lerpS = Lerp(lerpS, self.hopSPos, 0.2)
+				lerpE = Lerp(lerpE, self.hopEPos, 0.2)
+				DrawCircle(lerpS, 5, 25, col)
+				DrawCircle(lerpS, 20, 5, col)
+				DrawCircle(lerpE, 50, 1, col)
+				DrawLine(lerpE:To2D(), lerpS:To2D(), 2, col)
+			else
+				lerpS, lerpE = nil, nil
+			end
+		else
+			lerpS, lerpE = nil, nil
 		end
 	end
 
