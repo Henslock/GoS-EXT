@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -110,7 +110,7 @@ local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champ
 local gameTick = GameTimer()
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 900, Radius = 50, Speed = 1100}
+local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 900, Radius = 60, Speed = 1100}
 local E = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0, Range = 350, Radius = 210, Speed = 1600}
 
 --[[
@@ -1035,22 +1035,12 @@ function Naafiri:SemiManualFlashEngage()
 	end
 
 	local flashRange = 400
-	local flashSlot = nil
-	local canFlash = false
-	
-	--Flash Check
-	if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" and Ready(SUMMONER_1) then
-		canFlash = true
-		flashSlot = HK_SUMMONER_1
-	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" and Ready(SUMMONER_2) then
-		canFlash = true
-		flashSlot = HK_SUMMONER_2
-	end
+	local canFlash = CanFlash()
 
 	if(Ready(_E) and Ready(_W) and canFlash) then
 		local FlashEMaxDist = self:GetWRange() + E.Range + flashRange
 		local target = GetTarget(FlashEMaxDist - 15)
-		if(target and IsValid(target)) then
+		if(target and IsValid(target) and target.toScreen.onScreen) then
 			if (GetDistance(target.pos, Game.mousePos()) > 1600) then return end
 			--WALL Check
 			local isHittingWall = false
@@ -1060,9 +1050,8 @@ function Naafiri:SemiManualFlashEngage()
 				end
 			end
 			if(GetDistance(myHero, target) > (self:GetWRange() + E.Range + 50) and GetDistance(myHero, target) <= FlashEMaxDist) and not isHittingWall then
-				_G.Control.CastSpell(flashSlot, target.pos)
+				UseFlash()
 				_G.Control.CastSpell(HK_E, target.pos)
-				gameTick = GameTimer() + 0.2
 				return
 			end
 		end
@@ -1544,7 +1533,7 @@ function Naafiri:Draw()
 			else
 
 				local flashRange = 400
-				local canFlash = CanUseSummoner(myHero, "SummonerFlash")
+				local canFlash = CanFlash()
 
 				if(canFlash) then
 					DrawCircle(myHero.pos, self:GetWRange() + E.Range + flashRange, 1, DrawColor(35, 125, 125, 125))
@@ -1631,7 +1620,7 @@ function Naafiri:DrawFlashEngageUI()
 	end
 
 	local flashRange = 400
-	local canFlash = CanUseSummoner(myHero, "SummonerFlash")
+	local canFlash = CanFlash()
 
 	local dist = self:GetWRange() + E.Range
 
