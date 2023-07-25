@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.33
+scriptVersion = 1.34
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -32,7 +32,6 @@ local COMBO_MODE_ALLIN = 1
 local COMBO_MODE_SPAM = 2
 
 local gameTick = GameTimer()
-Annie.AutoLevelCheck = false
 
 -- GG PRED
 local Q = {Delay = 0.25, Range = 625}
@@ -43,7 +42,7 @@ local R = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.25, Radius = 250, Ran
 local comboDamageData = {}
 
 --Main Menu
-Annie.Menu = MenuElement({type = MENU, id = "KillerAnnie", name = "Killer Annie", leftIcon = AnnieIcon})
+Annie.Menu = MenuElement({type = MENU, id = "KillerAnnie", name = "Killer Annie"})
 Annie.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 
 function Annie:__init()
@@ -60,6 +59,8 @@ function Annie:__init()
 		self.Menu.AutoE.Ignore[champName]:MenuElement({id = enemy:GetSpellData(_E).name, name = "E", value = false})
 		self.Menu.AutoE.Ignore[champName]:MenuElement({id = enemy:GetSpellData(_R).name, name = "R", value = false})
 	end)
+
+	self:UpdateGoSMenuAutoLevel()
 
 end
 
@@ -160,9 +161,66 @@ function Annie:LoadMenu()
 	--debug
 	self.Menu.Drawings.Debug:MenuElement({id = "DrawUltClusters", name = "Draw Ult Clusters", value = false})
 	
-	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - W - E)", value = false})
+	--AutoLeveler	
+	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
+	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.AutoLevel:MenuElement({id = "StartingLevel", name = "Start Using At Level:", value = 3, min = 2, max = 18, step = 1})
+	self.Menu.AutoLevel:MenuElement({id = "FirstSkill", name = "First Skill Priority", drop = {"Q", "W", "E"}, value = 1, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.SecondSkill:Value() == 3) then
+					self.Menu.AutoLevel.SecondSkill:Value(1)
+				else
+					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+
+	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 2, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.FirstSkill:Value() == 3) then
+					self.Menu.AutoLevel.FirstSkill:Value(1)
+				else
+					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
+
 	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
 	
+end
+
+function Annie:UpdateGoSMenuAutoLevel()
+	self.Menu.AutoLevel.InfoText:Remove()
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	local thirdSkill = 0
+	local enumTable = {1, 2, 3}
+	enumTable[firstSkill] = nil
+	enumTable[secondSkill] = nil
+	for k, v in pairs(enumTable) do
+		thirdSkill = v
+	end
+
+	local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
+end
+
+function Annie:AutoLevel()
+	
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	skillPriority = GenerateSkillPriority(firstSkill, secondSkill)
+
+	AutoLeveler(skillPriority)
 end
 
 function Annie:Tick()
@@ -197,12 +255,11 @@ function Annie:Tick()
 	self:AutoStack()
 	self:UpdateComboDamage()
 	
-	
 	if(self.Menu.Combo.NinjaCombo.Key:Value()) then
 		self:NinjaCombo()
 	end
 	
-	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
+	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
 	end	
 end
@@ -262,14 +319,7 @@ function Annie:DebugCluster()
 		local searchrange = R.Range + R.Radius - RBuffer
 		local canFlash = false
 		if self.Menu.Combo.NinjaCombo.UseFlash:Value()  then--and self.Menu.Combo.NinjaCombo.Key:Value() then
-			
-			if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" and Ready(SUMMONER_1) then
-				canFlash = true
-				flashSlot = HK_SUMMONER_1
-			elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" and Ready(SUMMONER_2) then
-				canFlash = true
-				flashSlot = HK_SUMMONER_2
-			end
+			canFlash = CanFlash()
 		end
 		if canFlash == true then
 			searchrange = R.Range + R.Radius +400 - RBuffer
@@ -1173,18 +1223,11 @@ function Annie:NinjaCombo()
 	local flashRange = 400
 	local shouldNinja = false
 	
-	local flashSlot = nil
 	local canFlash = false
 	
 	--Flash Check
 	if(self.Menu.Combo.NinjaCombo.UseFlash:Value()) then
-		if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" and Ready(SUMMONER_1) then
-			canFlash = true
-			flashSlot = HK_SUMMONER_1
-		elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" and Ready(SUMMONER_2) then
-			canFlash = true
-			flashSlot = HK_SUMMONER_2
-		end
+		canFlash = CanFlash()
 	end
 	
 	if(Ready(_R) and self:HasTibbers() == false and Ready(_Q) and Ready(_W)) then
@@ -1210,12 +1253,12 @@ function Annie:NinjaCombo()
 			local nearbyEnemies = GetEnemiesAtPos(searchrange, R.Radius*2 -RBuffer, target.pos, target)
 			local bestPos, count = self:CalculateBestCirclePosition(nearbyEnemies, R.Radius-RBuffer, true)
 
-			if(flashSlot ~= nil and canFlash) then
+			if(canFlash) then
 				if(myHero.pos:DistanceTo(bestPos) < R.Range + flashRange -50) and (myHero.pos:DistanceTo(target.pos) > R.Range) then
 					_G.SDK.Orbwalker:SetMovement(false)
 					_G.Control.CastSpell(HK_E)
 					_G.Control.CastSpell(HK_R, bestPos)
-					_G.Control.CastSpell(flashSlot)
+					UseFlash()
 					_G.SDK.Orbwalker:SetMovement(true)
 				end
 			end
@@ -1306,7 +1349,8 @@ end
 local alphaLerp = 0
 function Annie:Draw()
 	if myHero.dead then return end
-	
+	--self:DebugWallIntersection()
+
 	if(self.Menu.Drawings.Debug.DrawUltClusters:Value()) then
 		self:DebugCluster()
 	end
@@ -1409,6 +1453,26 @@ function Annie:DrawKillReticle(unit)
 	DrawLine((unit.pos + (vec2 * (reticleRadius - 20))):To2D(), (unit.pos + (vec2 * (reticleRadius + 20))):To2D(), 3, DrawColor(255, 255, 25, 25))
 	DrawLine((unit.pos + (vec3 * (reticleRadius - 20))):To2D(), (unit.pos + (vec3 * (reticleRadius + 20))):To2D(), 3, DrawColor(255, 255, 25, 25))
 	DrawLine((unit.pos + (vec4 * (reticleRadius - 20))):To2D(), (unit.pos + (vec4 * (reticleRadius + 20))):To2D(), 3, DrawColor(255, 255, 25, 25))
+end
+
+require "MapPositionGOS"
+
+function Annie:DebugWallIntersection()
+	local p1 = myHero.pos:To2D()
+	local p2 = Game.cursorPos()
+	local mousePos = Game.mousePos()
+	DrawLine(p1, p2, 1)
+
+	if(MapPosition:intersectsWall(myHero.pos, mousePos)) then
+		DrawCircle(mousePos, 50, 1, DrawColor(255, 255, 0, 0))
+
+		local point = (MapPosition:getIntersectionPoint3D(myHero.pos, mousePos))
+		if(point) then
+			DrawCircle(point, 50, 1, DrawColor(255, 0, 255, 0))
+		end
+	else
+		DrawCircle(mousePos, 50, 1)
+	end
 end
 
 Annie()
