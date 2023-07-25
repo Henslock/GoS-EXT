@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.37
+local kLibVersion = 2.38
 
 -- [ AutoUpdate ]
 do
@@ -1270,15 +1270,30 @@ function CanFlash()
 		return false
 	end
 
+	if(Ready(slot) == false) then
+		return false
+	end
+
 	return true
 end
 
 function UseFlash(pos)
+	local castAtPos = false
+	if(pos) then castAtPos = true end
+
 	if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_1).name == "SummonerCherryFlash" then
-		Control.CastSpell(HK_SUMMONER_1, pos)
+		if(castAtPos) then
+			Control.CastSpell(HK_SUMMONER_1, pos)
+		else
+			Control.CastSpell(HK_SUMMONER_1)
+		end
 	end
 	if myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_2).name == "SummonerCherryFlash" then
-		Control.CastSpell(HK_SUMMONER_2, pos)
+		if(castAtPos) then
+			Control.CastSpell(HK_SUMMONER_2, pos)
+		else
+			Control.CastSpell(HK_SUMMONER_2)
+		end
 	end
 end
 
