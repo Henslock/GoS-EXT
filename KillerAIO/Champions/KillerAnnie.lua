@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.34
+scriptVersion = 1.35
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -394,46 +394,6 @@ function Annie:CalculateBestCirclePosition(targets, radius, edgeDetect)
 	end
 	
 	return avgCastPos, #targets, targets
-end
-
-function Annie:AutoLevel()
-	if self.AutoLevelCheck then return end
-	
-	local level = myHero.levelData.lvl
-	local levelPoints = myHero.levelData.lvlPts
-
-	if (levelPoints == 0) or (level == 1) then return end
-	if (Game.mapID == HOWLING_ABYSS and level <= 3) then return end
-	--Order = Q > W > E
-	if(levelPoints >0) then
-		self.AutoLevelCheck = true
-		DelayAction(function()				
-				
-				if level == 6 or level == 11 or level == 16 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_R)
-					Control.KeyUp(HK_R)
-					Control.KeyUp(HK_LUS)
-				elseif level == 1 or level == 4 or level == 5 or level == 7 or level == 9 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_Q)
-					Control.KeyUp(HK_Q)
-					Control.KeyUp(HK_LUS)
-				elseif level == 2 or level == 8 or level == 10 or level == 12 or level == 13 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_W)
-					Control.KeyUp(HK_W)
-					Control.KeyUp(HK_LUS)
-				elseif level == 3 or level == 14 or level == 15 or level == 17 or level == 18 then				
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
-					Control.KeyUp(HK_LUS)
-				end
-		
-			self.AutoLevelCheck = false
-		end, 0.5)
-	end
 end
 
 function Annie:GetPassiveStacks()
