@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.13
+scriptVersion = 1.14
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -613,10 +613,15 @@ function Gangplank:UpdateBarrelConnections()
 	end
 end
 
+function Gangplank:IsBarrel(unit)
+	if(unit:GetBuff(0).name:lower() == "gangplankebarrellife") then return true end
+	return false
+end
+
 function Gangplank:UpdateBarrels()
 	for i = #self.BarrelData, 1, -1 do
 		local barrel = self.BarrelData[i].barrelObj
-		if(barrel == nil or barrel.dead or not barrel.valid) then
+		if(barrel == nil or barrel.dead or not barrel.valid or self:IsBarrel(barrel) == false) then
 			table.remove(self.BarrelData, i)
 		end
 	end
@@ -651,7 +656,7 @@ function Gangplank:GetSpellbladeDamage()
 				end
 				
 				if(id == ITEM_ESSENCEREAVER) then -- ESSENCE REAVER
-					return myHero.baseDamage + (myHero.bonusDamage * 0.4)
+					return (myHero.baseDamage * 1.3) + (myHero.bonusDamage * 0.2)
 				end
 				
 			end
