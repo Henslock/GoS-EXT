@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.12
+scriptVersion = 1.13
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -104,7 +104,7 @@ local WBufferTick = GameTimer()
 Veigar.AutoLevelCheck = false
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1050, Radius = 140, Speed = 2200, Collision = true, MaxCollision = 2, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
+local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1050, Radius = 150, Speed = 2500, Collision = true, MaxCollision = 2, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
 local W = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.47, Radius = 240, Range = 950, Speed = math.huge, Collision = false}
 local E = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.80, Radius = 390, Range = 725, Speed = math.huge, Collision = false}
 local EEdge = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.80, Radius = 30, Range = 1100, Speed = math.huge, Collision = false}
@@ -149,6 +149,8 @@ function Veigar:__init()
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
 	StrafePred()
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Veigar:OnPreAttack(...) end)
+
+	self:UpdateGoSMenuAutoLevel()
 end
 
 function Veigar:LoadMenu()                     	
@@ -215,7 +217,39 @@ function Veigar:LoadMenu()
 	self.Menu:MenuElement({id = "Prediction", name = "Prediction", type = MENU})
 	self.Menu.Prediction:MenuElement({id = "QHitChance", name = "Q Hit Chance",  value = 2, drop = {"Normal", "High", "Immobile"}})
 		
-	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - E - W)", value = false})
+	--AutoLeveler	
+	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
+	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.AutoLevel:MenuElement({id = "StartingLevel", name = "Start Using At Level:", value = 3, min = 2, max = 18, step = 1})
+	self.Menu.AutoLevel:MenuElement({id = "FirstSkill", name = "First Skill Priority", drop = {"Q", "W", "E"}, value = 1, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.SecondSkill:Value() == 3) then
+					self.Menu.AutoLevel.SecondSkill:Value(1)
+				else
+					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 2, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.FirstSkill:Value() == 3) then
+					self.Menu.AutoLevel.FirstSkill:Value(1)
+				else
+					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
+	--
+
 	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
 	
 	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
@@ -225,6 +259,31 @@ function Veigar:LoadMenu()
 		self.Menu.KillSteal.RBlacklist:MenuElement({id = charName, name = charName, value = false})
 	end)
 	
+end
+
+function Veigar:UpdateGoSMenuAutoLevel()
+	self.Menu.AutoLevel.InfoText:Remove()
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	local thirdSkill = 0
+	local enumTable = {1, 2, 3}
+	enumTable[firstSkill] = nil
+	enumTable[secondSkill] = nil
+	for k, v in pairs(enumTable) do
+		thirdSkill = v
+	end
+
+	local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
+end
+
+function Veigar:AutoLevel()
+	
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	skillPriority = GenerateSkillPriority(firstSkill, secondSkill)
+
+	AutoLeveler(skillPriority)
 end
 
 
@@ -276,7 +335,7 @@ function Veigar:Tick()
 		self:SemiManualE()
 	end
 	
-	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
+	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
 	end	
 end
@@ -321,46 +380,6 @@ function Veigar:UpdateEData()
 		if(e.type ~= "obj_GeneralParticleEmitter") then
 			table.remove(self.EData, i)
 		end
-	end
-end
-
-function Veigar:AutoLevel()
-	if self.AutoLevelCheck then return end
-	
-	local level = myHero.levelData.lvl
-	local levelPoints = myHero.levelData.lvlPts
-
-	if (levelPoints == 0) or (level == 1) then return end
-	if (Game.mapID == HOWLING_ABYSS and level <= 3) then return end
-	--Order = Q > E > W
-	if(levelPoints >0) then
-		self.AutoLevelCheck = true
-		DelayAction(function()				
-				
-				if level == 6 or level == 11 or level == 16 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_R)
-					Control.KeyUp(HK_R)
-					Control.KeyUp(HK_LUS)
-				elseif level == 1 or level == 4 or level == 5 or level == 7 or level == 9 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_Q)
-					Control.KeyUp(HK_Q)
-					Control.KeyUp(HK_LUS)
-				elseif level == 2 or level == 8 or level == 10 or level == 12 or level == 13 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
-					Control.KeyUp(HK_LUS)
-				elseif level == 3 or level == 14 or level == 15 or level == 17 or level == 18 then				
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_W)
-					Control.KeyUp(HK_W)
-					Control.KeyUp(HK_LUS)
-				end
-		
-			self.AutoLevelCheck = false
-		end, 0.5)
 	end
 end
 
@@ -748,6 +767,9 @@ function Veigar:LastHit()
 	if(self.Menu.LastHit.UseQ:Value()) then
 	
 		--Turret last hitting
+		--[[
+		--Disabled this, this logic was frustrating to play with. May look at tuning this in the future.
+
 		local closestTurret = GetClosestFriendlyTurret()
 		local numTurretMinions = 0
 		if(closestTurret ~= nil) then
@@ -757,6 +779,7 @@ function Veigar:LastHit()
 				self:TurretLastHit(closestTurret, turretMinions)
 			end
 		end
+		--]]
 			
 		if(Ready(_Q)) then
 		
@@ -775,26 +798,26 @@ function Veigar:LastHit()
 				end
 			end
 			
-			if(#minions ~= numTurretMinions) then --Optimization trick, if all of our minions are under the turret then dont iterate through because we'll do the turret last hitting anyways
-				for i = 1, #minions do
-					local minion = minions[i]
-					if(minion and IsValid(minion)) then
-						--This is to prevent us Q'ing a target we are going to kill with an AA 
-						local check = true
-						if(avoidQMinionHandle == minion.handle) then
-							if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
-								check = false
-							end
+			--if(#minions ~= numTurretMinions) then --Optimization trick, if all of our minions are under the turret then dont iterate through because we'll do the turret last hitting anyways
+			for i = 1, #minions do
+				local minion = minions[i]
+				if(minion and IsValid(minion)) then
+					--This is to prevent us Q'ing a target we are going to kill with an AA 
+					local check = true
+					if(avoidQMinionHandle == minion.handle) then
+						if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
+							check = false
 						end
-						if(myHero.pos:DistanceTo(minion.pos) <= Q.Range and check) then
-							local isMinionUnderTurret, turretUnitMinion = IsUnderFriendlyTurret(minion)
-							if (isMinionUnderTurret == false) then
-								self:StandardLastHit(minion)
-							end
-						end
+					end
+					if(myHero.pos:DistanceTo(minion.pos) <= Q.Range and check) then
+						--local isMinionUnderTurret, turretUnitMinion = IsUnderFriendlyTurret(minion)
+						--if (isMinionUnderTurret == false) then
+						self:StandardLastHit(minion)
+						--end
 					end
 				end
 			end
+			--end
 		end
 	end
 	
@@ -805,7 +828,7 @@ function Veigar:StandardLastHit(minion)
 	if(collisionCount <= Q.MaxCollision) then
 		local QDam = self:GetRawAbilityDamage("Q")
 		local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay + (myHero.pos:DistanceTo(minion.pos)/Q.Speed))
-		if ((hp > 0) and (hp + 25 - QDam <= 0)) then
+		if ((hp > 0) and (hp + 25 - QDam < 0)) then
 			Control.CastSpell(HK_Q, minion)
 			gameTick = GameTimer() + 0.2
 			return
@@ -1107,7 +1130,7 @@ function Veigar:SemiManualE()
 							return
 						else
 							--"Running Towards"
-							if(target.distance <= (E.Range + E.Radius -50)) then
+							if(target.distance <= (E.Range + E.Radius -75)) then
 								local castPos = myHero.pos:Extended(EPrediction.CastPosition, E.Range -10)
 								Control.CastSpell(HK_E, castPos)
 								gameTick = GameTimer() + 0.333
@@ -1115,7 +1138,7 @@ function Veigar:SemiManualE()
 							end
 						end
 					else
-						if(target.distance <= (E.Range + E.Radius -50)) then
+						if(target.distance <= (E.Range + E.Radius -75)) then
 							local castPos = myHero.pos:Extended(EPrediction.CastPosition, E.Range -10)
 							Control.CastSpell(HK_E, castPos)
 							gameTick = GameTimer() + 0.333
