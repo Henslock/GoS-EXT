@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.14
+scriptVersion = 1.15
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -151,8 +151,9 @@ function Syndra:__init()
 	Callback.Add("Draw", function() self:Draw() end)
 	--Custom Callbacks
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
-	StrafePred()
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Syndra:OnPreAttack(...) end)
+
+	self:UpdateGoSMenuAutoLevel()
 end
 
 function Syndra:LoadMenu()                     	
@@ -224,7 +225,6 @@ function Syndra:LoadMenu()
 	self.Menu.Prediction:MenuElement({id = "WHitChance", name = "W Hit Chance",  value = 2, drop = {"Normal", "High", "Immobile"}})
 	self.Menu.Prediction:MenuElement({id = "EHitChance", name = "E Hit Chance",  value = 2, drop = {"Normal", "High", "Immobile"}})
 		
-	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - W - E)", value = false})
 	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
 	
 	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
@@ -239,6 +239,67 @@ function Syndra:LoadMenu()
 			end
 		end
 	end)
+end
+
+function Syndra:UpdateGoSMenuAutoLevel()
+
+	--AutoLeveler	
+	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
+	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.AutoLevel:MenuElement({id = "StartingLevel", name = "Start Using At Level:", value = 3, min = 2, max = 18, step = 1})
+	self.Menu.AutoLevel:MenuElement({id = "FirstSkill", name = "First Skill Priority", drop = {"Q", "W", "E"}, value = 1, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.SecondSkill:Value() == 3) then
+					self.Menu.AutoLevel.SecondSkill:Value(1)
+				else
+					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
+				end
+			end
+			UpdateInfo()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 2, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.FirstSkill:Value() == 3) then
+					self.Menu.AutoLevel.FirstSkill:Value(1)
+				else
+					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
+				end
+			end
+			UpdateInfo()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
+	--
+	
+	function UpdateInfo()
+		self.Menu.AutoLevel.InfoText:Remove()
+		local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+		local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+		local thirdSkill = 0
+		local enumTable = {1, 2, 3}
+		enumTable[firstSkill] = nil
+		enumTable[secondSkill] = nil
+		for k, v in pairs(enumTable) do
+			thirdSkill = v
+		end
+
+		local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+		self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
+	end
+end
+
+function Syndra:AutoLevel()
+	
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	skillPriority = GenerateSkillPriority(firstSkill, secondSkill)
+
+	AutoLeveler(skillPriority)
 end
 
 
@@ -282,7 +343,7 @@ function Syndra:Tick()
 		self:SemiManualStun()
 	end
 	
-	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
+	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
 	end	
 end
@@ -355,13 +416,13 @@ end
 function Syndra:OnSpellCast(spell)
 	if spell.name == "SyndraQ" or spell.name == "SyndraQUpgrade" then
 		self:CheckSpawningOrbs()
-        DelayAction(function()
+        DelayEvent(function()
             self:CheckOrbs()
         end, 0.75)
 	end
 	
 	if spell.name == "SyndraR" or spell.name == "SyndraRUpgrade" then
-        DelayAction(function()
+        DelayEvent(function()
             self:CheckOrbs()
         end, 1.75)
 	end
@@ -424,45 +485,6 @@ function Syndra:GetGrabObject()
 	return obj
 end
 
-function Syndra:AutoLevel()
-	if self.AutoLevelCheck then return end
-	
-	local level = myHero.levelData.lvl
-	local levelPoints = myHero.levelData.lvlPts
-
-	if (levelPoints == 0) or (level == 1) then return end
-	if (Game.mapID == HOWLING_ABYSS and level <= 3) then return end
-	--Order = Q > W > E
-	if(levelPoints >0) then
-		self.AutoLevelCheck = true
-		DelayAction(function()				
-				
-				if level == 6 or level == 11 or level == 16 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_R)
-					Control.KeyUp(HK_R)
-					Control.KeyUp(HK_LUS)
-				elseif level == 1 or level == 4 or level == 5 or level == 7 or level == 9 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_Q)
-					Control.KeyUp(HK_Q)
-					Control.KeyUp(HK_LUS)
-				elseif level == 2 or level == 8 or level == 10 or level == 12 or level == 13 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_W)
-					Control.KeyUp(HK_W)
-					Control.KeyUp(HK_LUS)
-				elseif level == 3 or level == 14 or level == 15 or level == 17 or level == 18 then				
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
-					Control.KeyUp(HK_LUS)
-				end
-		
-			self.AutoLevelCheck = false
-		end, 0.5)
-	end
-end
 
 function Syndra:Combo()
 	if(myHero.isChanneling) then return end
@@ -471,33 +493,10 @@ function Syndra:Combo()
 	-- Q
 	if(Ready(_Q) and self.Menu.Combo.UseQ:Value()) then
 		local target = GetTarget(Q.Range + Q.Radius*2)
-		if(target ~= nil and IsValid(target)) then
+		if(IsValid(target)) then
 		
 			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius) then
-				
-				
-				local isStrafing, avgPos = StrafePred:IsStrafing(target)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < Q.Range + Q.Radius) then
-						Control.CastSpell(HK_Q, avgPos)
-						return
-					end
-				end
-				
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < Q.Range + Q.Radius) then
-						Control.CastSpell(HK_Q, avgPos2)
-						return
-					end
-				end
-				
-				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
-				if QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
-					Control.CastSpell(HK_Q, QPrediction.CastPosition)
-					return
-				end
-		
+				CastPredictedSpell(HK_Q, target, Q, true)
 			end
 		end
 	end
@@ -573,7 +572,7 @@ function Syndra:Combo()
 			--If we also have our Q up, we might as well go for the free stun
 			if(Ready(_Q) and self.Menu.Combo.UseQ:Value()) then
 				Control.CastSpell(HK_Q, meleeTarget.pos)
-				DelayAction(function()
+				DelayEvent(function()
 					Control.CastSpell(HK_E, meleeTarget.pos)
 				end, 0.15)
 			else
@@ -607,30 +606,9 @@ function Syndra:Harass()
 	-- Q
 	if(Ready(_Q) and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
 		local target = GetTarget(Q.Range + Q.Radius) 
-		if(target ~= nil and IsValid(target)) then
+		if(IsValid(target)) then
 			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius) then
-			
-				local isStrafing, avgPos = StrafePred:IsStrafing(target)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < Q.Range + Q.Radius) then
-						Control.CastSpell(HK_Q, avgPos)
-						return
-					end
-				end
-				
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < Q.Range + Q.Radius) then
-						Control.CastSpell(HK_Q, avgPos2)
-						return
-					end
-				end
-				
-				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
-				if QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
-					Control.CastSpell(HK_Q, QPrediction.CastPosition)
-				end
-		
+				CastPredictedSpell(HK_Q, target, Q, true)
 			end
 		end
 	end
@@ -896,7 +874,7 @@ function Syndra:Clear()
 								local clusterMinionsAvgPos = AverageClusterPosition(clusterMinions)
 								Control.CastSpell(HK_W, clusterMinionsAvgPos)
 								if(self.Menu.Clear.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.QMana:Value() / 100)) then
-									DelayAction(function()
+									DelayEvent(function()
 										Control.CastSpell(HK_Q, clusterMinionsAvgPos)
 										gameTick = GameTimer() + 0.2
 									end, 0.25)
@@ -1103,7 +1081,7 @@ function Syndra:EInterrupter()
 					if(spell and spell.valid and self.InterruptableSpells[spell.name]) then
 						if(self.Menu.EInterrupter.InterruptSpells[spell.name]) then
 							if(self.Menu.EInterrupter.InterruptSpells[spell.name]:Value() == true) then
-								DelayAction(function()
+								DelayEvent(function()
 									Control.CastSpell(HK_E, enemy.pos)
 								end, (self.Menu.EInterrupter.HumanizedDelay:Value() /1000))
 							end
@@ -1203,7 +1181,7 @@ function Syndra:SemiManualStun()
 						finalPos = QDirVec + myHeroCalcPos
 					end
 					Control.CastSpell(HK_Q, finalPos)
-					DelayAction(function()
+					DelayEvent(function()
 						Control.CastSpell(HK_E, finalPos)
 						return
 					end, 0.15)
@@ -1217,7 +1195,7 @@ function Syndra:SemiManualStun()
 					finalPos = QDirVec + myHeroCalcPos
 				end
 				Control.CastSpell(HK_Q, finalPos)
-				DelayAction(function()
+				DelayEvent(function()
 					Control.CastSpell(HK_E, finalPos)
 					return
 				end, 0.15)
