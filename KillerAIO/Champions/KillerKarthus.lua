@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.10
+scriptVersion = 1.11
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -31,7 +31,7 @@ local UltableChamps = {}
 local MIATimer = 5
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1, Radius = 160, Range = 875, Speed = math.huge, Collision = false}
+local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.1, Radius = 160, Range = 875, Speed = math.huge, Collision = false}
 local W = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.3, Radius = 75, Range = 1000, Speed = math.huge, Collision = false}
 local E = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0, Radius = 550, Range = 0, Speed = math.huge, Collision = false}
 
@@ -48,6 +48,8 @@ function Karthus:__init()
 	self:LoadUltTrackerData()
 	Callback.Add("Tick", function() self:Tick() end)
 	Callback.Add("Draw", function() self:Draw() end)
+
+	self:UpdateGoSMenuAutoLevel()
 end
 
 
@@ -122,7 +124,6 @@ function Karthus:LoadMenu()
 	
 	-- Prediction
 	self.Menu:MenuElement({id = "Prediction", name = "Prediction", type = MENU})
-	self.Menu.Prediction:MenuElement({id = "QHitChance", name = "Q Hit Chance",  value = 1, drop = {"Normal", "High", "Immobile"}})
 	self.Menu.Prediction:MenuElement({id = "WHitChance", name = "W Hit Chance",  value = 1, drop = {"Normal", "High", "Immobile"}})
 	
 	-- Draws
@@ -132,8 +133,69 @@ function Karthus:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawChampTracker", name = "Draw Proximity Champion Tracker", value = false})
 	
-	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (Q - E - W)", value = false})
+end
+
+function Karthus:UpdateGoSMenuAutoLevel()
+
+	--AutoLeveler	
+	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
+	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.AutoLevel:MenuElement({id = "StartingLevel", name = "Start Using At Level:", value = 3, min = 2, max = 18, step = 1})
+	self.Menu.AutoLevel:MenuElement({id = "FirstSkill", name = "First Skill Priority", drop = {"Q", "W", "E"}, value = 1, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.SecondSkill:Value() == 3) then
+					self.Menu.AutoLevel.SecondSkill:Value(1)
+				else
+					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
+				end
+			end
+			UpdateInfo()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 3, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.FirstSkill:Value() == 3) then
+					self.Menu.AutoLevel.FirstSkill:Value(1)
+				else
+					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
+				end
+			end
+			UpdateInfo()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
+	--
 	
+	function UpdateInfo()
+		self.Menu.AutoLevel.InfoText:Remove()
+		local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+		local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+		local thirdSkill = 0
+		local enumTable = {1, 2, 3}
+		enumTable[firstSkill] = nil
+		enumTable[secondSkill] = nil
+		for k, v in pairs(enumTable) do
+			thirdSkill = v
+		end
+
+		local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+		self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
+	end
+
+	UpdateInfo()
+end
+
+function Karthus:AutoLevel()
+	
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	skillPriority = GenerateSkillPriority(firstSkill, secondSkill)
+
+	AutoLeveler(skillPriority)
 end
 
 function Karthus:Tick()
@@ -162,47 +224,11 @@ function Karthus:Tick()
 	
 	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
 		self:AutoLevel()
-	end	
-end
-
-Karthus.AutoLevelCheck = false
-function Karthus:AutoLevel()
-	if self.AutoLevelCheck then return end
-	
-	local level = myHero.levelData.lvl
-	local levelPoints = myHero.levelData.lvlPts
-
-	if (levelPoints == 0) or (level == 1) then return end	
-	--Order = Q > E > W
-	if(levelPoints >0) then
-		self.AutoLevelCheck = true
-		DelayAction(function()				
-				
-				if level == 6 or level == 11 or level == 16 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_R)
-					Control.KeyUp(HK_R)
-					Control.KeyUp(HK_LUS)
-				elseif level == 1 or level == 4 or level == 5 or level == 7 or level == 9 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_Q)
-					Control.KeyUp(HK_Q)
-					Control.KeyUp(HK_LUS)
-				elseif level == 2 or level == 8 or level == 10 or level == 12 or level == 13 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
-					Control.KeyUp(HK_LUS)
-				elseif level == 3 or level == 14 or level == 15 or level == 17 or level == 18 then				
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_W)
-					Control.KeyUp(HK_W)
-					Control.KeyUp(HK_LUS)
-				end
-		
-			self.AutoLevelCheck = false
-		end, 0.5)
 	end
+
+	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
+		self:AutoLevel()
+	end	
 end
 
 local gameTick = GameTimer()
@@ -217,13 +243,11 @@ function Karthus:Combo()
 	if(myHero.isChanneling) then return end
 	
 	-- Q
-	local target = GetTarget(Q.Range) --Extend out of the Q range a little bit
+	local target = GetTarget(Q.Range + Q.Radius*0.5) --Extend out of the Q range a little bit
 	if(target ~= nil and IsValid(target)) then
 		if(self:CanQ() and self.Menu.Combo.UseQ:Value()) then
-			local QPrediction = GGPrediction:SpellPrediction(Q)
-			QPrediction:GetPrediction(target, myHero)
-			if QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
-				Control.CastSpell(HK_Q, QPrediction.CastPosition)
+			local didCast = CastPredictedSpell(HK_Q, target, Q, true)
+			if(didCast) then
 				gameTick = GameTimer() + 0.2
 			end
 		end
@@ -279,13 +303,11 @@ function Karthus:Harass()
 	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
 	
 	-- Q
-	local target = GetTarget(Q.Range + 25) --Extend out of the Q range a little bit
+	local target = GetTarget(Q.Range + Q.Radius*0.5) --Extend out of the Q range a little bit
 	if(target ~= nil and IsValid(target)) then
 		if(self:CanQ() and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
-			local QPrediction = GGPrediction:SpellPrediction(Q)
-			QPrediction:GetPrediction(target, myHero)
-			if QPrediction.CastPosition and QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value()) then
-				Control.CastSpell(HK_Q, QPrediction.CastPosition)
+			local didCast = CastPredictedSpell(HK_Q, target, Q, true)
+			if(didCast) then
 				gameTick = GameTimer() + 0.2
 			end
 		end
