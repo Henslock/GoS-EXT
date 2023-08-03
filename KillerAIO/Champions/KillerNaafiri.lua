@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -139,7 +139,6 @@ function Naafiri:__init()
 	Callback.Add("Draw", function() self:Draw() end)
 
 	--Custom Callbacks
-	StrafePred()
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
 	_G.SDK.Orbwalker:OnPreMovement(function(...) Naafiri:OnPreMovement(...) end)
 
@@ -231,7 +230,13 @@ function Naafiri:LoadMenu()
 	self.Menu.Drawings.DamageHPBar:MenuElement({id = "DrawDamageHPBar", name = "Draw Full Combo Damage", value = true})
 	self.Menu.Drawings.DamageHPBar:MenuElement({id = "ShowOverKillBar", name = "Draw Overkill Bar", value = true})
 	self.Menu.Drawings.DamageHPBar:MenuElement({id = "YOffset", name = "Y Offset", value = 60, min = -100, max = 100, step = 5})
-		
+
+	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
+	
+end
+
+function Naafiri:UpdateGoSMenuAutoLevel()
+
 	--AutoLeveler	
 	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
 	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
@@ -246,10 +251,9 @@ function Naafiri:LoadMenu()
 					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
 				end
 			end
-			self:UpdateGoSMenuAutoLevel()
+			UpdateInfo()
 		end, 0.15)
 	end})
-
 	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 3, callback = 
 	function ()
 		DelayEvent(function()
@@ -260,30 +264,29 @@ function Naafiri:LoadMenu()
 					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
 				end
 			end
-			self:UpdateGoSMenuAutoLevel()
+			UpdateInfo()
 		end, 0.15)
 	end})
 	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
-
-	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
+	--
 	
-end
+	function UpdateInfo()
+		self.Menu.AutoLevel.InfoText:Remove()
+		local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+		local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+		local thirdSkill = 0
+		local enumTable = {1, 2, 3}
+		enumTable[firstSkill] = nil
+		enumTable[secondSkill] = nil
+		for k, v in pairs(enumTable) do
+			thirdSkill = v
+		end
 
-function Naafiri:UpdateGoSMenuAutoLevel()
-	self.Menu.AutoLevel.InfoText:Remove()
-	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
-	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
-	local thirdSkill = 0
-	local enumTable = {1, 2, 3}
-	enumTable[firstSkill] = nil
-	enumTable[secondSkill] = nil
-	for k, v in pairs(enumTable) do
-		thirdSkill = v
+		local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+		self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
 	end
-
-	local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
-	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
 end
+
 
 function Naafiri:AutoLevel()
 	
@@ -460,51 +463,8 @@ function Naafiri:Combo()
 		if(Ready(_Q)) then
 			
 			local target = GetTarget(Q.Range - 75)
-			if(IsValid(target) and (CantKill(target, true, true, false)==false)) then
-				local isStrafing, avgPos = StrafePred:IsStrafing(target)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-				
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < Q.Range) then
-						Control.CastSpell(HK_Q, avgPos)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < Q.Range) then
-						Control.CastSpell(HK_Q, avgPos2)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				
-				local QPrediction = GGPrediction:SpellPrediction(Q)
-				QPrediction:GetPrediction(target, myHero)
-				if QPrediction.CastPosition and QPrediction:CanHit(HITCHANCE_HIGH) then
-					Control.CastSpell(HK_Q, QPrediction.CastPosition)
-					gameTick = GameTimer() + 0.2
-					return
-				end
-				
-				--If we are close to the target we really don't need high accuracy
-				if(QPrediction.CastPosition) and QPrediction:CanHit(HITCHANCE_NORMAL) then
-					if(GetDistance(QPrediction.CastPosition, myHero.pos) <= 400) then
-						Control.CastSpell(HK_Q, QPrediction.CastPosition)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-
-				--If pred still doesn't want to go, we'll just use built-in GOS pred
-				local enemyPredPos = target:GetPrediction(Q.Speed, Q.Delay)
-				if(enemyPredPos) then
-					if(GetDistance(enemyPredPos, myHero.pos) <= 400) then
-						Control.CastSpell(HK_Q, enemyPredPos)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
+			if(IsValid(target)) then
+				CastPredictedSpell(HK_Q, target, Q, false)
 			end
 		end
 	end
@@ -649,53 +609,8 @@ function Naafiri:Harass()
 		if(Ready(_Q) and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
 			
 			local target = GetTarget(Q.Range - 75)
-			if(IsValid(target) and (CantKill(target, true, true, false)==false)) then
-				local isStrafing, avgPos = StrafePred:IsStrafing(target)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-				
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < Q.Range) then
-						Control.CastSpell(HK_Q, avgPos)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < Q.Range) then
-						Control.CastSpell(HK_Q, avgPos2)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				
-				local QPrediction = GGPrediction:SpellPrediction(Q)
-				QPrediction:GetPrediction(target, myHero)
-				if QPrediction.CastPosition and QPrediction:CanHit(HITCHANCE_HIGH) then
-					if(GetDistance(QPrediction.CastPosition, myHero.pos) <= Q.Range - 50) then
-						Control.CastSpell(HK_Q, QPrediction.CastPosition)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				
-				--If we are close to the target we really don't need high accuracy
-				if(QPrediction.CastPosition) and QPrediction:CanHit(HITCHANCE_NORMAL) then
-					if(GetDistance(QPrediction.CastPosition, myHero.pos) <= 400) then
-						Control.CastSpell(HK_Q, QPrediction.CastPosition)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-
-				--If pred still doesn't want to go, we'll just use built-in GOS pred
-				local enemyPredPos = target:GetPrediction(Q.Speed, Q.Delay)
-				if(enemyPredPos) then
-					if(GetDistance(enemyPredPos, myHero.pos) <= 400) then
-						Control.CastSpell(HK_Q, enemyPredPos)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
+			if(IsValid(target)) then
+				CastPredictedSpell(HK_Q, target, Q, false)
 			end
 
 		end
