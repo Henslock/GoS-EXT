@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.40
+local kLibVersion = 2.41
 
 -- [ AutoUpdate ]
 do
@@ -1581,7 +1581,7 @@ function GetPrediction(target, spell_speed, casting_delay)
 		z = target_position.z + target_velocity.z * t
 	}
 
-	return interception_point
+	return Vector(interception_point)
 end
 
 
@@ -1655,7 +1655,7 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 		end
 
 		--If pred still doesn't want to go, we'll just use KillerLib pred
-		local enemyPredPos = Vector(GetPrediction(target, SpellData.Speed, SpellData.Delay))
+		local enemyPredPos = GetPrediction(target, SpellData.Speed, SpellData.Delay)
 		if(enemyPredPos) then
 			if(GetDistance(enemyPredPos, myHero.pos) <= SpellData.Range - 50) then
 				if(maxCollision > 0) then
