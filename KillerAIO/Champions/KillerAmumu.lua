@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Amumu will exit.")
@@ -68,7 +68,6 @@ function Amumu:__init()
 	Callback.Add("Draw", function() self:Draw() end)
 
 	--Custom Callbacks
-	StrafePred()
 end
 
 function Amumu:LoadMenu()                     	
