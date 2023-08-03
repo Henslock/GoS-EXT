@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.14
+scriptVersion = 1.15
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -241,7 +241,6 @@ function Gangplank:__init()
 	Callback.Add("Draw", function() self:Draw() end)
 	--Custom Callbacks
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
-	StrafePred()
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Gangplank:OnPreAttack(...) end)
 
 	DelayEvent(function()
