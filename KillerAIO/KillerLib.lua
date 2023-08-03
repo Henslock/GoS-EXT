@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.42
+local kLibVersion = 2.43
 
 -- [ AutoUpdate ]
 do
@@ -1585,14 +1585,14 @@ function GetPrediction(target, spell_speed, casting_delay)
 end
 
 
-function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollision, collisionWidthOverride)
+function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollision, collisionRadiusOverride)
 	if(not IsValid(myHero) or myHero.dead) then return end
 	if(SpellData.Range == nil) then return end
 
 	SpellData.Speed = SpellData.Speed or math.huge
 	SpellData.Delay = SpellData.Delay or 0
 	maxCollision = maxCollision or 0
-	collisionWidthOverride = collisionWidthOverride or SpellData.Radius or 0
+	collisionRadiusOverride = collisionRadiusOverride or SpellData.Radius or 0
 	local collisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}
 	if(IsValid(target) and CantKill(target, true, true, false)==false) then
 		local isStrafing, avgPos = StrafePred:IsStrafing(target)
@@ -1601,7 +1601,7 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 		if(isStrafing) then
 			if(avgPos:DistanceTo(myHero.pos) < SpellData.Range) then
 				if(maxCollision > 0) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, SpellData.Speed, SpellData.Delay, collisionWidthOverride, collisionTypes, target.networkID)
+					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
 					if(collisionCount < maxCollision) then
 						Control.CastSpell(hotkey, avgPos)
 						return true
@@ -1615,7 +1615,7 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 		if(isStutterDancing) then
 			if(avgPos2:DistanceTo(myHero.pos) < SpellData.Range) then
 				if(maxCollision > 0) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, SpellData.Speed, SpellData.Delay, collisionWidthOverride, collisionTypes, target.networkID)
+					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
 					if(collisionCount < maxCollision) then
 						Control.CastSpell(hotkey, avgPos2)
 						return true
@@ -1642,7 +1642,7 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 					if(GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
 	
 						if(maxCollision > 0) then
-							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, SpellPrediction.CastPosition, SpellData.Speed, SpellData.Delay, collisionWidthOverride, collisionTypes, target.networkID)
+							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, SpellPrediction.CastPosition, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
 							if(collisionCount < maxCollision) then
 								Control.CastSpell(hotkey, SpellPrediction.CastPosition)
 								return true
@@ -1662,7 +1662,7 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 				if(GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
 
 					if(maxCollision > 0) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, SpellPrediction.CastPosition, SpellData.Speed, SpellData.Delay, collisionWidthOverride, collisionTypes, target.networkID)
+						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, SpellPrediction.CastPosition, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
 						if(collisionCount < maxCollision) then
 							Control.CastSpell(hotkey, SpellPrediction.CastPosition)
 							return true
@@ -1681,7 +1681,7 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 		if(enemyPredPos) then
 			if(GetDistance(enemyPredPos, myHero.pos) <= SpellData.Range - 50) then
 				if(maxCollision > 0) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, enemyPredPos, SpellData.Speed, SpellData.Delay, collisionWidthOverride, collisionTypes, target.networkID)
+					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, enemyPredPos, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
 					if(collisionCount < maxCollision) then
 						Control.CastSpell(hotkey, enemyPredPos)
 						return true
