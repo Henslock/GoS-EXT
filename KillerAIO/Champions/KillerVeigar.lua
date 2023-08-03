@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.13
+scriptVersion = 1.14
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -147,7 +147,6 @@ function Veigar:__init()
 	Callback.Add("Draw", function() self:Draw() end)
 	--Custom Callbacks
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
-	StrafePred()
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Veigar:OnPreAttack(...) end)
 
 	self:UpdateGoSMenuAutoLevel()
@@ -212,10 +211,6 @@ function Veigar:LoadMenu()
 	self.Menu.Drawings.DamageHPBar:MenuElement({id = "YOffset", name = "Y Offset", value = 60, min = -100, max = 100, step = 5})
 	-- debug.debug
 	self.Menu.Drawings.Debug:MenuElement({id = "DrawParticles", name = "Draw Particles", value = false})
-	
-	-- Prediction
-	self.Menu:MenuElement({id = "Prediction", name = "Prediction", type = MENU})
-	self.Menu.Prediction:MenuElement({id = "QHitChance", name = "Q Hit Chance",  value = 2, drop = {"Normal", "High", "Immobile"}})
 		
 	--AutoLeveler	
 	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
@@ -392,41 +387,7 @@ function Veigar:Combo()
 		if(Ready(_Q)) then
 			local target = GetTarget(Q.Range -10)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
-				local isStrafing, avgPos = StrafePred:IsStrafing(target)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-				
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < Q.Range) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, Q.Speed, Q.Delay, Q.Radius, Q.CollisionTypes, target.networkID)
-						if(collisionCount <= Q.MaxCollision) then
-							Control.CastSpell(HK_Q, avgPos)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
-				end
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < Q.Range) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, Q.Speed, Q.Delay, Q.Radius, Q.CollisionTypes, target.networkID)
-						if(collisionCount <= Q.MaxCollision) then
-							Control.CastSpell(HK_Q, avgPos2)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
-				end
-				
-				local QPrediction = GGPrediction:SpellPrediction(Q)
-				QPrediction:GetPrediction(target, myHero)
-				if QPrediction.CastPosition and QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value() + 1) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, QPrediction.CastPosition, Q.Speed, Q.Delay, Q.Radius, Q.CollisionTypes, target.networkID)
-					if(collisionCount <= Q.MaxCollision) then
-						Control.CastSpell(HK_Q, QPrediction.CastPosition)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				
+				CastPredictedSpell(HK_Q, target, Q, false, 2, Q.Radius + 15)
 			end
 		end
 	end
@@ -689,39 +650,8 @@ function Veigar:Harass()
 			end
 			
 			local target = GetTarget(Q.Range)
-			if(target and IsValid(target)) then
-				local isStrafing, avgPos = StrafePred:IsStrafing(target)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-				
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < Q.Range) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, Q.Speed, Q.Delay, Q.Radius, Q.CollisionTypes, target.networkID)
-						if(collisionCount <= Q.MaxCollision) then
-							Control.CastSpell(HK_Q, avgPos)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
-				end
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < Q.Range) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, Q.Speed, Q.Delay, Q.Radius, Q.CollisionTypes, target.networkID)
-						if(collisionCount <= Q.MaxCollision) then
-							Control.CastSpell(HK_Q, avgPos2)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
-				end
-				
-				local QPrediction = GGPrediction:SpellPrediction(Q)
-				QPrediction:GetPrediction(target, myHero)
-				if QPrediction.CastPosition and QPrediction:CanHit(self.Menu.Prediction.QHitChance:Value() + 1) then
-					Control.CastSpell(HK_Q, QPrediction.CastPosition)
-					gameTick = GameTimer() + 0.2
-					return
-				end
-				
+			if(IsValid(target)) then
+				CastPredictedSpell(HK_Q, target, Q, false, 2, Q.Radius + 15)
 			end
 		end
 	end
