@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.11
+scriptVersion = 1.14
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -56,9 +56,10 @@ function Illaoi:__init()
 	Callback.Add("Draw", function() self:Draw() end)
 
 	--Custom Callbacks
-	StrafePred()
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Illaoi:OnPreAttack(...) end)
 	_G.SDK.Orbwalker:OnPostAttack(function(...) Illaoi:OnPostAttack(...) end)
+
+	self:UpdateGoSMenuAutoLevel()
 end
 
 function Illaoi:LoadMenu()                     	
@@ -118,9 +119,69 @@ function Illaoi:LoadMenu()
 	self.Menu.Drawings.DamageHPBar:MenuElement({id = "AlwaysShow", name = "Always Show Damage Bar", value = false})
 	self.Menu.Drawings.DamageHPBar:MenuElement({id = "YOffset", name = "Y Offset", value = 60, min = -100, max = 100, step = 5})
 		
-	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (E - Q - W)", value = false})
 	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
 	
+end
+
+function Illaoi:UpdateGoSMenuAutoLevel()
+
+	--AutoLeveler	
+	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
+	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.AutoLevel:MenuElement({id = "StartingLevel", name = "Start Using At Level:", value = 3, min = 2, max = 18, step = 1})
+	self.Menu.AutoLevel:MenuElement({id = "FirstSkill", name = "First Skill Priority", drop = {"Q", "W", "E"}, value = 3, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.SecondSkill:Value() == 3) then
+					self.Menu.AutoLevel.SecondSkill:Value(1)
+				else
+					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
+				end
+			end
+			UpdateInfo()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 1, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.FirstSkill:Value() == 3) then
+					self.Menu.AutoLevel.FirstSkill:Value(1)
+				else
+					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
+				end
+			end
+			UpdateInfo()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
+	--
+	
+	function UpdateInfo()
+		self.Menu.AutoLevel.InfoText:Remove()
+		local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+		local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+		local thirdSkill = 0
+		local enumTable = {1, 2, 3}
+		enumTable[firstSkill] = nil
+		enumTable[secondSkill] = nil
+		for k, v in pairs(enumTable) do
+			thirdSkill = v
+		end
+
+		local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+		self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
+	end
+end
+
+function Illaoi:AutoLevel()
+	
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	skillPriority = GenerateSkillPriority(firstSkill, secondSkill)
+
+	AutoLeveler(skillPriority)
 end
 
 function Illaoi:Tick()
@@ -169,69 +230,11 @@ function Illaoi:Tick()
 		self:AutoEImmobile()
 	end
 	
-	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
+	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
 	end	
 end
 
-
-function Illaoi:AutoLevel()
-	if self.AutoLevelCheck then return end
-	
-	local level = myHero.levelData.lvl
-	local levelPoints = myHero.levelData.lvlPts
-
-	if (levelPoints == 0) or (level == 1) then return end
-	if (Game.mapID == HOWLING_ABYSS and level <= 3) then return end
-	--Order = Q > E > W
-	if(levelPoints >0) then
-		self.AutoLevelCheck = true
-		DelayAction(function()				
-				
-				--Levels 1 ~ 3
-				if level == 1 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_Q)
-					Control.KeyUp(HK_Q)
-					Control.KeyUp(HK_LUS)
-				elseif level == 2 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_W)
-					Control.KeyUp(HK_W)
-					Control.KeyUp(HK_LUS)
-				elseif level == 3 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
-					Control.KeyUp(HK_LUS)
-				end
-
-				if level == 6 or level == 11 or level == 16 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_R)
-					Control.KeyUp(HK_R)
-					Control.KeyUp(HK_LUS)
-				elseif level == 4 or level == 5 or level == 7 or level == 9 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
-					Control.KeyUp(HK_LUS)
-				elseif level == 8 or level == 10 or level == 12 or level == 13 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_Q)
-					Control.KeyUp(HK_Q)
-					Control.KeyUp(HK_LUS)
-				elseif level == 14 or level == 15 or level == 17 or level == 18 then				
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_W)
-					Control.KeyUp(HK_W)
-					Control.KeyUp(HK_LUS)
-				end
-		
-			self.AutoLevelCheck = false
-		end, 0.5)
-	end
-end
 
 Illaoi.HoldW = false
 function Illaoi:OnPreAttack(args)
@@ -476,72 +479,7 @@ function Illaoi:Combo()
 				end
 
 				if(shouldUseE) then
-					local isStrafing, avgPos = StrafePred:IsStrafing(tar)
-					local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(tar)
-					
-					if(isStrafing) then
-						if(avgPos:DistanceTo(myHero.pos) < E.Range) then
-							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, E.Speed, E.Delay, 115, E.CollisionTypes, tar.networkID)
-							if(collisionCount < E.MaxCollision) then
-								Control.CastSpell(HK_E, avgPos)
-								gameTick = GameTimer() + 0.2
-								return
-							end
-						end
-					end
-					if(isStutterDancing) then
-						if(avgPos2:DistanceTo(myHero.pos) < E.Range) then
-							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, E.Speed, E.Delay, 115, E.CollisionTypes, tar.networkID)
-							if(collisionCount < E.MaxCollision) then
-								Control.CastSpell(HK_E, avgPos2)
-								gameTick = GameTimer() + 0.2
-								return
-							end
-						end
-					end
-					
-					--We can use E on targets that are casting spells and are stationary briefly
-					if(tar.activeSpell.valid and tar.pathing.hasMovePath == false) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, tar.pos, E.Speed, E.Delay, 115, E.CollisionTypes, tar.networkID)
-						if(collisionCount < E.MaxCollision) then
-							Control.CastSpell(HK_E, tar.pos)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
-
-					--Angular Checked Pred
-					local EPrediction = GGPrediction:SpellPrediction(E)
-					EPrediction:GetPrediction(tar, myHero)
-					if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, E.Speed, E.Delay, 115, E.CollisionTypes, tar.networkID)
-						if(collisionCount < E.MaxCollision) then
-							--Precision: Let's avoid casting E on perpendicular-moving targets
-							if(tar.pathing.hasMovePath) then
-								local meVec = (myHero.pos - tar.pos):Normalized()
-								local pathVec = (tar.pathing.endPos - tar.pos):Normalized()
-								local res = dotProduct(meVec, pathVec)
-								if(res <= -0.35 or res >= 0.35) then
-									Control.CastSpell(HK_E, EPrediction.CastPosition)
-									gameTick = GameTimer() + 0.2
-									return
-								end
-							end
-						end
-					end
-
-					--High Precision Pred
-					local PreciseE = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 950, Radius = 37.5, Speed = 1900, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
-					local EPrediction = GGPrediction:SpellPrediction(PreciseE)
-					EPrediction:GetPrediction(tar, myHero)
-					if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 115, PreciseE.CollisionTypes, tar.networkID)
-						if(collisionCount < PreciseE.MaxCollision) then
-							Control.CastSpell(HK_E, EPrediction.CastPosition)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
+					CastPredictedSpell(HK_E, tar, E, false, 1)
 				end
 			end
 		end
@@ -682,32 +620,7 @@ function Illaoi:Harass()
 		if(Ready(_Q) and (myHero.mana / myHero.maxMana) * 100 >= self.Menu.Harass.QMana:Value() ) then
 			local tar = GetTarget(Q.Range)
 			if(tar and IsValid(tar) and tar.toScreen.onScreen) then
-				local isStrafing, avgPos = StrafePred:IsStrafing(tar)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(tar)
-				
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < Q.Range) then
-						Control.CastSpell(HK_Q, avgPos)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < Q.Range) then
-						Control.CastSpell(HK_Q, avgPos2)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-
-				local QPrediction = GGPrediction:SpellPrediction(Q)
-				QPrediction:GetPrediction(tar, myHero)
-				if QPrediction.CastPosition and QPrediction:CanHit(HITCHANCE_HIGH) then
-					Control.CastSpell(HK_Q, QPrediction.CastPosition)
-					gameTick = GameTimer() + 0.2
-					return
-				end
-
+				CastPredictedSpell(HK_Q, tar, Q)
 			end
 		end
 	end
@@ -855,85 +768,12 @@ function Illaoi:SemiManualE()
 	if(gameTick > GameTimer()) then return end	
 
 	--E
-
 	if(Ready(_E)) then
 		local tar = GetTarget(Q.Range + 25)
-		if(tar and IsValid(tar) and tar.toScreen.onScreen) then
-
-			local shouldUseE = true
-
-			if(shouldUseE) then
-				local isStrafing, avgPos = StrafePred:IsStrafing(tar)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(tar)
-				
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < E.Range) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, E.Speed, E.Delay, 100, E.CollisionTypes, tar.networkID)
-						if(collisionCount < E.MaxCollision) then
-							Control.CastSpell(HK_E, avgPos)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
-				end
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < E.Range) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, E.Speed, E.Delay, 100, E.CollisionTypes, tar.networkID)
-						if(collisionCount < E.MaxCollision) then
-							Control.CastSpell(HK_E, avgPos2)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
-				end
-				
-				--We can use E on targets that are casting spells and are stationary briefly
-				if(tar.activeSpell.valid and tar.pathing.hasMovePath == false) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, tar.pos, E.Speed, E.Delay, 100, E.CollisionTypes, tar.networkID)
-					if(collisionCount < E.MaxCollision) then
-						Control.CastSpell(HK_E, tar.pos)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-
-				--Angular Checked Pred
-				local EPrediction = GGPrediction:SpellPrediction(E)
-				EPrediction:GetPrediction(tar, myHero)
-				if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_HIGH) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, E.Speed, E.Delay, 100, E.CollisionTypes, tar.networkID)
-					if(collisionCount < E.MaxCollision) then
-						--Precision: Let's avoid casting E on perpendicular-moving targets
-						if(tar.pathing.hasMovePath) then
-							local meVec = (myHero.pos - tar.pos):Normalized()
-							local pathVec = (tar.pathing.endPos - tar.pos):Normalized()
-							local res = dotProduct(meVec, pathVec)
-							if(res <= -0.35 or res >= 0.35) then
-								Control.CastSpell(HK_E, EPrediction.CastPosition)
-								gameTick = GameTimer() + 0.2
-								return
-							end
-						end
-					end
-				end
-
-				--High Precision Pred
-				local PreciseE = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 950, Radius = 37.5, Speed = 1900, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
-				local EPrediction = GGPrediction:SpellPrediction(PreciseE)
-				EPrediction:GetPrediction(tar, myHero)
-				if EPrediction.CastPosition and EPrediction:CanHit(HITCHANCE_NORMAL) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, EPrediction.CastPosition, PreciseE.Speed, PreciseE.Delay, 100, PreciseE.CollisionTypes, tar.networkID)
-					if(collisionCount < PreciseE.MaxCollision) then
-						Control.CastSpell(HK_E, EPrediction.CastPosition)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-			end
+		if(IsValid(tar) and tar.toScreen.onScreen) then	
+			CastPredictedSpell(HK_E, tar, E, false, 1)
 		end
 	end
-
-
 end
 
 function Illaoi:SemiManualUltraR()
