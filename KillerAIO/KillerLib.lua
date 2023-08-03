@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.41
+local kLibVersion = 2.42
 
 -- [ AutoUpdate ]
 do
@@ -1629,9 +1629,31 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 		
 		if(extendedCheck) then
 			local SpellPrediction, isExtended = GetExtendedSpellPrediction(target, SpellData)
-			if SpellPrediction:CanHit(HITCHANCE_HIGH) then
-				Control.CastSpell(hotkey, SpellPrediction.CastPosition)
-				return
+			if(isExtended) then
+				if SpellPrediction:CanHit(HITCHANCE_HIGH) then
+					local result = myHero.pos:Extended(SpellPrediction.CastPosition, SpellData.Range-2)
+					Control.CastSpell(hotkey, result)
+					return true
+				end
+			else
+				local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
+				SpellPrediction:GetPrediction(target, myHero)
+				if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) then
+					if(GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
+	
+						if(maxCollision > 0) then
+							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, SpellPrediction.CastPosition, SpellData.Speed, SpellData.Delay, collisionWidthOverride, collisionTypes, target.networkID)
+							if(collisionCount < maxCollision) then
+								Control.CastSpell(hotkey, SpellPrediction.CastPosition)
+								return true
+							end
+						else
+							Control.CastSpell(hotkey, SpellPrediction.CastPosition)
+							return true
+						end
+	
+					end
+				end				
 			end
 		else
 			local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
