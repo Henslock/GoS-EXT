@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.00
+scriptVersion = 1.01
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Cho'Gath will exit.")
@@ -52,7 +52,7 @@ local FeastTable = {
 }
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.5, Range = 925, Radius = 250, Speed = math.huge, Collision = false}
+local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.4, Range = 925, Radius = 250, Speed = math.huge, Collision = false}
 local W = {Type = GGPrediction.SPELLTYPE_CONE, Delay = 0.5, Radius = 175, Range = 625, Speed = 28000, Collision = false}
 local ESpikes = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.3, Radius = 170, Range = 650, Speed = 1800, Collision = false}
 local R = {Range = 175}
@@ -91,7 +91,6 @@ function Chogath:__init()
 	Callback.Add("Draw", function() self:Draw() end)
 
 	--Custom Callbacks
-	StrafePred()
 	_G.SDK.Orbwalker:OnPostAttack(function(...) Chogath:OnPostAttack(...) end)
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Chogath:OnPreAttack(...) end)
 end
