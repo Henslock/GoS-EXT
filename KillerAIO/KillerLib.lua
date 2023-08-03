@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.38
+local kLibVersion = 2.39
 
 -- [ AutoUpdate ]
 do
@@ -102,6 +102,8 @@ MINION_CASTER = 2
 
 RUNNING_AWAY = -1
 RUNNING_TOWARDS = 1
+
+LEAGUE_ARENA = 30 --map ID
 
 _G.LATENCY = 0.05
 
@@ -260,7 +262,7 @@ local function OnChampStrafe(fn)
     table.insert(StrafePred.OnStrafePredCallback, fn)
 end
 
-
+StrafePred()
 
 --[[ DELAY ACTION ]]--
 
@@ -335,6 +337,7 @@ function AutoLeveler(skillPriority)
 
 	if (levelPoints == 0) or (level == 1) then return end
 	if (Game.mapID == HOWLING_ABYSS and level <= 3) then return end
+	if (Game.mapID == LEAGUE_ARENA) then return end
 	--[[
 	Rules:
 	- Prioritize Ult when it's attainable [6, 11, 16]
@@ -1283,13 +1286,19 @@ function UseFlash(pos)
 
 	if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_1).name == "SummonerCherryFlash" then
 		if(castAtPos) then
-			Control.CastSpell(HK_SUMMONER_1, pos)
+			if(GetDistance(myHero, pos) > 400) then
+				pos = myHero.pos:Extended(pos, 400)
+			end
+ 			Control.CastSpell(HK_SUMMONER_1, pos)
 		else
 			Control.CastSpell(HK_SUMMONER_1)
 		end
 	end
 	if myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_2).name == "SummonerCherryFlash" then
 		if(castAtPos) then
+			if(GetDistance(myHero, pos) > 400) then
+				pos = myHero.pos:Extended(pos, 400)
+			end
 			Control.CastSpell(HK_SUMMONER_2, pos)
 		else
 			Control.CastSpell(HK_SUMMONER_2)
@@ -1506,5 +1515,125 @@ function CantKill(unit, kill, ss, aa)
 		return true
 	end
 	
+	return false
+end
+
+function GetPrediction(target, spell_speed, casting_delay)
+	local caster_position = myHero.pos
+	local target_position = target.pos
+	local direction_vector = target.dir
+	local movement_speed = target.ms
+
+	if(target.pathing.hasMovePath) then
+		direction_vector = (target.pathing.endPos - target.pos):Normalized()
+	end
+	
+	-- Normalize direction_vector
+	local magnitude = math.sqrt(direction_vector.x^2 + direction_vector.z^2)
+	local normalized_direction_vector = {x = direction_vector.x / magnitude, z = direction_vector.z / magnitude}
+	
+	-- Target velocity vector
+	local target_velocity = {x = normalized_direction_vector.x * movement_speed, z = normalized_direction_vector.z * movement_speed}
+
+	-- If the spell_speed is math.huge (i.e., the spell travels instantaneously), return the predicted target_position after casting_delay
+	if spell_speed == math.huge then
+		return {x = target_position.x + target_velocity.x * casting_delay, z = target_position.z + target_velocity.z * casting_delay}
+	end
+
+	-- Calculate difference in positions
+	local delta_position = {x = target_position.x - caster_position.x, z = target_position.z - caster_position.z}
+
+	-- Quadratic equation coefficients
+	local a = (target_velocity.x^2 + target_velocity.z^2) - spell_speed^2
+	local b = 2 * (delta_position.x * target_velocity.x + delta_position.z * target_velocity.z)
+	local c = delta_position.x^2 + delta_position.z^2
+
+	-- Discriminant
+	local discriminant = b^2 - 4*a*c
+
+	-- If the discriminant is negative, no real solution exists
+	if discriminant < 0 then
+		return nil
+	end
+
+	-- Find the two possible solutions
+	local t1 = (-b + math.sqrt(discriminant)) / (2 * a)
+	local t2 = (-b - math.sqrt(discriminant)) / (2 * a)
+
+	-- We want the smallest positive t (if it exists)
+	local t = nil
+	if t1 > 0 and t2 > 0 then
+		t = math.min(t1, t2)
+	elseif t1 > 0 then
+		t = t1
+	elseif t2 > 0 then
+		t = t2
+	end
+
+	if t == nil then
+		return nil
+	end
+
+	-- Compute the interception point
+	local interception_point = {
+		x = target_position.x + target_velocity.x * t,
+		y = target_position.y,
+		z = target_position.z + target_velocity.z * t
+	}
+
+	return interception_point
+end
+
+
+function CastPredictedSpell(hotkey, target, SpellData, extendedCheck)
+	if(not IsValid(myHero) or myHero.dead) then return end
+	if(SpellData.Range == nil) then return end
+	SpellData.Speed = SpellData.Speed or math.huge
+	SpellData.Delay = SpellData.Delay or 0
+
+	if(IsValid(target) and CantKill(target, true, true, false)==false) then
+		local isStrafing, avgPos = StrafePred:IsStrafing(target)
+		local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
+		
+		if(isStrafing) then
+			if(avgPos:DistanceTo(myHero.pos) < SpellData.Range) then
+				Control.CastSpell(hotkey, avgPos)
+				return true
+			end
+		end
+		if(isStutterDancing) then
+			if(avgPos2:DistanceTo(myHero.pos) < SpellData.Range) then
+				Control.CastSpell(hotkey, avgPos2)
+				return true
+			end
+		end
+		
+		if(extendedCheck) then
+			local SpellPrediction, isExtended = GetExtendedSpellPrediction(target, SpellData)
+			if SpellPrediction:CanHit(HITCHANCE_HIGH) then
+				Control.CastSpell(hotkey, SpellPrediction.CastPosition)
+				return
+			end
+		else
+			local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
+			SpellPrediction:GetPrediction(target, myHero)
+			if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) then
+				if(GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
+					Control.CastSpell(hotkey, SpellPrediction.CastPosition)
+					return true
+				end
+			end
+		end
+
+		--If pred still doesn't want to go, we'll just use KillerLib pred
+		local enemyPredPos = Vector(GetPrediction(target, SpellData.Speed, SpellData.Delay))
+		if(enemyPredPos) then
+			if(GetDistance(enemyPredPos, myHero.pos) <= SpellData.Range - 50) then
+				Control.CastSpell(hotkey, enemyPredPos)
+				return true
+			end
+		end
+	end
+
 	return false
 end
