@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.43
+local kLibVersion = 2.44
 
 -- [ AutoUpdate ]
 do
@@ -747,6 +747,14 @@ function IsPositionUnderTurret(pos)
         end
     end
     return false
+end
+
+function IsTurretDiving(pos)
+	if(IsPositionUnderTurret(myHero.pos) == false and IsPositionUnderTurret(pos) == true) then
+		return true
+	end
+
+	return false
 end
 
 function IsUnderFriendlyTurret(unit)
@@ -1521,12 +1529,8 @@ end
 function GetPrediction(target, spell_speed, casting_delay)
 	local caster_position = myHero.pos
 	local target_position = target.pos
-	local direction_vector = target.dir
+	local direction_vector = target.pathing.hasMovePath and (target:GetPath(target.pathing.pathIndex) - target_position):Normalized() or target.dir
 	local movement_speed = target.ms
-
-	if(target.pathing.hasMovePath) then
-		direction_vector = (target.pathing.endPos - target.pos):Normalized()
-	end
 	
 	-- Normalize direction_vector
 	local magnitude = math.sqrt(direction_vector.x^2 + direction_vector.z^2)
