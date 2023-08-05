@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.44
+local kLibVersion = 2.45
 
 -- [ AutoUpdate ]
 do
@@ -1590,7 +1590,6 @@ end
 
 
 function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollision, collisionRadiusOverride)
-	if(not IsValid(myHero) or myHero.dead) then return end
 	if(SpellData.Range == nil) then return end
 
 	SpellData.Speed = SpellData.Speed or math.huge
