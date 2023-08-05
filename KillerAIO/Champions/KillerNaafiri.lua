@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -453,7 +453,13 @@ function Naafiri:Combo()
 			local target = GetTarget(E.Range)
 			if(IsValid(target)) then
 				if(GetDistance(target, myHero) >= 75) and (CantKill(target, true, true, false)==false) then
-					Control.CastSpell(HK_E, target.pos)
+					if(IsTurretDiving(target.pos)) then
+						if(self:IsKillable(target)) then
+							Control.CastSpell(HK_E, target.pos)
+						end
+					else
+						Control.CastSpell(HK_E, target.pos)
+					end
 				end
 			end
 		end
@@ -730,8 +736,10 @@ function Naafiri:LaneClear(laneMinions)
 				if(#clusterMinions >= 2) then
 					local clusterMinionsAvgPos = AverageClusterPosition(clusterMinions)
 					if(GetDistance(clusterMinionsAvgPos, myHero.pos) <= E.Range) then
-						Control.CastSpell(HK_E, clusterMinionsAvgPos)
-						return
+						if(IsTurretDiving(clusterMinionsAvgPos) == false) then
+							Control.CastSpell(HK_E, clusterMinionsAvgPos)
+							return
+						end
 					end
 				end
 			end
@@ -748,9 +756,10 @@ function Naafiri:LaneClear(laneMinions)
 				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, (GetDistance(myHero, canonMinion)/E.Speed))
 				
 				if ((hp > 0) and (canonMinion.health + 30 - EDam <= 0)) and GetDistance(myHero, canonMinion) <= E.Range and GetDistance(myHero, canonMinion) > 75  then
-					Control.CastSpell(HK_E, canonMinion.pos)
-					gameTick = GameTimer() + 0.2
-					return
+					if(IsTurretDiving(canonMinion.pos) == false) then
+						Control.CastSpell(HK_E, canonMinion.pos)
+						return
+					end
 				end
 			end
 		end
