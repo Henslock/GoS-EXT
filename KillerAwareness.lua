@@ -1,9 +1,9 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.16
+local scriptVersion = 1.17
 ----------------------------------------------------
---|                    AUTO UPDATE                       |--
+--|                    AUTO UPDATE               |--
 ----------------------------------------------------
 
 do
@@ -28,7 +28,7 @@ do
         end
         
         local function ReadFile(path, fileName)
-            local file = io.open(path .. fileName, "r")
+            local file = assert(io.open(path .. fileName, "r"))
             local result = file:read()
             file:close()
             return result
