@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.45
+local kLibVersion = 2.46
 
 -- [ AutoUpdate ]
 do
@@ -33,7 +33,7 @@ do
 		end
         
         local function ReadFile(path, fileName)
-            local file = io.open(path .. fileName, "r")
+            local file = assert(io.open(path .. fileName, "r"))
             local result = file:read()
             file:close()
             return result
@@ -1590,6 +1590,7 @@ end
 
 
 function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollision, collisionRadiusOverride)
+	if(IsValid(target) == false) then return end
 	if(SpellData.Range == nil) then return end
 
 	SpellData.Speed = SpellData.Speed or math.huge
@@ -1597,7 +1598,8 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 	maxCollision = maxCollision or 0
 	collisionRadiusOverride = collisionRadiusOverride or SpellData.Radius or 0
 	local collisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}
-	if(IsValid(target) and CantKill(target, true, true, false)==false) then
+
+	if(CantKill(target, true, true, false)==false) then
 		local isStrafing, avgPos = StrafePred:IsStrafing(target)
 		local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
 		
@@ -1697,5 +1699,5 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 		end
 	end
 
-	return false
+	return
 end
