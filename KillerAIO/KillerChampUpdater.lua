@@ -8,7 +8,7 @@ local champVersion = "Killer"..champName..".version"
 local gitHub = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/KillerAIO/Champions/"
 
 local function FileExists(path)
-	local file = io.open(path, "r")
+	local file = assert(io.open(path, "r"))
 	if file ~= nil then 
 		io.close(file) 
 		return true 
