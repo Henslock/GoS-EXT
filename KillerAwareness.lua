@@ -28,7 +28,7 @@ do
         end
         
         local function ReadFile(path, fileName)
-            local file = assert(io.open(path .. fileName, "r"))
+            local file = io.open(path .. fileName, "r")
             local result = file:read()
             file:close()
             return result
