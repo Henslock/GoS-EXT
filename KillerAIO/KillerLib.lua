@@ -17,7 +17,7 @@ do
     local function AutoUpdate()
 	
 		local function FileExists(path)
-			local file = io.open(path, "r")
+			local file = assert(io.open(path, "r"))
 			if file ~= nil then 
 				io.close(file) 
 				return true 
