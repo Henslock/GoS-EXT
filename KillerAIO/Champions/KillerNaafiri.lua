@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -299,7 +299,7 @@ end
 
 function Naafiri:Tick()
 	if(self.Menu.DisableInFountain:Value()) then
-		if(IsInFountain() or not myHero.alive) then
+		if(IsInFountain() or myHero.dead) then
 			_G.SDK.Orbwalker:SetMovement(false)
 		else
 			_G.SDK.Orbwalker:SetMovement(true)
@@ -307,7 +307,7 @@ function Naafiri:Tick()
 	else
 		_G.SDK.Orbwalker:SetMovement(true)
 	end
-	
+
 	if(MyHeroNotReady()) then return end	
 
 	local mode = GetMode()
@@ -416,7 +416,7 @@ end
 
 function Naafiri:Combo()
 	if(gameTick > GameTimer()) then return end
-	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	if not myHero.valid or myHero.dead or myHero.isChanneling then return end
 
 	if(self.Menu.Combo.UseIgnite:Value()) then
 		if(CanUseSummoner(myHero, "SummonerDot")) then
@@ -566,7 +566,7 @@ end
 
 function Naafiri:LastHit()
 	if(gameTick > GameTimer()) then return end	
-	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	if not myHero.valid or myHero.dead or myHero.isChanneling then return end
 
 	if(self.Menu.LastHit.UseECanon:Value() and Ready(_E)) then
 		local minions = _G.SDK.ObjectManager:GetEnemyMinions(E.Range)
@@ -609,7 +609,7 @@ end
 
 function Naafiri:Harass()
 	if(gameTick > GameTimer()) then return end	
-	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	if not myHero.valid or myHero.dead or myHero.isChanneling then return end
 
 	if(self.Menu.Harass.UseQ:Value()) then
 		if(Ready(_Q) and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
@@ -625,12 +625,12 @@ end
 
 function Naafiri:Flee()
 	if(gameTick > GameTimer()) then return end	
-	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	if not myHero.valid or myHero.dead or myHero.isChanneling then return end
 end
 
 function Naafiri:Clear()
 	if(gameTick > GameTimer()) then return end	
-	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	if not myHero.valid or myHero.dead or myHero.isChanneling then return end
 
 	local rangeCheck = math.max(Q.Range, self:GetWRange()) --Your W is further at max rank
 
@@ -1127,7 +1127,7 @@ function Naafiri:GetTotalDamage(unit)
 	totalDmg = totalDmg + AADmg
 
 	--This is not an accurate calculation of Duskblade since your damage would be dynamically updating with their health, but it's better than no calculation at all
-	if(self:HasItem(ITEM_DUSKBLADE)) then
+	if(self:HasDuskblade()) then
 		local duskMult = math.min(((1 - (unit.health / unit.maxHealth)) / 7) * 2, 0.2)
 		totalDmg= totalDmg * (1 + duskMult)
 	end
@@ -1236,6 +1236,16 @@ function Naafiri:HasItem(itemId)
 	return false
 end
 
+function Naafiri:HasDuskblade()
+    for i = ITEM_1, ITEM_7 do
+		local id = myHero:GetItemData(i).itemID
+        if id == ITEM_DUSKBLADE then
+			return true
+        end
+    end
+
+	return false 
+end
 
 function Naafiri:HasRActive()
 	local rBuff = GetBuffData(myHero, "NaafiriR")
