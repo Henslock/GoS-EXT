@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.46
+local kLibVersion = 2.47
 
 -- [ AutoUpdate ]
 do
@@ -1180,11 +1180,10 @@ function CheckDmgItems(itemID)
     return nil
 end
 
-function CalcMagicalDamage(source, target, amount, time)
+function CalcMagicalDamage(source, target, amount)
     local passiveMod = 0
-    
-    local totalMR = target.magicResist
 
+    local totalMR = target.magicResist
     if totalMR < 0 then
         passiveMod = 2 - 100 / (100 - totalMR)
     elseif totalMR * source.magicPenPercent - source.magicPen < 0 then
@@ -1197,13 +1196,10 @@ function CalcMagicalDamage(source, target, amount, time)
     
     if target.charName == "Kassadin" then
         dmg = dmg * 0.85
-	elseif target.charName == "Malzahar" and HasBuff(target, "malzaharpassiveshield") then
+    elseif target.charName == "Malzahar" and _G.SDK.BuffManager:HasBuff(target, "malzaharpassiveshield") then
 		dmg = dmg * 0.1
     end
     
-    if HasBuff(target, "cursedtouch") then
-        dmg = dmg + amount * 0.1
-    end
     return dmg
 end
 
@@ -1472,58 +1468,55 @@ function GetUnitRunDirection(unit, target)
 	return nil
 end
 
-function CantKill(unit, kill, ss, aa)
-	--set kill to true if you dont want to waste on undying/revive targets
-	--set ss to true if you dont want to cast on spellshield
-	--set aa to true if ability applies onhit (yone q, ez q etc)
-	
-	for i = 0, unit.buffCount do
-	
-		local buff = unit:GetBuff(i)
-		if buff.name:lower():find("kayler") and buff.count==1 then
-			return true
-		end
-	
-		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
-			return true
-		end
-		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
-			return true
-		end	
-		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
-			return true
-		end			
-		
-		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
-			return true
-		end
+function HasBuffType(unit, type)
+    local buffs = _G.SDK.BuffManager:GetBuffs(unit)
+    for i, buff in ipairs(buffs) do
+        if buff and buff.count > 0 and buff.type == type then
+            return true
+        end
+    end
+    return false
+end
 
-		if  buff.name:lower():find("morganae") and ss and buff.count==1 then
-			return true
-		end
-		
-		if (buff.name:lower():find("fioraw") or buff.name:lower():find("pantheone")) and buff.count==1 then
-			return true
-		end
-		
-		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
-			return true
-		end	
-	end
-	
-	if HasBuffType(unit, 4) and ss then
-		return true
-	end
-	
-	return false
+function CantKill(unit, kill, ss, aa)
+    -- Define conditions for each buff
+    local buffConditions = {
+        kayler = function() return true end,
+        undyingrage = function() return unit.health < 100 or kill end,
+        kindredrnodeathbuff = function() return kill or (unit.health / unit.maxHealth) < 0.11 end,
+        chronoshift = function() return kill end,
+        willrevive = function() return (unit.health / unit.maxHealth) >= 0.5 and kill end,
+        morganae = function() return ss end,
+        fioraw = true,
+        pantheone = true,
+        jaxcounterstrike = function() return aa end,
+        nilahw = function() return aa end,
+        shenwbuff = function() return aa end
+    }
+
+    -- Get buffs using SDK
+    local buffs = _G.SDK.BuffManager:GetBuffs(unit)
+
+    -- Iterate through buffs
+    for _, buff in ipairs(buffs) do
+        if buff.count > 0 then
+            local buffName = buff.name:lower()
+
+            -- Check conditions for each buff in table
+            for buffKey, buffCondition in pairs(buffConditions) do
+                if buffName:find(buffKey) and (type(buffCondition) == 'boolean' or buffCondition()) then
+                    return true
+                end
+            end
+        end
+    end
+
+    -- Additional condition check
+    if HasBuffType(unit, 4) and ss then
+        return true
+    end
+
+    return false
 end
 
 function GetPrediction(target, spell_speed, casting_delay)
