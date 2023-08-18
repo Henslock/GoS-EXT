@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.06
+scriptVersion = 1.07
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -99,6 +99,69 @@ local function OnSpellCast(fn)
     table.insert(SpellCast.OnSpellCastCallback, fn)
 end
 
+
+memoize = (function()
+	local function is_callable(f)
+	  local tf = type(f)
+	  if tf == 'function' then return true end
+	  if tf == 'table' then
+		local mt = getmetatable(f)
+		return type(mt) == 'table' and is_callable(mt.__call)
+	  end
+	  return false
+	end
+  
+	local function cache_get(cache, params, refreshTime)
+	  local node = cache
+	  for i = 1, #params do
+		node = node.children and node.children[params[i]]
+		if not node then return nil end
+	  end
+	  
+	  -- Check refresh time if provided
+	  if refreshTime and node.cachedResultTime and (node.cachedResultTime + refreshTime) <= os.clock() then
+		return nil
+	  end
+	  
+	  return node.results
+	end
+  
+	local function cache_put(cache, params, results)
+	  local node = cache
+	  local param
+	  for i = 1, #params do
+		param = params[i]
+		node.children = node.children or {}
+		node.children[param] = node.children[param] or {}
+		node = node.children[param]
+	  end
+	  node.results = results
+	  node.cachedResultTime = os.clock() -- Record the time when the result was cached
+	end
+  
+	local function memoize(f, cache)
+	  cache = cache or {}
+  
+	  if not is_callable(f) then
+		error(string.format(
+				"Only functions and callable tables are memoizable. Received %s (a %s)",
+				tostring(f), type(f)))
+	  end
+  
+	  return function (params, refreshTime)
+		local results = cache_get(cache, params, refreshTime)
+		if not results then
+		  results = { f(table.unpack(params)) }
+		  cache_put(cache, params, results)
+		end
+  
+		return table.unpack(results)
+	  end
+	end
+  
+	return memoize
+  end)()
+
 ----------------------------------------------------
 --|                Champion               		|--
 ----------------------------------------------------
@@ -133,7 +196,10 @@ Naafiri.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 Naafiri.PackmateData = {}
 Naafiri.ComboDamageData = {}
 
+local lastTick = GameTimer()
+
 function Naafiri:__init()
+
 	self:LoadMenu()
 	Callback.Add("Tick", function() self:Tick() end)
 	Callback.Add("Draw", function() self:Draw() end)
@@ -143,6 +209,7 @@ function Naafiri:__init()
 	_G.SDK.Orbwalker:OnPreMovement(function(...) Naafiri:OnPreMovement(...) end)
 
 	self:UpdateGoSMenuAutoLevel()
+
 end
 
 function Naafiri:LoadMenu()                     	
@@ -287,7 +354,6 @@ function Naafiri:UpdateGoSMenuAutoLevel()
 	end
 end
 
-
 function Naafiri:AutoLevel()
 	
 	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
@@ -296,7 +362,6 @@ function Naafiri:AutoLevel()
 
 	AutoLeveler(skillPriority)
 end
-
 function Naafiri:Tick()
 	if(self.Menu.DisableInFountain:Value()) then
 		if(IsInFountain() or myHero.dead) then
@@ -1117,7 +1182,7 @@ function Naafiri:GetTotalDamage(unit)
 	end
 
 	if(self:HasItem(ITEM_PROWLERSCLAW)) then
-		local prowlersDmg = 85 + (0.45 * myHero.bonusDamage)
+		local prowlersDmg = 85 + (0.55 * myHero.bonusDamage)
 		prowlersDmg = CalcPhysicalDamage(myHero, unit, prowlersDmg)
 		totalDmg= totalDmg + prowlersDmg
 	end
@@ -1128,7 +1193,7 @@ function Naafiri:GetTotalDamage(unit)
 
 	--This is not an accurate calculation of Duskblade since your damage would be dynamically updating with their health, but it's better than no calculation at all
 	if(self:HasDuskblade()) then
-		local duskMult = math.min(((1 - (unit.health / unit.maxHealth)) / 7) * 2, 0.2)
+		local duskMult = math.min(((1 - (unit.health / unit.maxHealth)) / 7) * 1.8, 0.18)
 		totalDmg= totalDmg * (1 + duskMult)
 	end
 
@@ -1379,7 +1444,7 @@ local alphaLerp = 0
 local lerpS, lerpE = nil, nil
 function Naafiri:Draw()
 	if myHero.dead then return end
-
+	--local missileCount = memoizeMissileCount({}, 2)
 	if(self.Menu.Drawings.DrawQ:Value()) then
 		if(myHero:GetSpellData(_Q).level > 0) then
 			if(myHero:GetSpellData(_Q).currentCd == 0) then
