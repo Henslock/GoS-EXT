@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.07
+scriptVersion = 1.08
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -488,7 +488,7 @@ function Naafiri:Combo()
 			local igniteRange = 600
 			local target = GetTarget(igniteRange)
 			if(IsValid(target)) then
-				if(GetDistance(target, myHero) <= igniteRange) and (CantKill(target, true, true, false)==false) then
+				if(GetDistance(target, myHero) <= igniteRange) and (CantKill(target, true, false, false)==false) then
 
 					local overkillCheck = self:CalculateOverkillAmount(target)
 					local igniteDmg = 50 + (20 * myHero.levelData.lvl)
@@ -517,7 +517,7 @@ function Naafiri:Combo()
 		if(Ready(_E)) then
 			local target = GetTarget(E.Range)
 			if(IsValid(target)) then
-				if(GetDistance(target, myHero) >= 75) and (CantKill(target, true, true, false)==false) then
+				if(GetDistance(target, myHero) >= 75) and (CantKill(target, true, false, false)==false) then
 					if(IsTurretDiving(target.pos)) then
 						if(self:IsKillable(target)) then
 							Control.CastSpell(HK_E, target.pos)
@@ -881,7 +881,7 @@ function Naafiri:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
-						if((CantKill(enemy, true, true, false)==false)) then
+						if((CantKill(enemy, true, false, false)==false)) then
 
 							--Full E damage
 							if(myHero.pos:DistanceTo(enemy.pos) <= E.Range) then
