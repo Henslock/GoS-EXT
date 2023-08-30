@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.08
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -1240,11 +1240,11 @@ function Naafiri:GetRawAbilityDamage(spell)
 	end
 
 	if(spell == "E") then
-		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_E).level] + (1.5 * myHero.bonusDamage)
+		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_E).level] + (1.3 * myHero.bonusDamage)
 	end
 
 	if(spell == "EFlurry") then
-		return ({65, 100, 135, 170, 205})[myHero:GetSpellData(_E).level] + (0.9 * myHero.bonusDamage)
+		return ({65, 100, 135, 170, 205})[myHero:GetSpellData(_E).level] + (0.8 * myHero.bonusDamage)
 	end
 
 	return 0
@@ -1261,7 +1261,7 @@ function Naafiri:GetQ2Damage(unit)
 			popDamage = popDamage * tickAmount
 		end
 		local missingHPRatio = (1 - (unit.health / unit.maxHealth))
-		dmg = ({35, 50, 65, 80, 95})[myHero:GetSpellData(_Q).level] + (0.7 * myHero.bonusDamage)
+		dmg = ({30, 45, 60, 75, 90})[myHero:GetSpellData(_Q).level] + (0.4 * myHero.bonusDamage)
 		dmg = dmg * (1 + missingHPRatio)
 		return dmg + popDamage
 	end
@@ -1277,7 +1277,7 @@ function Naafiri:GetQ2MaxPossibleDamage(unit)
 		popDamage = popDamage * tickAmount
 
 		local missingHPRatio = (1 - (unit.health / unit.maxHealth))
-		dmg = ({35, 50, 65, 80, 95})[myHero:GetSpellData(_Q).level] + (0.7 * myHero.bonusDamage)
+		dmg = ({30, 45, 60, 75, 90})[myHero:GetSpellData(_Q).level] + (0.4 * myHero.bonusDamage)
 		dmg = dmg * (1 + missingHPRatio)
 		return dmg + popDamage
 	end
