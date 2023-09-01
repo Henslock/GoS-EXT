@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.47
+local kLibVersion = 2.48
 
 -- [ AutoUpdate ]
 do
@@ -726,10 +726,12 @@ function GetAllyHeroes(range, bbox)
 end
 
 function IsUnderTurret(unit)
-	for i, turret in ipairs(GetEnemyTurrets()) do
-        local range = (turret.boundingRadius + 750 + unit.boundingRadius / 2)
+    local boundingRadius = unit.boundingRadius or 0
+    local unitpos = unit.pos or unit
+    for i, turret in ipairs(GetEnemyTurrets()) do
+        local range = (turret.boundingRadius + 750 + boundingRadius / 2)
         if not turret.dead then 
-            if turret.pos:DistanceTo(unit.pos) < range then
+            if turret.pos:DistanceTo(unitpos) < range then
                 return true
             end
         end
@@ -1520,6 +1522,7 @@ function CantKill(unit, kill, ss, aa)
 end
 
 function GetPrediction(target, spell_speed, casting_delay)
+	if(not IsValid(target)) then return end
 	local caster_position = myHero.pos
 	local target_position = target.pos
 	local direction_vector = target.pathing.hasMovePath and (target:GetPath(target.pathing.pathIndex) - target_position):Normalized() or target.dir
