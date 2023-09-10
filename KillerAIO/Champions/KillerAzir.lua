@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -220,6 +220,7 @@ function Azir:LoadMenu()
 	self.Menu.Clear.Lane:MenuElement({id = "UseQCanon", name = "Use Q to Last Hit Canon", value = true})
 	self.Menu.Clear.Lane:MenuElement({id = "UseW", name = "Use W on Minion Clusters", value = true})
 	self.Menu.Clear.Lane:MenuElement({id = "WLevelReq", name = "Don't Use W until Level", value = 6, min = 1, max = 18, step = 1})
+	self.Menu.Clear.Lane:MenuElement({id = "QLevelReq", name = "Don't Use Q Reposition until Level", value = 6, min = 1, max = 18, step = 1})
 	self.Menu.Clear.Lane:MenuElement({id = "WSoldierLevelReq", name = "Keep At Least 1 Soldier Charge Until Level: ", value = 9, min = 1, max = 18, step = 1})
 	self.Menu.Clear.Lane:MenuElement({id = "MinimumManaQ", name = "Minimum Mana to Q", value = 50, min = 0, max = 100, step = 5, identifier = "%"})
 
@@ -454,7 +455,7 @@ function Azir:Combo()
 								local dir = (ultCastPos - myHero.pos):Normalized()
 								ultCastPos = myHero.pos + (dir*400)
 
-								if(self:IsPointInRRectangle(tarPredPos, myHero.pos, dir)) then
+								if(self:IsPointInRRectangle(tarPredPos, myHero.pos, dir, 20)) then
 									if(not (myHero.pathing and myHero.pathing.isDashing)) then
 										Control.CastSpell(HK_R, ultCastPos)
 									end
@@ -500,12 +501,12 @@ function Azir:Combo()
 										--Use E to gapclose
 										if(Ready(_E)) then
 											local closestSoldier = self:GetClosestSoldierFromPos(tar.pos)
-											if(closestSoldier and GetDistance(closestSoldier.pos, tar.pos)  <= 250) then
+											if(closestSoldier and GetDistance(closestSoldier.pos, tar.pos)  <= 250 and IsPositionUnderTurret(closestSoldier.pos)==false) then
 												Control.CastSpell(HK_E, closestSoldier)
 											end
 										end
 
-										if(self:IsPointInRRectangle(tar.pos, myHero.pos, dir, 20)) then
+										if(self:IsPointInRRectangle(tar.pos, myHero.pos, dir)) then
 											Control.CastSpell(HK_R, ultCastPos)
 										end
 									end
@@ -645,7 +646,7 @@ function Azir:Combo()
 		--E Bodyslam
 		if(self.Menu.Combo.Killsteal.UseE:Value()) then
 			if(Ready(_E)) then
-				local enemies = GetEnemyHeroes(1500)
+				local enemies = GetEnemyHeroes(1650)
 				local enemyCheck = false
 
 				--If we have UseEAlone on, we only want to E if there's 1 target.
@@ -792,7 +793,7 @@ function Azir:Clear()
 		end
 	end
 
-	if(#jungleMinions > 0) then
+	if(#jungleMinions > 0) and IsUnderFriendlyTurret(myHero) == false and IsUnderTurret(myHero) == false then
 		self:JungleClear(jungleMinions)
 	end
 
@@ -924,17 +925,19 @@ function Azir:LaneClear(minions)
 
 		--Reposition if your W isnt on any minions
 		if(self.Menu.Clear.Lane.UseQReposition:Value()) then
-			if(myHero.mana/myHero.maxMana >= self.Menu.Clear.Lane.MinimumManaQ:Value()/100) then
-				if(Ready(_Q) and self:GetSoldierCount() >= 1) then
-					if(soldierIsOnMinions == false) then
-						local clusterMinions = GetMinionsAroundMinion(W.Range, W.Radius + SoldierRadius, minion)
-						if(#clusterMinions >= 1) then 
-							local clusterMinionsAvgPos = AverageClusterPosition(clusterMinions)
-							Control.CastSpell(HK_Q, clusterMinionsAvgPos)
-							return
-						else
-							Control.CastSpell(HK_Q, minion.pos)
-							return
+			if(myHero.levelData.lvl >= self.Menu.Clear.Lane.QLevelReq:Value()) then
+				if(myHero.mana/myHero.maxMana >= self.Menu.Clear.Lane.MinimumManaQ:Value()/100) then
+					if(Ready(_Q) and self:GetSoldierCount() >= 1) then
+						if(soldierIsOnMinions == false) then
+							local clusterMinions = GetMinionsAroundMinion(W.Range, W.Radius + SoldierRadius, minion)
+							if(#clusterMinions >= 1) then 
+								local clusterMinionsAvgPos = AverageClusterPosition(clusterMinions)
+								Control.CastSpell(HK_Q, clusterMinionsAvgPos)
+								return
+							else
+								Control.CastSpell(HK_Q, minion.pos)
+								return
+							end
 						end
 					end
 				end
