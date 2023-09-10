@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.00
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -235,6 +235,7 @@ function Azir:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawSoldierTether", name = "Draw Soldier Tether", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawSoldierTetherRadius", name = "Draw Soldier Tether Radius", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawRevenantUI", name = "Draw Revenant UI", value = true})
+	self.Menu.Drawings:MenuElement({id = "DrawFlashText", name = "Draw Flash Combo Text", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawE", name = "Draw E Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DamageHPBar", name = "Damage HP Bar", type = MENU})
 
@@ -504,7 +505,7 @@ function Azir:Combo()
 											end
 										end
 
-										if(self:IsPointInRRectangle(tar.pos, myHero.pos, dir)) then
+										if(self:IsPointInRRectangle(tar.pos, myHero.pos, dir, 20)) then
 											Control.CastSpell(HK_R, ultCastPos)
 										end
 									end
@@ -589,7 +590,7 @@ function Azir:Combo()
 
 			local tar = GetTarget(searchRange) --Extend the range a bit. We just need the soldier to get into AA range, so the Q doesn't have to necessarily land right on the target.
 			if(IsValid(tar)) then
-				local WPred = GetPrediction(tar, 2200, 0.3)
+				local WPred = GetPrediction(tar, 2000, 0.3)
 				if(tar.pathing and tar.pathing.isDashing) then
 					WPred = tar.pathing.endPos
 				end
@@ -1317,9 +1318,10 @@ function Azir:CanUltTrapAtPoint(point)
 	return false
 end
 
-function Azir:IsPointInRRectangle(point, castPos, directionVec)
-	local sPos = castPos + (directionVec*-285)
-	local ePos = castPos + (directionVec*365)
+function Azir:IsPointInRRectangle(point, castPos, directionVec, buffer)
+	local ultBuffer = buffer or 0
+	local sPos = castPos + (directionVec*-(285-ultBuffer))
+	local ePos = castPos + (directionVec*(365-ultBuffer))
 
 	local p, isOnSegment = ClosestPointOnLineSegment(point, sPos, ePos)
 	if(isOnSegment) then
@@ -2230,17 +2232,19 @@ function Azir:Draw()
 		end
 	end
 
-	local fontSize = 20
-	local pos = {x = myHero.pos:To2D().x - fontSize - 65, y = myHero.pos:To2D().y + 30}
-	if(self.Menu.Combo.ToggleFlash:Value()) then
-		if(CanFlash()) then
-			DrawText("Flash Combo Enabled", fontSize, Vector(pos), DrawColor(255, 80, 255, 80))
+	if(self.Menu.Drawings.DrawFlashText:Value()) then
+		local fontSize = 20
+		local pos = {x = myHero.pos:To2D().x - fontSize - 65, y = myHero.pos:To2D().y + 30}
+		if(self.Menu.Combo.ToggleFlash:Value()) then
+			if(CanFlash()) then
+				DrawText("Flash Combo Enabled", fontSize, Vector(pos), DrawColor(255, 80, 255, 80))
+			else
+				pos = {x = myHero.pos:To2D().x - fontSize - 25, y = myHero.pos:To2D().y + 30}
+				DrawText("Flash On CD", fontSize, Vector(pos), DrawColor(85, 80, 80, 80))
+			end
 		else
-			pos = {x = myHero.pos:To2D().x - fontSize - 25, y = myHero.pos:To2D().y + 30}
-			DrawText("Flash On CD", fontSize, Vector(pos), DrawColor(85, 80, 80, 80))
+			DrawText("Flash Combo Disabled", fontSize, Vector(pos), DrawColor(85, 80, 80, 80))
 		end
-	else
-		DrawText("Flash Combo Disabled", fontSize, Vector(pos), DrawColor(85, 80, 80, 80))
 	end
 
 	if(self.Menu.Drawings.DamageHPBar.DrawDamageHPBar:Value()) then
