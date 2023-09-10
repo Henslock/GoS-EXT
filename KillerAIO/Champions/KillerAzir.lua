@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.03
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -1187,7 +1187,7 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 	end
 
 	-- #3
-	local allies = GetAllyHeroes(1500)
+	local allies = GetAllyHeroes(2100)
 	if(#allies >= 1) then
 		local bestPos, count = CalculateBestCirclePosition(allies, 450, false)
 		if(count >= 2) then
