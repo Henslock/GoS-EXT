@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -156,10 +156,10 @@ function Azir:LoadMenu()
 
 	-- Ult priority
 	self.Menu:MenuElement({id = "UltPrio", name = "Ult Priority List", type = MENU})
-	self.Menu.UltPrio:MenuElement({name = "1. Towards a Terrain Trap", type = SPACE})
-	self.Menu.UltPrio:MenuElement({name = "2. Towards Ally Tower", type = SPACE})
-	self.Menu.UltPrio:MenuElement({name = "3. Towards Team Cluster", type = SPACE})
-	self.Menu.UltPrio:MenuElement({name = "4. Towards Healthiest/Tankiest Ally", type = SPACE})
+	self.Menu.UltPrio:MenuElement({id = "Prio1", name = "1. Towards a Terrain Trap", value = true})
+	self.Menu.UltPrio:MenuElement({id = "Prio2",name = "2. Towards Ally Tower", value = true})
+	self.Menu.UltPrio:MenuElement({id = "Prio3",name = "3. Towards Team Cluster", value = true})
+	self.Menu.UltPrio:MenuElement({id = "Prio4",name = "4. Towards Healthiest/Tankiest Ally", value = true})
 	self.Menu.UltPrio:MenuElement({name = "5. Towards Engage Position", type = SPACE})
 	-- Combo
 	self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
@@ -169,6 +169,7 @@ function Azir:LoadMenu()
 	self.Menu.Combo:MenuElement({id = "WSettings", name = "W Settings", type = MENU})
 	self.Menu.Combo:MenuElement({id = "UseSmartR", name = "Use Smart R Combo", value = true})
 	self.Menu.Combo:MenuElement({id = "SmartRSettings", name = "Smart R Settings", type = MENU})
+	self.Menu.Combo:MenuElement({id = "RMeleePeel", name = "R Melee Champ Peel", type = MENU})
 	self.Menu.Combo:MenuElement({id = "ToggleFlash", name = "Toggle Flash Usage for R", toggle = 20, value = false})
 	self.Menu.Combo:MenuElement({name = "----- INSEC ULT SETTINGS -----", type = SPACE})
 	self.Menu.Combo:MenuElement({id = "RPull", name = "R Shuffle Combo", key = string.byte("Z")})
@@ -195,6 +196,13 @@ function Azir:LoadMenu()
 	self.Menu.Combo.SmartRSettings:MenuElement({id = "ShouldPush", name = "Push Away if Azir's HP is Low", value = true})
 	self.Menu.Combo.SmartRSettings:MenuElement({id = "PushCheck", name = "Push Away if Azir's HP is Below:", value = 30, min = 0, max = 100, step = 5, identifier = "%"})
 
+
+	-- R Melee Peel
+	self.Menu.Combo.RMeleePeel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
+		local charName = args.charName
+		self.Menu.Combo.RMeleePeel:MenuElement({id = charName, name = charName, value = true})
+	end)
 
 	-- Flee
 	self.Menu:MenuElement({id = "Flee", name = "Flee", type = MENU})
@@ -568,6 +576,31 @@ function Azir:Combo()
 	end
 	SmartR()
 
+	--Melee Peel R
+	if(self.Menu.Combo.RMeleePeel.Enabled:Value()) then
+		if(Ready(_R)) then
+			local enemies = GetEnemyHeroes(375)
+			if(#enemies > 0) then
+				for _, enemy in pairs(enemies) do
+					if(IsValid(enemy) and enemy.range <= 250 and GetDistance(myHero, enemy) <= 200) then
+						if(self.Menu.Combo.RMeleePeel[enemy.charName]) then
+							if(self.Menu.Combo.RMeleePeel[enemy.charName]:Value()) then
+								-- We can cast
+								local ultCastPos = self:GenerateRPriorityPosition(myHero.pos)
+								if(ultCastPos) then
+									local dir = (ultCastPos - myHero.pos):Normalized()
+									ultCastPos = myHero.pos + (dir*400)
+									Control.CastSpell(HK_R, ultCastPos)
+									print("Azir Ult Melee Peel!")
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
 	--Auto Q
 	if(self.Menu.Combo.AutoQ:Value()) then
 		local tar = GetTarget(Q.Range + SoldierRadius*0.75) --Extend the range a bit. We just need the soldier to get into AA range, so the Q doesn't have to necessarily land right on the target.
@@ -591,15 +624,18 @@ function Azir:Combo()
 
 			local tar = GetTarget(searchRange) --Extend the range a bit. We just need the soldier to get into AA range, so the Q doesn't have to necessarily land right on the target.
 			if(IsValid(tar)) then
-				local WPred = GetPrediction(tar, 2000, 0.3)
+				local WDelay = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 525, Radius = 100, Speed = 2000}
+				local WPred = GGPrediction:SpellPrediction(WDelay) --Get the targets predicted position
+				WPred:GetPrediction(tar, myHero)
+				local predPos = Vector(WPred.CastPosition.x, tar.pos.y, WPred.CastPosition.z) or tar.pos
 				if(tar.pathing and tar.pathing.isDashing) then
-					WPred = tar.pathing.endPos
+					predPos = tar.pathing.endPos
 				end
-				if(WPred) then
-					if(GetDistance(myHero.pos, WPred) <= searchRange) then
+				if(predPos) then
+					if(GetDistance(myHero.pos, predPos) <= searchRange and GetDistance(myHero.pos, tar.pos) <= searchRange) then
 
-						local dist = math.min(GetDistance(myHero, WPred), W.Range)
-						local castPos = myHero.pos:Extended(WPred, dist)
+						local dist = math.min(GetDistance(myHero, predPos), W.Range)
+						local castPos = myHero.pos:Extended(predPos, dist)
 						if(self:IsSoldierOnPosition(castPos) == false) then
 
 							local towerCheck = true	
@@ -630,7 +666,14 @@ function Azir:Combo()
 							if(CantKill(enemy, true, false, false)==false) then
 								if(GetDistance(myHero, enemy) <= Q.Range + SoldierRadius*0.75) then
 
-									local dmg = self:GetRawAbilityDamage("W") + self:GetRawAbilityDamage("Q")
+									local dmg = self:GetRawAbilityDamage("Q")
+									local sCount = self:GetSoldierCount()
+									if(sCount > 1) then
+										dmg = dmg + self:GetRawAbilityDamage("W")
+										dmg = dmg + (self:GetRawAbilityDamage("W")* 0.25 * (sCount - 1))
+									else
+										dmg = dmg + self:GetRawAbilityDamage("W")
+									end
 									dmg = CalcMagicalDamage(myHero, enemy, dmg)
 									if(enemy.health - dmg <= 0) then
 										self:AttackQOnUnit(enemy)
@@ -1108,106 +1151,112 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 	]]
 
 	-- #1
-	local canTrap, trapPos = self:CanUltTrapAtPoint(checkFromPos)
-	if(canTrap) then
-		--print("Trapping" ..GameTimer())
-		return trapPos
+	if(self.Menu.UltPrio.Prio1:Value()) then
+		local canTrap, trapPos = self:CanUltTrapAtPoint(checkFromPos)
+		if(canTrap) then
+			--print("Trapping" ..GameTimer())
+			return trapPos
+		end
 	end
+	
+	if(self.Menu.UltPrio.Prio2:Value()) then
+		local function FetchClosestTurret()
+			local azirTurr, friendlyTurr = nil, nil
 
-	local function FetchClosestTurret()
-		local azirTurr, friendlyTurr = nil, nil
+			local function FetchAzirTurret()
+				-- #2 (Azir Turret)
+				if(self.PassiveTurret and not self.PassiveTurret.dead) then
+					if(GetDistance(self.PassiveTurret, checkFromPos) <= 3000) then
 
-		local function FetchAzirTurret()
-			-- #2 (Azir Turret)
-			if(self.PassiveTurret and not self.PassiveTurret.dead) then
-				if(GetDistance(self.PassiveTurret, checkFromPos) <= 3000) then
-
-					--We're comfortable ulting towards the tower if there's a clear line of sight from us towards it.
-					--We're also comfortable ulting towards the tower if it will knock enemies under it across walls.
-					local intersectCheck = MapPosition:getIntersectionPoint3D(checkFromPos, self.PassiveTurret.pos)
-					if GetDistance(intersectCheck, self.PassiveTurret.pos) <= 400 or not intersectCheck then
-						return self.PassiveTurret
-					end
-
-					if(intersectCheck) then
-						local dirCastPos = checkFromPos:Extended(self.PassiveTurret.pos, 650)
-						if(GetDistance(self.PassiveTurret, dirCastPos) <= 1000 and self:HasWallFailure(checkFromPos, dirCastPos, 325) == false) then
+						--We're comfortable ulting towards the tower if there's a clear line of sight from us towards it.
+						--We're also comfortable ulting towards the tower if it will knock enemies under it across walls.
+						local intersectCheck = MapPosition:getIntersectionPoint3D(checkFromPos, self.PassiveTurret.pos)
+						if GetDistance(intersectCheck, self.PassiveTurret.pos) <= 400 or not intersectCheck then
 							return self.PassiveTurret
 						end
-					end
-				end		
+
+						if(intersectCheck) then
+							local dirCastPos = checkFromPos:Extended(self.PassiveTurret.pos, 650)
+							if(GetDistance(self.PassiveTurret, dirCastPos) <= 1000 and self:HasWallFailure(checkFromPos, dirCastPos, 325) == false) then
+								return self.PassiveTurret
+							end
+						end
+					end		
+				end
 			end
-		end
 
-		local function FetchFriendlyTurret()
-			-- #2
-			local closestTurret = GetClosestFriendlyTurret()
-			if(closestTurret) then
-				if(GetDistance(closestTurret, checkFromPos) <= 3000) then
+			local function FetchFriendlyTurret()
+				-- #2
+				local closestTurret = GetClosestFriendlyTurret()
+				if(closestTurret) then
+					if(GetDistance(closestTurret, checkFromPos) <= 3000) then
 
-					--We're comfortable ulting towards the tower if there's a clear line of sight from us towards it.
-					--We're also comfortable ulting towards the tower if it will knock enemies under it across walls.
-					local intersectCheck = MapPosition:getIntersectionPoint3D(checkFromPos, closestTurret.pos)
-					if GetDistance(intersectCheck, closestTurret.pos) <= 400 or not intersectCheck then
-						return closestTurret
-					end
-
-					if(intersectCheck) then
-						local dirCastPos = checkFromPos:Extended(closestTurret.pos, 650)
-						if(GetDistance(closestTurret, dirCastPos) <= 1000 and self:HasWallFailure(checkFromPos, dirCastPos, 325) == false) then
+						--We're comfortable ulting towards the tower if there's a clear line of sight from us towards it.
+						--We're also comfortable ulting towards the tower if it will knock enemies under it across walls.
+						local intersectCheck = MapPosition:getIntersectionPoint3D(checkFromPos, closestTurret.pos)
+						if GetDistance(intersectCheck, closestTurret.pos) <= 400 or not intersectCheck then
 							return closestTurret
+						end
+
+						if(intersectCheck) then
+							local dirCastPos = checkFromPos:Extended(closestTurret.pos, 650)
+							if(GetDistance(closestTurret, dirCastPos) <= 1000 and self:HasWallFailure(checkFromPos, dirCastPos, 325) == false) then
+								return closestTurret
+							end
 						end
 					end
 				end
 			end
+
+			azirTurr = FetchAzirTurret()
+			friendlyTurr = FetchFriendlyTurret()
+			if(azirTurr and friendlyTurr) then
+				if(GetDistance(azirTurr.pos, checkFromPos) <= GetDistance(friendlyTurr.pos, checkFromPos)) then
+					return azirTurr
+				else
+					return friendlyTurr
+				end
+			else
+				if(azirTurr) then
+					return azirTurr
+				else
+					return friendlyTurr
+				end
+			end
+
+			return nil
 		end
 
-		azirTurr = FetchAzirTurret()
-		friendlyTurr = FetchFriendlyTurret()
-		if(azirTurr and friendlyTurr) then
-			if(GetDistance(azirTurr.pos, checkFromPos) <= GetDistance(friendlyTurr.pos, checkFromPos)) then
-				return azirTurr
-			else
-				return friendlyTurr
-			end
-		else
-			if(azirTurr) then
-				return azirTurr
-			else
-				return friendlyTurr
-			end
+		local towerResult = FetchClosestTurret()
+		if(towerResult) then
+			return towerResult.pos
 		end
-
-		return nil
-	end
-
-	local towerResult = FetchClosestTurret()
-	if(towerResult) then
-		return towerResult.pos
 	end
 
 	-- #3
 	local allies = GetAllyHeroes(2100)
 	if(#allies >= 1) then
 		local bestPos, count = CalculateBestCirclePosition(allies, 450, false)
-		if(count >= 2) then
+		if(count >= 2) and (self.Menu.UltPrio.Prio3:Value()) then
 			return bestPos
 		end
 
 		-- #4
-		local tankiestAlly = nil
-		for _, ally in ipairs(allies) do
-			if(ally.health / ally.maxHealth >= 0.5 and ally.health > myHero.health) then
-				if(tankiestAlly == nil) then tankiestAlly = ally end
+		if(self.Menu.UltPrio.Prio4:Value()) then
+			local tankiestAlly = nil
+			for _, ally in ipairs(allies) do
+				if(ally.health / ally.maxHealth >= 0.5 and ally.health > myHero.health) then
+					if(tankiestAlly == nil) then tankiestAlly = ally end
 
-				if(ally.health > tankiestAlly.health) then
-					tankiestAlly = ally
+					if(ally.health > tankiestAlly.health) then
+						tankiestAlly = ally
+					end
 				end
 			end
-		end
 
-		if(IsValid(tankiestAlly)) then
-			return tankiestAlly.pos
+			if(IsValid(tankiestAlly)) then
+				return tankiestAlly.pos
+			end
 		end
 	end
 
@@ -1383,7 +1432,7 @@ function Azir:RPullCombo()
 			end
 
 			if(bestPos) then
-				if(not dashingCheck or GetDistance(myHero, bestPos) <= 200) then
+				if(not dashingCheck or GetDistance(myHero, bestPos) <= 175) then
 					if(self.EngagePosition == nil) then
 						self.EngagePosition = bestPos:Extended(myHero.pos, GetDistance(myHero, bestPos) + 100)
 					end
@@ -1423,7 +1472,7 @@ function Azir:RPullCombo()
 					end	
 				end	
 			else
-				if(not dashingCheck or GetDistance(myHero, tar.pos) <= 250) then
+				if(not dashingCheck or GetDistance(myHero, tar.pos) <= 200) then
 					if(self.EngagePosition == nil) then
 						self.EngagePosition = tar.pos:Extended(myHero.pos, GetDistance(myHero, tar) + 100)
 					end
@@ -1431,7 +1480,7 @@ function Azir:RPullCombo()
 					if(pos) then
 						local dir = (pos - myHero.pos):Normalized()
 						pos = myHero.pos + (dir*400)
-						local rectCheck = self:IsPointInRRectangle(tar.pos, myHero.pos, dir)
+						local rectCheck = self:IsPointInRRectangle(tar.pos, myHero.pos, dir, 20)
 						if(rectCheck) then
 							Control.CastSpell(HK_R, pos)
 							self.RTravelPos = nil
