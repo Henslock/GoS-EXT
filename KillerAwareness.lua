@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.20
+local scriptVersion = 1.21
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -276,7 +276,7 @@ local ChampionSprites = {}
 local ChampionHaloData = {}
 local TrackerData = {}
 
-local AutoWardPing, ChampionTracker, MinimapHack
+local AutoWardPing, ChampionTracker, MinimapHack, SmiteManager
 
 local MIATimer = 5
 local haloCD = 10
@@ -285,6 +285,7 @@ KillerAwareness.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolut
 KillerAwareness.AllowMove = nil
 KillerAwareness.ChampionTrackerLoaded = false
 KillerAwareness.MinimapTrackerLoaded = false
+KillerAwareness.SmiteManagerLoaded = false
 KillerAwareness.Menu = {}
 
 local tbl = {1, 2, 3, 4, 5, 6, 7}
@@ -335,9 +336,13 @@ function KillerAwareness:LoadMenu()
 
 	--Minimap Tracker
 	self.Menu:MenuElement({id = "MinimapTracker", name = "Minimap Tracker", type = MENU})
+
+	--Smite Manager
+	self.Menu:MenuElement({id = "SmiteManager", name = "Smite Manager", type = MENU})
 	
 	--Health Tracker
 	self.Menu:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = false})
+
 
 	KillerAwareness.Menu = self.Menu
 end
@@ -1575,21 +1580,319 @@ MinimapHack = {
 	end,
 }
 
+SmiteManager = {
+	SmiteMenu = nil,
+	SmiteRange = 500,
+	SmiteSlot = nil,
+	SmiteCastSlot = nil,
+	ParseTick = GameTimer(),
+
+	MarkTable = {
+		["SRU_Baron"]= "MarkBaron",
+		["SRU_RiftHerald"]= "MarkHerald",
+		["SRU_Dragon_Elder"]= "MarkDragon",
+		["SRU_Dragon_Water"]= "MarkDragon",
+		["SRU_Dragon_Fire"]= "MarkDragon",
+		["SRU_Dragon_Earth"]= "MarkDragon",
+		["SRU_Dragon_Air"]= "MarkDragon",
+		["SRU_Dragon_Ruined"]= "MarkDragon",
+		["SRU_Dragon_Chemtech"]= "MarkDragon",
+		["SRU_Dragon_Hextech"]= "MarkDragon",
+		["SRU_Blue"]= "MarkBlue",
+		["SRU_Red"]= "MarkRed",
+		["SRU_Gromp"]= "MarkGromp",
+		["SRU_Murkwolf"]= "MarkWolves",
+		["SRU_Razorbeak"]= "MarkRazorbeaks",
+		["SRU_Krug"]= "MarkKrugs",
+		["Sru_Crab"]= "MarkCrab",
+	},
+
+	SmiteTable = {
+		["SRU_Baron"]= "SmiteBaron",
+		["SRU_RiftHerald"]= "SmiteHerald",
+		["SRU_Dragon_Elder"]= "SmiteDragon",
+		["SRU_Dragon_Water"]= "SmiteDragon",
+		["SRU_Dragon_Fire"]= "SmiteDragon",
+		["SRU_Dragon_Earth"]= "SmiteDragon",
+		["SRU_Dragon_Air"]= "SmiteDragon",
+		["SRU_Dragon_Ruined"]= "SmiteDragon",
+		["SRU_Dragon_Chemtech"]= "SmiteDragon",
+		["SRU_Dragon_Hextech"]= "SmiteDragon",
+		["SRU_Blue"]= "SmiteBlue",
+		["SRU_Red"]= "SmiteRed",
+		["SRU_Gromp"]= "SmiteGromp",
+		["SRU_Murkwolf"]= "SmiteWolves",
+		["SRU_Razorbeak"]= "SmiteRazorbeaks",
+		["SRU_Krug"]= "SmiteKrugs",
+		["Sru_Crab"]= "SmiteCrab",
+	},
+
+	Camps = {
+		["monsterCamp_1"] = { names={["SRU_Blue"]=1}, obj = nil},
+		["monsterCamp_2"] = { names={["SRU_Murkwolf"]=1}, obj = nil},
+		["monsterCamp_3"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
+		["monsterCamp_4"] = { names={["SRU_Red"]=1}, obj = nil},
+		["monsterCamp_5"] = { names={["SRU_Krug"]=1}, obj = nil},
+		["monsterCamp_6"] = { names={["SRU_Dragon_Elder"]=1, ["SRU_Dragon_Water"]=1, ["SRU_Dragon_Fire"]=1, ["SRU_Dragon_Earth"]=1, ["SRU_Dragon_Air"]=1, ["SRU_Dragon_Ruined"]=1, ["SRU_Dragon_Chemtech"]=1, ["SRU_Dragon_Hextech"]=1}, obj = nil},
+		["monsterCamp_7"] = { names={["SRU_Blue"]=1}, obj = nil},
+		["monsterCamp_8"] = { names={["SRU_Murkwolf"]=1}, obj = nil},
+		["monsterCamp_9"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
+		["monsterCamp_10"] = { names={["SRU_Red"]=1}, obj = nil},
+		["monsterCamp_11"] = { names={["SRU_Krug"]=1}, obj = nil},
+		["monsterCamp_12"] = { names={["SRU_Baron"]=1}, obj = nil},
+		["monsterCamp_13"] = { names={["SRU_Gromp"]=1}, obj = nil},
+		["monsterCamp_14"] = { names={["SRU_Gromp"]=1}, obj = nil},
+		["monsterCamp_15"] = { names={["Sru_Crab"]=1}, obj = nil},
+		["monsterCamp_16"] = { names={["Sru_Crab"]=1}, obj = nil},
+		["monsterCamp_17"] = { names={["SRU_RiftHerald"]=1}, obj = nil},
+	},
+
+	SmiteNames = {
+		["SummonerSmite"]=1,
+		["S5_SummonerSmitePlayerGanker"]=1,
+		["SummonerSmiteAvatarOffensive"]=1,
+		["SummonerSmiteAvatarUtility"]=1,
+		["SummonerSmiteAvatarDefensive"]=1,
+	},
+
+	Init = function (self)
+		--Assign our smite slot
+		if(self.SmiteNames[myHero:GetSpellData(SUMMONER_1).name] == 1) then
+			self.SmiteSlot = SUMMONER_1
+			self.SmiteCastSlot = HK_SUMMONER_1
+		end
+
+		if(self.SmiteNames[myHero:GetSpellData(SUMMONER_2).name] == 1) then
+			self.SmiteSlot = SUMMONER_2
+			self.SmiteCastSlot = HK_SUMMONER_2
+		end
+
+		local shouldCheck = true
+		local function InitMenu()
+			if not shouldCheck then return end
+			if not (KillerAwareness.Menu.Loaded) then return end
+			
+			if(self.SmiteSlot == nil) then
+				KillerAwareness.Menu.SmiteManager:MenuElement({name = "Smite Not Loaded", type = SPACE})
+				KillerAwareness.SmiteManagerLoaded = false
+				shouldCheck = false
+			else
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "Enabled", name = "Toggle Enable Key", key = string.byte("M"), toggle = true})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "AutoSmite", name = "Auto-Smite", value = true})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "AutoSmiteTargets", name = "Auto-Smite Targets", type = MENU})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "SmiteMarkers", name = "Draw Smite Markers", value = true})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "MarkerTargets", name = "Smite Marker Targets", type = MENU})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "DrawEnabledStatus", name = "Draw Enabled Status", value = true})
+
+				--Auto Smite
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteBaron", name = "Smite Baron", value = true, leftIcon = "http://puu.sh/rPuVv/933a78e350.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteHerald", name = "Smite Herald", value = true, leftIcon = "http://puu.sh/rQs4A/47c27fa9ea.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteDragon", name = "Smite Dragon", value = true, leftIcon = "http://puu.sh/rPvdF/a00d754b30.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteBlue", name = "Smite Blue Buff", value = true, leftIcon = "http://puu.sh/rPvNd/f5c6cfb97c.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteRed", name = "Smite Red Buff", value = true, leftIcon = "http://puu.sh/rPvQs/fbfc120d17.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteGromp", name = "Smite Gromp", value = false, leftIcon = "http://puu.sh/rPvSY/2cf9ff7a8e.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteWolves", name = "Smite Wolves", value = false, leftIcon = "http://puu.sh/rPvWu/d9ae64a105.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteRazorbeaks", name = "Smite Razorbeaks", value = false, leftIcon = "http://puu.sh/rPvZ5/acf0e03cc7.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteKrugs", name = "Smite Krugs", value = false, leftIcon = "http://puu.sh/rPw6a/3096646ec4.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteCrab", name = "Smite Crab", value = false, leftIcon = "http://puu.sh/rPwaw/10f0766f4d.png"})
+
+				--Smite Marker Targets
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkBaron", name = "Mark Baron", value = true, leftIcon = "http://puu.sh/rPuVv/933a78e350.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkHerald", name = "Mark Herald", value = true, leftIcon = "http://puu.sh/rQs4A/47c27fa9ea.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkDragon", name = "Mark Dragon", value = true, leftIcon = "http://puu.sh/rPvdF/a00d754b30.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkBlue", name = "Mark Blue Buff", value = true, leftIcon = "http://puu.sh/rPvNd/f5c6cfb97c.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkRed", name = "Mark Red Buff", value = true, leftIcon = "http://puu.sh/rPvQs/fbfc120d17.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkGromp", name = "Mark Gromp", value = true, leftIcon = "http://puu.sh/rPvSY/2cf9ff7a8e.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkWolves", name = "Mark Wolves", value = true, leftIcon = "http://puu.sh/rPvWu/d9ae64a105.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkRazorbeaks", name = "Mark Razorbeaks", value = true, leftIcon = "http://puu.sh/rPvZ5/acf0e03cc7.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkKrugs", name = "Mark Krugs", value = true, leftIcon = "http://puu.sh/rPw6a/3096646ec4.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkCrab", name = "Mark Crab", value = true, leftIcon = "http://puu.sh/rPwaw/10f0766f4d.png"})
+
+				KillerAwareness.SmiteManagerLoaded = true
+				self.SmiteMenu = KillerAwareness.Menu.SmiteManager
+				shouldCheck = false
+			end
+		end
+
+		self.InitCallback = Callback.Add("Tick", InitMenu)
+	end,
+
+	GetSmiteDamage = function(self, unit)
+		local SmiteDamage = 600
+		local SmiteUnleashedDamage = 900
+		local SmitePrimalDamage = 1200
+		local SmiteAdvDamageHero = 80 + 80 / 17 * (myHero.levelData.lvl - 1)
+		if unit.type ~= Obj_AI_Hero then
+			if myHero:GetSpellData(self.SmiteSlot).name == "SummonerSmite" then
+				return SmiteDamage
+			elseif myHero:GetSpellData(self.SmiteSlot).name == "S5_SummonerSmiteDuel" or
+				myHero:GetSpellData(self.SmiteSlot).name == "S5_SummonerSmitePlayerGanker" then
+				return SmiteUnleashedDamage
+			elseif myHero:GetSpellData(self.SmiteSlot).name == 'SummonerSmiteAvatarOffensive' or
+				myHero:GetSpellData(self.SmiteSlot).name == 'SummonerSmiteAvatarUtility' or
+				myHero:GetSpellData(self.SmiteSlot).name == 'SummonerSmiteAvatarDefensive' then
+				return SmitePrimalDamage
+			end
+		elseif unit.type == Obj_AI_Hero then
+			if myHero:GetSpellData(self.SmiteSlot).name == "S5_SummonerSmiteDuel" or
+				myHero:GetSpellData(self.SmiteSlot).name == "S5_SummonerSmitePlayerGanker" then
+				return SmiteAdvDamageHero
+			elseif myHero:GetSpellData(self.SmiteSlot).name == 'SummonerSmiteAvatarOffensive' or
+				myHero:GetSpellData(self.SmiteSlot).name == 'SummonerSmiteAvatarUtility' or
+				myHero:GetSpellData(self.SmiteSlot).name == 'SummonerSmiteAvatarDefensive' then
+				return SmiteAdvDamageHero
+			end
+		else return 0 end
+	end,
+
+	UpdateData = function (self)
+		local function FlushJungle()
+			for k, v in pairs(self.Camps) do
+				if(v.obj) then
+					if(v.obj.dead or GetDistance(myHero.pos, v.obj.pos) >= 2150 or not v.names[v.obj.charName]==1) then
+						v.obj = nil
+					end
+				end
+			end
+		end
+
+		local function ParseJungle()
+			if(GameTimer() > self.ParseTick) then
+				local jgMonsters = {}
+				for k, v in pairs(self.Camps) do
+					local camp = Game.Camp(tonumber(k:match("monsterCamp_(%d+)")))
+					if(camp.isCampUp and GetDistance(myHero.pos, camp.pos) <= 1200) and v.obj == nil then
+
+						local scanSuccess = false
+						jgMonsters = _G.SDK.ObjectManager:GetMonsters(1200)
+
+						if(#jgMonsters > 0) then
+							for _, monster in ipairs(jgMonsters) do
+								if(v.names[monster.charName] == 1) then
+									v.obj = monster
+									scanSuccess = true
+									break
+								end
+							end
+						end
+
+						if(#jgMonsters == 0 or scanSuccess == false) then
+							--Search through fog as a fallback.
+							for i = 0, Game.ObjectCount() do
+								local m = Game.Object(i)
+								if(v.names[m.charName] == 1 and GetDistance(m.pos, camp.pos) <= 1200) then
+									v.obj = m
+									break
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+
+		ParseJungle()
+		FlushJungle()	
+	end,
+
+	AutoSmite = function (self)
+		if(Ready(self.SmiteSlot) and IsValid(myHero)) then
+			for k, v in pairs(self.Camps) do
+				if(v.obj and not v.obj.dead and v.obj.visible and GetDistance(v.obj.pos, myHero.pos) <= self.SmiteRange) then
+
+					--Check to see if we should smite this.
+					local canSmite = false
+					local key = self.SmiteTable[v.obj.charName]
+					canSmite = (self.SmiteMenu.AutoSmiteTargets[key]:Value())
+
+					if(canSmite) then
+						local smiteDmg = self:GetSmiteDamage(v.obj)
+						if(v.obj.health - smiteDmg <= 0) then
+							Control.CastSpell(self.SmiteCastSlot, v.obj)
+						end
+					end
+				end
+			end
+		end
+	end,
+
+	OnTick = function (self)
+		if not KillerAwareness.SmiteManagerLoaded then return end
+
+		if(self.SmiteMenu.Enabled:Value()) then
+			self:UpdateData()
+
+			if(self.SmiteMenu.AutoSmite:Value()) then
+				self:AutoSmite()
+			end
+		end
+	end,
+
+	Draw = function (self)
+		if not KillerAwareness.SmiteManagerLoaded then return end
+
+		if(self.SmiteMenu.DrawEnabledStatus:Value()) then
+			self:DrawEnabledUI()
+		end
+
+		if(self.SmiteMenu.Enabled:Value()) then
+			if(self.SmiteMenu.SmiteMarkers:Value()) then
+				if(Ready(self.SmiteSlot) and IsValid(myHero)) then
+					for k, v in pairs(self.Camps) do
+						if(v.obj and not v.obj.dead and v.obj.visible and GetDistance(v.obj.pos, myHero.pos) <= 1000) then
+
+							--Check to see if we should draw this.
+							local canDraw = false
+							local key = self.MarkTable[v.obj.charName]
+							canDraw = (self.SmiteMenu.MarkerTargets[key]:Value())
+
+							if(canDraw) then
+								local smiteDmg = self:GetSmiteDamage(v.obj)
+								if(v.obj.health - smiteDmg <= 0) then
+									Draw.Circle(v.obj.pos, v.obj.boundingRadius*2, 1, Draw.Color(255, 3, 252, 144))
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end,
+
+	DrawEnabledUI = function(self)
+		local res = Game.Resolution()
+		local xOffset = 50
+		local yOffset = res.y - 70
+		local fontSize = 20
+		Draw.Rect(xOffset-10, yOffset-5, 160, fontSize*2 +12, Draw.Color(215, 0, 0, 0))
+		Draw.Text("Auto-Smite Status:", fontSize, xOffset, yOffset)
+		local state = self.SmiteMenu.Enabled:Value()
+		if(state) then
+			Draw.Text("Enabled ["..string.char(self.SmiteMenu.Enabled:Key()).."]", fontSize, xOffset, yOffset + fontSize, Draw.Color(255, 30, 230, 30))
+		else
+			Draw.Text("Disabled ["..string.char(self.SmiteMenu.Enabled:Key()).."]", fontSize, xOffset, yOffset + fontSize, Draw.Color(255, 230, 30, 30))
+		end
+	end
+}
+
 Callback.Add("Load", function()
 	LoadUnits()
 	KillerAwareness()
 	ChampionTracker:Init()
 	MinimapHack:Init()
+	SmiteManager:Init()
 end)
 
 Callback.Add("Tick", function()
 	ChampionTracker:OnTick()
 	MinimapHack:OnTick()
+	SmiteManager:OnTick()
 end)
 
 Callback.Add("Draw", function()
 	ChampionTracker:Draw()
 	MinimapHack:Draw()
+	SmiteManager:Draw()
 end)
 
 if KillerAwareness.OnWndMsg then
