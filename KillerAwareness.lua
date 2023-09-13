@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.17
+local scriptVersion = 1.18
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -28,7 +28,7 @@ do
         end
         
         local function ReadFile(path, fileName)
-            local file = io.open(path .. fileName, "r")
+            local file = assert(io.open(path .. fileName, "r"))
             local result = file:read()
             file:close()
             return result
@@ -112,7 +112,7 @@ end
 
 local function GetEnemyHeroes(range, bbox)
 	local result = {}
-	for _, unit in ipairs(Enemies) do
+	for _, unit in pairs(Enemies) do
 		local extrarange = bbox and unit.boundingRadius or 0
 		if unit.distance < range + extrarange then
 			table.insert(result, unit)
@@ -224,6 +224,28 @@ local function FileExists(path)
 	end
 end
 
+--[[ DELAY ACTION ]]--
+
+if not unpack then unpack = table.unpack end
+local delayedActions, delayedActionsExecuter = {}, nil
+function DelayEvent(func, delay, args) --delay in seconds
+	if not delayedActionsExecuter then
+		function delayedActionsExecuter()
+			for t, funcs in pairs(delayedActions) do
+				if t <= os.clock() then
+					for _, f in ipairs(funcs) do f.func(unpack(f.args or {})) end
+					delayedActions[t] = nil
+				end
+			end
+		end
+		Callback.Add("Tick", delayedActionsExecuter)
+	end
+	local t = os.clock() + (delay or 0)
+	if delayedActions[t] then table.insert(delayedActions[t], { func = func, args = args })
+	else delayedActions[t] = { { func = func, args = args } }
+	end
+end
+
 -----------------------------------------------------
 
 class "KillerAwareness"
@@ -239,14 +261,18 @@ local ChampionSprites = {}
 local ChampionHaloData = {}
 local TrackerData = {}
 
+local AutoWardPing, ChampionTracker, MinimapHack
+
 local MIATimer = 5
 local haloCD = 10
 
 KillerAwareness.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolution().y * 0.5 }
 KillerAwareness.AllowMove = nil
 KillerAwareness.ChampionTrackerLoaded = false
+KillerAwareness.MinimapTrackerLoaded = false
 KillerAwareness.Menu = {}
 
+local tbl = {1, 2, 3, 4, 5, 6, 7}
 function KillerAwareness:__init()
 	self:LoadMenu()
 	self:CreateSprites()
@@ -256,7 +282,7 @@ function KillerAwareness:__init()
 end
 
 function KillerAwareness:LoadHealthTrackerData()
-	DelayAction(function()
+	DelayEvent(function()
 	for k, v in pairs (Enemies) do
 		TrackerData[v.name] = {champ = v.charName, timelastspotted = 0, mia = false}
 	end
@@ -286,21 +312,14 @@ function KillerAwareness:LoadMenu()
 	self.Menu.TurretAwareness:MenuElement({id = "DrawAllies", name = "Draw Ally Turret Range", value = false})
 	self.Menu.TurretAwareness:MenuElement({id = "DrawEnemies", name = "Draw Enemy Turret Range", value = true})
 	self.Menu.TurretAwareness:MenuElement({id = "DrawHP", name = "Draw Turret HP on Minimap", value = true})
+	self.Menu.TurretAwareness:MenuElement({id = "HPOverlapCheck", name = "Dont Overlap HP on Hero Icons", value = false})
 	self.Menu.TurretAwareness:MenuElement({id = "DrawRange", name = "Turret Draw Range", value = 500, min = 200, max = 1500, step = 100})
-
-	--Ward Auto Ping
-	--[[
-	self.Menu:MenuElement({id = "WardPing", name = "Ward Auto-Ping", type = MENU})
-	self.Menu.WardPing:MenuElement({name = "MANDATORY:", type = SPACE})
-	self.Menu.WardPing:MenuElement({name = "Options > Hotkeys > Communication", type = SPACE})
-	self.Menu.WardPing:MenuElement({name = "Match Quick Alert Ping with THIS Key!", type = SPACE})
-	self.Menu.WardPing:MenuElement({id = "Enabled", name = "Enabled", value = true})
-	self.Menu.WardPing:MenuElement({id = "Key", name = "Quick Alert Ping Key", key = string.byte("H")})
-	--]]
 
 	--Champion Tracker
 	self.Menu:MenuElement({id = "ChampTracker", name = "Champion Tracker", type = MENU})
 
+	--Minimap Tracker
+	self.Menu:MenuElement({id = "MinimapTracker", name = "Minimap Tracker", type = MENU})
 	
 	--Health Tracker
 	self.Menu:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = false})
@@ -450,9 +469,37 @@ function KillerAwareness:DrawTurretAwareness()
 		for _, turret in pairs(EnemyTurrets) do
 			if(turret.valid and turret.isTargetableToTeam ) then
 				if(IsTurret(turret)) then
-					local hp = tostring(math.floor((turret.health / turret.maxHealth) * 100)).."%"
-					DrawRect(turret.posMM.x - 14, turret.posMM.y + 12, 34, 16, DrawColor(125, 0, 0, 0));
-					DrawText(hp, 16, turret.posMM.x - 12, turret.posMM.y + 12, DrawColor(255, 255, 255, 255));
+					local overlapCheck = true
+					if(self.Menu.TurretAwareness.HPOverlapCheck:Value()) then
+						
+						--Check allies and enemies
+
+						for _, v in pairs(Units) do
+							if(IsValid(v.unit)) then
+								if(GetDistance(turret.pos, v.unit.pos) <= 1000) then
+									overlapCheck = false
+									break
+								end
+							end
+						end
+
+						--Minimap hack support
+						if(MinimapHack) then
+							local minimapData = MinimapHack:GetMinimapData()
+							for _, data in pairs(minimapData) do
+								if(GetDistance(turret.pos, data.lastPos) <= 1000) then
+									overlapCheck = false
+									break
+								end
+							end
+						end
+					end
+
+					if(overlapCheck) then
+						local hp = tostring(math.floor((turret.health / turret.maxHealth) * 100)).."%"
+						DrawRect(turret.posMM.x - 14, turret.posMM.y + 12, 34, 16, DrawColor(125, 0, 0, 0));
+						DrawText(hp, 16, turret.posMM.x - 12, turret.posMM.y + 12, DrawColor(255, 255, 255, 255));
+					end
 				end
 			end			
 		end
@@ -543,10 +590,9 @@ function KillerAwareness:UpdateHealthData()
 end
 
 
-local AutoWardPing, ChampionTracker
 
 --Auto Ward Pinger
-
+--[[
 AutoWardPing = {
 
 	CachedClickedWards = {},
@@ -616,7 +662,7 @@ AutoWardPing = {
 		--Control.CastSpell(1, finalClickPos)
 		--Control.CastSpell(self.WardMenu.Key:Key())
 		--Control.CastSpell(1, finalClickPos)
-		DelayAction( function ()
+		DelayEvent( function ()
 			--Control.CastSpell(2)
 			self.IsActivePinging = false
 		end, 0.1)
@@ -649,9 +695,10 @@ AutoWardPing = {
 	end
 
 }
+--]]
 
 local summonerSprites = {}
-local summonerSpirteNames = {"Barrier", "Clarity", "Cleanse", "Exhaust", "Flash", "Ghost", "Heal", "Hexflash", "Ignite", "Mark", "Smite", "Teleport", "UnleashedTeleport"}
+local summonerSpriteNames = {"Barrier", "Clarity", "Cleanse", "Exhaust", "Flash", "Ghost", "Heal", "Hexflash", "Ignite", "Mark", "Smite", "Teleport", "UnleashedTeleport"}
 
 ChampionTracker = {
 
@@ -668,13 +715,13 @@ ChampionTracker = {
 	CDFont = Draw.Font("NotoSans-Regular.ttf", "Ubuntu"),
 
 	Init = function (self)
-		self:InitSpirtes()
+		self:InitSprites()
 	end,
 
-	InitSpirtes = function ()
+	InitSprites = function ()
 		local check = true
-		for i = 1, #summonerSpirteNames do
-			local spriteName = summonerSpirteNames[i]
+		for i = 1, #summonerSpriteNames do
+			local spriteName = summonerSpriteNames[i]
 			if(FileExists(SPRITE_PATH .. "KillerAwareness/Summoners/" .. spriteName .. ".png") == false) then
 				check = false
 				break
@@ -684,7 +731,7 @@ ChampionTracker = {
 		if(check == false) then
 			print("Killer Awareness - Missing Sprites for Champion Tracker")
 
-			DelayAction(function()
+			DelayEvent(function()
 				if (KillerAwareness.Menu.Loaded) then
 					KillerAwareness.Menu.ChampTracker:MenuElement({name = "[WARNING] Sprites Missing", drop = {""}})
 					KillerAwareness.Menu.ChampTracker:MenuElement({name = " ", drop = {"Please download them on the forums."}})
@@ -717,7 +764,7 @@ ChampionTracker = {
 				["SummonerPoroThrow"] = Sprite("KillerAwareness\\Summoners\\Mark.png")
 				}
 
-				DelayAction(function()
+				DelayEvent(function()
 					if (KillerAwareness.Menu.Loaded) then
 						KillerAwareness.Menu.ChampTracker:MenuElement({id = "Enabled", name = "Enabled", type = MENU})
 						KillerAwareness.Menu.ChampTracker:MenuElement({id = "ClickedTarget", name = "Only Show on Clicked Target", type = MENU})
@@ -796,7 +843,7 @@ ChampionTracker = {
 		if not (KillerAwareness.ChampionTrackerLoaded) then return end
 
 		if(shouldDrawEnemies) then
-			for _, enemy in ipairs(Enemies) do
+			for _, enemy in pairs(Enemies) do
 				if(IsValid(enemy) and enemy.charName ~= "PracticeTool_TargetDummy") then
 					self:DrawChampionTracker(enemy)
 				end
@@ -804,7 +851,7 @@ ChampionTracker = {
 		end
 
 		if(shouldDrawAllies) then
-			for _, ally in ipairs(Allies) do
+			for _, ally in pairs(Allies) do
 				if(IsValid(ally)) then
 					self:DrawChampionTracker(ally)
 				end
@@ -1235,19 +1282,299 @@ ChampionTracker = {
 	end
 }
 
+MinimapHack = {
+	TrackerMenu = nil,
+	InitCallback = nil,
+	cachedSpriteScale = 1,
+	defaultSpritePixelSize = 24,
+	MinimapData = {},
+
+	Init = function (self)
+		local spriteInit = false
+		local shouldCheck = true
+		local function InitMenu()
+			if not shouldCheck then return end
+
+			if not (KillerAwareness.Menu.Loaded) then return end
+			if not spriteInit then
+				self:InitSprites()
+				spriteInit = true
+			end
+
+			if(KillerAwareness.MinimapTrackerLoaded) then
+				self.TrackerMenu = KillerAwareness.Menu.MinimapTracker
+				--Callback.Del("Tick", self.InitCallback)
+				shouldCheck = false
+			end
+		end
+		self.InitCallback = Callback.Add("Tick", InitMenu)
+	end,
+
+	InitSprites = function (self)
+		local check = true
+		for _, enemy in pairs(Enemies) do
+			if(FileExists(SPRITE_PATH .. "KillerAwareness/Minimap/" .. enemy.charName .. ".png") == false) then
+				check = false
+				break
+			end
+		end
+
+		if(check == false) then
+			print("Killer Awareness - Missing Sprites for Minimap Tracker")
+
+			DelayEvent(function()
+				if (KillerAwareness.Menu.Loaded) then
+					KillerAwareness.Menu.MinimapTracker:MenuElement({name = "[WARNING] Sprites Missing", drop = {""}})
+					KillerAwareness.Menu.MinimapTracker:MenuElement({name = " ", drop = {"Please download them on the forums."}})
+					KillerAwareness.Menu.MinimapTracker:MenuElement({name = " ", drop = {"Directory: Sprites/KillerAwareness/Minimap"}})
+					KillerAwareness.MinimapTrackerLoaded = false
+				end
+			end,  1)
+			return
+		else
+			--Init DATA
+			for _, enemy in pairs(Enemies) do
+				if(not self.MinimapData[enemy.networkID]) then
+					self.MinimapData[enemy.networkID] = {hero = enemy, lastPos = enemy.pos, lastSeen = GameTimer(), direction = nil, didRecall = false, sprite = Sprite("KillerAwareness\\Minimap\\" .. enemy.charName ..".png")}
+				end
+			end
+
+			KillerAwareness.Menu.MinimapTracker:MenuElement({id = "Enabled", name = "Enabled", value = true})
+			KillerAwareness.Menu.MinimapTracker:MenuElement({id = "DrawTimers", name = "Draw Timers", value = true})
+			KillerAwareness.Menu.MinimapTracker:MenuElement({id = "DrawDirectionArrows", name = "Draw Direction Arrows", value = true})
+			KillerAwareness.Menu.MinimapTracker:MenuElement({id = "DrawCircles", name = "Draw Movement Circles", value = true})
+			KillerAwareness.Menu.MinimapTracker:MenuElement({id = "VisibilityOptions", name = "Visibility Options", type = MENU})
+			KillerAwareness.Menu.MinimapTracker:MenuElement({id = "SpriteSize", name = "Sprite Size", value = 100, min = 75, max = 200, step = 5})
+
+			-- Visibility Options
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "CircleMaxRadius", name = "Max Circle Radius", value = 2500, min = 100, max = 5000, step = 50, identifier = "Units"})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "CircleMaxDuration", name = "Max Circle Duration", value = 15, min = 5, max = 60, step = 1, identifier = " Seconds"})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "ArrowLength", name = "Direction Arrow Length", value = 125, min = 100, max = 250, step = 5})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "TextTransparency", name = "Text Transparency", value = 155, min = 0, max = 255, step = 5})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "ArrowTransparency", name = "Arrow Transparency", value = 255, min = 0, max = 255, step = 5})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "CircleTransparency", name = "Circle Transparency", value = 255, min = 0, max = 255, step = 5})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "ShowTimerAfter", name = "Show Timer After", value = 10, min = 0, max = 60, step = 1, identifier = " Seconds"})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "OverlappingText", name = "Dont Draw Overlapping Text", value = true})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "OverlappingArrows", name = "Dont Draw Overlapping Arrows", value = false})
+			KillerAwareness.Menu.MinimapTracker.VisibilityOptions:MenuElement({id = "OverlappingIcons", name = "Fade Overlapping Sprites", value = true})
+
+			KillerAwareness.MinimapTrackerLoaded = true
+
+		end
+	end,
+
+	GetMinimapData = function (self)
+		return self.MinimapData
+	end,
+
+	FormatSecondsToString = function(self, seconds)
+		return math.floor(seconds / 60)..":".. string.format("%02d", math.floor(seconds % 60))
+	end,
+
+	GetBasePos = function(self)
+		if Game.mapID == SUMMONERS_RIFT then
+			return { Blue = Vector(696, 100, 562), Red = Vector(14288, 100, 14360)}
+		else -- Howling Abyss
+			return { Blue = Vector(946, 100, 1070 ), Red = Vector(11850, 100, 11596) }
+		end
+	end,
+
+	UpdateSpriteScale = function (self)
+		local spriteScale = self.TrackerMenu.SpriteSize:Value() / 100
+		if(spriteScale ~= self.cachedSpriteScale) then
+			self.cachedSpriteScale = spriteScale
+			for _, data in pairs(self.MinimapData) do
+				data.sprite:SetScale(spriteScale)
+			end
+		end
+	end,
+
+	IsUnitOverlapping = function (self, data)
+		for k, v in pairs(self.MinimapData) do
+			if(v.hero.networkID ~= data.hero.networkID) then
+				if(GetDistance(v.hero.pos, data.hero.pos) <= 800 or GetDistance(v.lastPos, data.lastPos) <= 800)  then
+					return true
+				end
+			end
+		end
+		return false
+	end,
+
+	IsUnitOverlappingActiveUnits = function (self, data)
+		if(myHero.valid) then
+			if(GetDistance(myHero.pos, data.lastPos) <= 800) then return true end
+		end
+
+		for k, v in pairs(Units) do
+			if(v.unit.networkID ~= data.hero.networkID and v.visible and v.valid) then
+				if(GetDistance(v.unit.pos, data.lastPos) <= 800)  then
+					return true
+				end
+			end
+		end
+
+		return false
+	end,
+
+	OnTick = function (self)
+		for _, data in pairs(self.MinimapData) do
+			if(data.hero.valid) then
+
+				--Update position constantly as long as they arent recalling
+				if(not data.didRecall) then
+					if(data.hero.pos ~= data.lastPos) then
+						--Update our timer for tracking units through fog
+						data.lastSeen = GameTimer()
+					end
+					data.lastPos = data.hero.pos
+				end
+				if(data.hero.visible) then
+					data.lastSeen = GameTimer()
+					self:ProcessRecall(data)
+				end
+
+				if(self.TrackerMenu.DrawDirectionArrows:Value()) then
+					local unit = data.hero
+					if(unit.visible) then
+						if(unit.pathing.hasMovePath) then
+							local endPosVec = Vector(unit.pathing.endPos.x, unit.pos.y, unit.pathing.endPos.z)
+							local startPosVec = Vector(unit.pathing.startPos.x, unit.pos.y, unit.pathing.startPos.z)
+							local nVec = Vector(endPosVec - startPosVec):Normalized()
+
+							data.direction = nVec
+						else
+							data.direction = nil
+						end
+					end
+				end
+			end
+
+			if(data.hero.dead) then
+				-- If they are dead, set their position to base.
+				if(data.hero.team == 100) then
+					data.lastPos = self:GetBasePos().Blue
+				else
+					data.lastPos = self:GetBasePos().Red
+				end
+				data.lastSeen = GameTimer()
+				data.direction = nil
+			end
+		end
+	end,
+
+	Draw = function (self)
+		if not KillerAwareness.MinimapTrackerLoaded then return end
+
+		self:UpdateSpriteScale()
+		if(self.TrackerMenu.Enabled:Value()) then
+			for _, data in pairs(self.MinimapData) do
+				if(not data.hero.visible) then
+					if(not data.hero.dead) then
+						local overlappingCheck = self:IsUnitOverlapping(data)
+						local overlappingCheck2 = self:IsUnitOverlappingActiveUnits(data)
+						local overlappingArrowCheck = overlappingCheck and self.TrackerMenu.VisibilityOptions.OverlappingArrows:Value() -- Returns true if we are overlapping and our option is enabled
+						local overlappingTextCheck = overlappingCheck and self.TrackerMenu.VisibilityOptions.OverlappingText:Value() -- Returns true if we are overlapping and our option is enabled
+						local overlappingIconCheck = overlappingCheck2 and self.TrackerMenu.VisibilityOptions.OverlappingIcons:Value() -- Returns true if we are overlapping and our option is enabled
+						--Drawing Arrows
+						if(self.TrackerMenu.DrawDirectionArrows:Value()) then
+							if(data.direction ~= nil and not overlappingArrowCheck and not overlappingIconCheck) then
+								local arrowLength = self.TrackerMenu.VisibilityOptions.ArrowLength:Value() * 10
+								local arrowAlpha = self.TrackerMenu.VisibilityOptions.ArrowTransparency:Value()
+								local lineDir = data.lastPos + (data.direction*arrowLength)
+								local tip1 = (data.direction):Rotated(0, math.rad(150), 0):Normalized() * 300 + lineDir
+								local tip2 = (data.direction):Rotated(0, math.rad(210), 0):Normalized() * 300 + lineDir
+
+								DrawLine(data.lastPos:ToMM(), lineDir:ToMM(), 3, Draw.Color(arrowAlpha, 255, 255, 255))
+								DrawLine(lineDir:ToMM(), tip1:ToMM(), 3, Draw.Color(arrowAlpha, 255, 255, 255))
+								DrawLine(lineDir:ToMM(), tip2:ToMM(), 3, Draw.Color(arrowAlpha, 255, 255, 255))
+							end
+						end
+
+						local posMM = data.lastPos:ToMM()
+						local offset = (self.defaultSpritePixelSize * (self.TrackerMenu.SpriteSize:Value() / 100))/2
+						if(overlappingIconCheck) then
+							data.sprite:SetColor(Draw.Color(125, 255, 255, 255))
+						else
+							data.sprite:SetColor(Draw.Color(255, 255, 255, 255))
+						end
+						data.sprite:Draw(posMM.x - offset, posMM.y - offset)
+
+						--Drawing timers
+						if(self.TrackerMenu.DrawTimers:Value() and not overlappingTextCheck and not overlappingIconCheck) then
+							if(GameTimer() - data.lastSeen >= self.TrackerMenu.VisibilityOptions.ShowTimerAfter:Value()) then
+								local fontSize = (self.defaultSpritePixelSize * (self.TrackerMenu.SpriteSize:Value() / 100))/2
+								local transparency = self.TrackerMenu.VisibilityOptions.TextTransparency:Value()
+								Draw.Text(self:FormatSecondsToString(GameTimer() - data.lastSeen), fontSize, posMM.x - offset, posMM.y + fontSize - 2, Draw.Color(transparency,255,255,255))
+							end
+						end
+
+						--Drawing circles
+						if(self.TrackerMenu.DrawCircles:Value()) then
+							if(GameTimer() - data.lastSeen <= self.TrackerMenu.VisibilityOptions.CircleMaxDuration:Value()) then
+								local circleRadius = (GameTimer() - data.lastSeen) * data.hero.ms
+								local maxRadius = self.TrackerMenu.VisibilityOptions.CircleMaxRadius:Value()
+								local alpha = self.TrackerMenu.VisibilityOptions.CircleTransparency:Value()
+								circleRadius = math.min(circleRadius, maxRadius)
+								Draw.CircleMinimap(data.lastPos, circleRadius, 1, Draw.Color(alpha, 255, 255, 255))
+							end
+						end
+
+					end
+				end
+			end
+		end
+	end,
+
+	ProcessRecall = function (self, data)
+		if(data.hero.activeSpell.name == "recall") then
+			if(GameTimer() - data.hero.activeSpell.castEndTime >= 7.9) then
+				-- If they recalled, set their position to base.
+				if(data.hero.team == 100) then
+					data.lastPos = self:GetBasePos().Blue
+				else
+					data.lastPos = self:GetBasePos().Red
+				end
+				data.lastSeen = GameTimer()
+				data.direction = nil
+				data.didRecall = true
+			end
+		end
+
+		if(data.hero.activeSpell.name == "SuperRecall") then
+			if(GameTimer() - data.hero.activeSpell.castEndTime >= 3.9) then
+				-- If they recalled, set their position to base.
+				if(data.hero.team == 100) then
+					data.lastPos = self:GetBasePos().Blue
+				else
+					data.lastPos = self:GetBasePos().Red
+				end
+				data.lastSeen = GameTimer()
+				data.direction = nil
+				data.didRecall = true
+			end
+		end
+
+		if(GameTimer() - data.lastSeen >= 3) then 
+			data.didRecall = false
+		end
+	end,
+}
+
 Callback.Add("Load", function()
 	LoadUnits()
-	ChampionTracker:Init()
 	KillerAwareness()
+	ChampionTracker:Init()
+	MinimapHack:Init()
 end)
 
 Callback.Add("Tick", function()
-	--AutoWardPing:OnTick()
 	ChampionTracker:OnTick()
+	MinimapHack:OnTick()
 end)
 
 Callback.Add("Draw", function()
 	ChampionTracker:Draw()
+	MinimapHack:Draw()
 end)
 
 if KillerAwareness.OnWndMsg then
