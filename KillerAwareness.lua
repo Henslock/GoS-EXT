@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.19
+local scriptVersion = 1.20
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -146,7 +146,7 @@ function GetDistance(pos1, pos2)
 
 	local a = pos1.pos or pos1
 	local b = pos2.pos or pos2
-	return sqrt(GetDistanceSqr(a, b))
+	return math.sqrt(GetDistanceSqr(a, b))
 end
 
 function math.clamp(val, minval, maxval)
