@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.18
+local scriptVersion = 1.19
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -132,6 +132,21 @@ local function GetEnemyCount(range, pos)
 		end
 	end
 	return count
+end
+
+function GetDistanceSqr(pos1, pos2)
+	local pos2 = pos2 or myHero.pos
+	local dx = pos1.x - pos2.x
+	local dz = (pos1.z or pos1.y) - (pos2.z or pos2.y)
+	return dx * dx + dz * dz
+end
+
+function GetDistance(pos1, pos2)
+	if(pos1 == nil or pos2 == nil) then return "Error" end
+
+	local a = pos1.pos or pos1
+	local b = pos2.pos or pos2
+	return sqrt(GetDistanceSqr(a, b))
 end
 
 function math.clamp(val, minval, maxval)
