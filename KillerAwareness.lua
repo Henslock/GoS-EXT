@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.22
+local scriptVersion = 1.23
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -147,6 +147,10 @@ function GetDistance(pos1, pos2)
 	local a = pos1.pos or pos1
 	local b = pos2.pos or pos2
 	return math.sqrt(GetDistanceSqr(a, b))
+end
+
+function Ready(spell)
+    return myHero:GetSpellData(spell).currentCd == 0 and myHero:GetSpellData(spell).level > 0 and myHero:GetSpellData(spell).mana <= myHero.mana and GameCanUseSpell(spell) == 0
 end
 
 function math.clamp(val, minval, maxval)
