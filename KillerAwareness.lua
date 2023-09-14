@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.21
+local scriptVersion = 1.22
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -1796,7 +1796,7 @@ SmiteManager = {
 	end,
 
 	AutoSmite = function (self)
-		if(Ready(self.SmiteSlot) and IsValid(myHero)) then
+		if(Ready(self.SmiteSlot) and not myHero.dead) then
 			for k, v in pairs(self.Camps) do
 				if(v.obj and not v.obj.dead and v.obj.visible and GetDistance(v.obj.pos, myHero.pos) <= self.SmiteRange) then
 
