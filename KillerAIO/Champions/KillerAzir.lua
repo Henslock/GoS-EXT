@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -152,8 +152,6 @@ function Azir:__init()
 end
 
 function Azir:LoadMenu()                     	
-	self.Menu:MenuElement({id = "AlphaWarning", name = "[[ Early Alpha Release ]]", type = SPACE})
-
 	-- Ult priority
 	self.Menu:MenuElement({id = "UltPrio", name = "Ult Priority List", type = MENU})
 	self.Menu.UltPrio:MenuElement({id = "Prio1", name = "1. Towards a Terrain Trap", value = true})
