@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.23
+local scriptVersion = 1.24
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -151,6 +151,51 @@ end
 
 function Ready(spell)
     return myHero:GetSpellData(spell).currentCd == 0 and myHero:GetSpellData(spell).level > 0 and myHero:GetSpellData(spell).mana <= myHero.mana and GameCanUseSpell(spell) == 0
+end
+
+function FetchAsciiString(ascii)
+	local charTable = {
+		[0] = "NULL",
+		[1] = "SOH",
+		[2] = "STX",
+		[3] = "ETX",
+		[4] = "EOT",
+		[5] = "MBN 4",
+		[6] = "MBN 5",
+		[7] = "BELL",
+		[8] = "BACKSPACE",
+		[9] = "TAB",
+		[10] = "LF",
+		[11] = "VT",
+		[12] = "FF",
+		[13] = "CR",
+		[14] = "SO",
+		[15] = "SI",
+		[16] = "DLE",
+		[17] = "DC1",
+		[18] = "DC2",
+		[19] = "DC3",
+		[20] = "DC4",
+		[21] = "NAK",
+		[22] = "SYN",
+		[23] = "ETB",
+		[24] = "CANCEL",
+		[25] = "EM",
+		[26] = "SUB",
+		[27] = "ESC",
+		[28] = "FS",
+		[29] = "GS",
+		[30] = "RS",
+		[31] = "US"
+	}
+
+	if(ascii == -1) then return "" end
+
+	if(ascii>= 32) then
+		return string.char(ascii)
+	else
+		return charTable[ascii]
+	end
 end
 
 function math.clamp(val, minval, maxval)
@@ -1871,10 +1916,13 @@ SmiteManager = {
 		Draw.Rect(xOffset-10, yOffset-5, 160, fontSize*2 +12, Draw.Color(215, 0, 0, 0))
 		Draw.Text("Auto-Smite Status:", fontSize, xOffset, yOffset)
 		local state = self.SmiteMenu.Enabled:Value()
-		if(state) then
-			Draw.Text("Enabled ["..string.char(self.SmiteMenu.Enabled:Key()).."]", fontSize, xOffset, yOffset + fontSize, Draw.Color(255, 30, 230, 30))
-		else
-			Draw.Text("Disabled ["..string.char(self.SmiteMenu.Enabled:Key()).."]", fontSize, xOffset, yOffset + fontSize, Draw.Color(255, 230, 30, 30))
+		if(self.SmiteMenu.Enabled:Key()) then
+		local keyString = FetchAsciiString(self.SmiteMenu.Enabled:Key())
+			if(state) then
+				Draw.Text("Enabled ["..keyString.."]", fontSize, xOffset, yOffset + fontSize, Draw.Color(255, 30, 230, 30))
+			else
+				Draw.Text("Disabled ["..keyString.."]", fontSize, xOffset, yOffset + fontSize, Draw.Color(255, 230, 30, 30))
+			end
 		end
 	end
 }
