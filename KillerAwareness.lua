@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.24
+local scriptVersion = 1.25
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -106,7 +106,7 @@ local function IsTurret(unit)
 	return false
 end
 
-function GetEnemyHeroes()
+local function GetEnemyHeroes()
 	return Enemies
 end
 
@@ -134,14 +134,14 @@ local function GetEnemyCount(range, pos)
 	return count
 end
 
-function GetDistanceSqr(pos1, pos2)
+local function GetDistanceSqr(pos1, pos2)
 	local pos2 = pos2 or myHero.pos
 	local dx = pos1.x - pos2.x
 	local dz = (pos1.z or pos1.y) - (pos2.z or pos2.y)
 	return dx * dx + dz * dz
 end
 
-function GetDistance(pos1, pos2)
+local function GetDistance(pos1, pos2)
 	if(pos1 == nil or pos2 == nil) then return "Error" end
 
 	local a = pos1.pos or pos1
@@ -149,11 +149,11 @@ function GetDistance(pos1, pos2)
 	return math.sqrt(GetDistanceSqr(a, b))
 end
 
-function Ready(spell)
+local function Ready(spell)
     return myHero:GetSpellData(spell).currentCd == 0 and myHero:GetSpellData(spell).level > 0 and myHero:GetSpellData(spell).mana <= myHero.mana and GameCanUseSpell(spell) == 0
 end
 
-function FetchAsciiString(ascii)
+local function FetchAsciiString(ascii)
 	local charTable = {
 		[0] = "NULL",
 		[1] = "SOH",
@@ -1404,7 +1404,7 @@ MinimapHack = {
 			--Init DATA
 			for _, enemy in pairs(Enemies) do
 				if(not self.MinimapData[enemy.networkID]) then
-					self.MinimapData[enemy.networkID] = {hero = enemy, lastPos = enemy.pos, lastSeen = GameTimer(), direction = nil, didRecall = false, sprite = Sprite("KillerAwareness\\Minimap\\" .. enemy.charName ..".png")}
+					self.MinimapData[enemy.networkID] = {hero = enemy, lastPos = enemy.pos, lastSeen = GameTimer(), direction = nil, didRecall = false, recallTime = 0, sprite = Sprite("KillerAwareness\\Minimap\\" .. enemy.charName ..".png")}
 				end
 			end
 
@@ -1527,6 +1527,7 @@ MinimapHack = {
 				end
 				data.lastSeen = GameTimer()
 				data.direction = nil
+				data.didRecall = false
 			end
 		end
 	end,
@@ -1606,6 +1607,7 @@ MinimapHack = {
 				data.lastSeen = GameTimer()
 				data.direction = nil
 				data.didRecall = true
+				data.recallTime = GameTimer()
 			end
 		end
 
@@ -1620,10 +1622,11 @@ MinimapHack = {
 				data.lastSeen = GameTimer()
 				data.direction = nil
 				data.didRecall = true
+				data.recallTime = GameTimer()
 			end
 		end
 
-		if(GameTimer() - data.lastSeen >= 3) then 
+		if(GameTimer() - data.recallTime >= 3) then 
 			data.didRecall = false
 		end
 	end,
@@ -1811,7 +1814,6 @@ SmiteManager = {
 				for k, v in pairs(self.Camps) do
 					local camp = Game.Camp(tonumber(k:match("monsterCamp_(%d+)")))
 					if(camp.isCampUp and GetDistance(myHero.pos, camp.pos) <= 1200) and v.obj == nil then
-
 						local scanSuccess = false
 						jgMonsters = _G.SDK.ObjectManager:GetMonsters(1200)
 
@@ -1834,6 +1836,7 @@ SmiteManager = {
 									break
 								end
 							end
+							self.ParseTick = GameTimer() + 0.5
 						end
 					end
 				end
