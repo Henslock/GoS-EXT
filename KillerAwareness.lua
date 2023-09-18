@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.26
+local scriptVersion = 1.27
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -1864,7 +1864,7 @@ SmiteManager = {
 							local buffProtection = false
 							if(self.SmiteMenu.BlueRedProtection:Value()) then
 								if(Game.Camp(6).isCampUp or Game.Camp(12).isCampUp) then
-									if(myHero:GetSpellData(self.SmiteSlot).ammoCurrentCd >= 15 or myHero:GetSpellData(self.SmiteSlot).ammo < 2) then
+									if(myHero:GetSpellData(self.SmiteSlot).ammo < 2) then
 										buffProtection = true
 									end
 								end
