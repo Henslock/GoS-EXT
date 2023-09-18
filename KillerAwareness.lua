@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.25
+local scriptVersion = 1.26
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -1732,6 +1732,7 @@ SmiteManager = {
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "Enabled", name = "Toggle Enable Key", key = string.byte("M"), toggle = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "AutoSmite", name = "Auto-Smite", value = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "AutoSmiteTargets", name = "Auto-Smite Targets", type = MENU})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "BlueRedProtection", name = "Don't Smite Buffs if Drag/Baron is Up", value = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "SmiteMarkers", name = "Draw Smite Markers", value = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "MarkerTargets", name = "Smite Marker Targets", type = MENU})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "DrawEnabledStatus", name = "Draw Enabled Status", value = true})
@@ -1860,7 +1861,18 @@ SmiteManager = {
 					if(canSmite) then
 						local smiteDmg = self:GetSmiteDamage(v.obj)
 						if(v.obj.health - smiteDmg <= 0) then
-							Control.CastSpell(self.SmiteCastSlot, v.obj)
+							local buffProtection = false
+							if(self.SmiteMenu.BlueRedProtection:Value()) then
+								if(Game.Camp(6).isCampUp or Game.Camp(12).isCampUp) then
+									if(myHero:GetSpellData(self.SmiteSlot).ammoCurrentCd >= 15 or myHero:GetSpellData(self.SmiteSlot).ammo < 2) then
+										buffProtection = true
+									end
+								end
+							end
+
+							if not buffProtection then
+								Control.CastSpell(self.SmiteCastSlot, v.obj)
+							end
 						end
 					end
 				end
