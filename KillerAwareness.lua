@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.27
+local scriptVersion = 1.28
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -1372,11 +1372,18 @@ MinimapHack = {
 
 			if(KillerAwareness.MinimapTrackerLoaded) then
 				self.TrackerMenu = KillerAwareness.Menu.MinimapTracker
-				--Callback.Del("Tick", self.InitCallback)
 				shouldCheck = false
 			end
 		end
 		self.InitCallback = Callback.Add("Tick", InitMenu)
+
+		--FOW Tracker Support
+		if _G.FOWTRACKER then
+			print("FoW Tracker Loaded!")
+			table.insert(FOWTRACKER.OnFogCampKilledCallback, function(camp) self:ProcessFoWCampKill(camp) end)
+		else
+			print("NAY!")
+		end
 	end,
 
 	InitSprites = function (self)
@@ -1630,6 +1637,10 @@ MinimapHack = {
 			data.didRecall = false
 		end
 	end,
+
+	ProcessFoWCampKill = function (self, camp)
+		--print(camp.pos)
+	end,
 }
 
 SmiteManager = {
@@ -1729,7 +1740,8 @@ SmiteManager = {
 				KillerAwareness.SmiteManagerLoaded = false
 				shouldCheck = false
 			else
-				KillerAwareness.Menu.SmiteManager:MenuElement({id = "Enabled", name = "Toggle Enable Key", key = string.byte("M"), toggle = true})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "IsEnabled", name = "Enabled", value = true})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "ToggleActive", name = "Toggle Enable Key", key = string.byte("M"), toggle = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "AutoSmite", name = "Auto-Smite", value = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "AutoSmiteTargets", name = "Auto-Smite Targets", type = MENU})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "BlueRedProtection", name = "Don't Smite Buffs if Drag/Baron is Up", value = true})
@@ -1864,7 +1876,7 @@ SmiteManager = {
 							local buffProtection = false
 							if(self.SmiteMenu.BlueRedProtection:Value()) then
 								if(Game.Camp(6).isCampUp or Game.Camp(12).isCampUp) then
-									if(myHero:GetSpellData(self.SmiteSlot).ammo < 2) then
+									if(myHero:GetSpellData(self.SmiteSlot).ammo < 2 and (v.obj.charName == "SRU_Red" or v.obj.charName == "SRU_Blue")) then
 										buffProtection = true
 									end
 								end
@@ -1883,11 +1895,13 @@ SmiteManager = {
 	OnTick = function (self)
 		if not KillerAwareness.SmiteManagerLoaded then return end
 
-		if(self.SmiteMenu.Enabled:Value()) then
+		if(self.SmiteMenu.IsEnabled:Value()) then
 			self:UpdateData()
 
-			if(self.SmiteMenu.AutoSmite:Value()) then
-				self:AutoSmite()
+			if(self.SmiteMenu.ToggleActive:Value()) then
+				if(self.SmiteMenu.AutoSmite:Value()) then
+					self:AutoSmite()
+				end
 			end
 		end
 	end,
@@ -1899,28 +1913,28 @@ SmiteManager = {
 			self:DrawEnabledUI()
 		end
 
-		if(self.SmiteMenu.Enabled:Value()) then
-			if(self.SmiteMenu.SmiteMarkers:Value()) then
-				if(Ready(self.SmiteSlot) and IsValid(myHero)) then
-					for k, v in pairs(self.Camps) do
-						if(v.obj and not v.obj.dead and v.obj.visible and GetDistance(v.obj.pos, myHero.pos) <= 1000) then
 
-							--Check to see if we should draw this.
-							local canDraw = false
-							local key = self.MarkTable[v.obj.charName]
-							canDraw = (self.SmiteMenu.MarkerTargets[key]:Value())
+		if(self.SmiteMenu.SmiteMarkers:Value()) then
+			if(Ready(self.SmiteSlot) and IsValid(myHero)) then
+				for k, v in pairs(self.Camps) do
+					if(v.obj and not v.obj.dead and v.obj.visible and GetDistance(v.obj.pos, myHero.pos) <= 1000) then
 
-							if(canDraw) then
-								local smiteDmg = self:GetSmiteDamage(v.obj)
-								if(v.obj.health - smiteDmg <= 0) then
-									Draw.Circle(v.obj.pos, v.obj.boundingRadius*2, 1, Draw.Color(255, 3, 252, 144))
-								end
+						--Check to see if we should draw this.
+						local canDraw = false
+						local key = self.MarkTable[v.obj.charName]
+						canDraw = (self.SmiteMenu.MarkerTargets[key]:Value())
+
+						if(canDraw) then
+							local smiteDmg = self:GetSmiteDamage(v.obj)
+							if(v.obj.health - smiteDmg <= 0) then
+								Draw.Circle(v.obj.pos, v.obj.boundingRadius*2, 1, Draw.Color(255, 3, 252, 144))
 							end
 						end
 					end
 				end
 			end
 		end
+
 	end,
 
 	DrawEnabledUI = function(self)
@@ -1930,9 +1944,9 @@ SmiteManager = {
 		local fontSize = 20
 		Draw.Rect(xOffset-10, yOffset-5, 160, fontSize*2 +12, Draw.Color(215, 0, 0, 0))
 		Draw.Text("Auto-Smite Status:", fontSize, xOffset, yOffset)
-		local state = self.SmiteMenu.Enabled:Value()
-		if(self.SmiteMenu.Enabled:Key()) then
-		local keyString = FetchAsciiString(self.SmiteMenu.Enabled:Key())
+		local state = self.SmiteMenu.ToggleActive:Value()
+		if(self.SmiteMenu.ToggleActive:Key()) then
+		local keyString = FetchAsciiString(self.SmiteMenu.ToggleActive:Key())
 			if(state) then
 				Draw.Text("Enabled ["..keyString.."]", fontSize, xOffset, yOffset + fontSize, Draw.Color(255, 30, 230, 30))
 			else
