@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.28
+local scriptVersion = 1.29
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -1747,7 +1747,13 @@ SmiteManager = {
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "BlueRedProtection", name = "Don't Smite Buffs if Drag/Baron is Up", value = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "SmiteMarkers", name = "Draw Smite Markers", value = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "MarkerTargets", name = "Smite Marker Targets", type = MENU})
-				KillerAwareness.Menu.SmiteManager:MenuElement({id = "DrawEnabledStatus", name = "Draw Enabled Status", value = true})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "AutoSmiteUI", name = "Auto Smite UI", type = MENU})
+
+
+				KillerAwareness.Menu.SmiteManager.AutoSmiteUI:MenuElement({id = "DrawEnabledStatus", name = "Enabled", value = true})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteUI:MenuElement({name = "=== POSITION ===", type = SPACE})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteUI:MenuElement({id = "XPos", name = "X Position", value = 5, min = 0, max = 100, step = 1, identifier = "%"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteUI:MenuElement({id = "YPos", name = "Y Position", value = 95, min = 0, max = 100, step = 1, identifier = "%"})
 
 				--Auto Smite
 				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteBaron", name = "Smite Baron", value = true, leftIcon = "http://puu.sh/rPuVv/933a78e350.png"})
@@ -1909,7 +1915,7 @@ SmiteManager = {
 	Draw = function (self)
 		if not KillerAwareness.SmiteManagerLoaded then return end
 
-		if(self.SmiteMenu.DrawEnabledStatus:Value()) then
+		if(self.SmiteMenu.AutoSmiteUI.DrawEnabledStatus:Value()) then
 			self:DrawEnabledUI()
 		end
 
@@ -1939,8 +1945,8 @@ SmiteManager = {
 
 	DrawEnabledUI = function(self)
 		local res = Game.Resolution()
-		local xOffset = 50
-		local yOffset = res.y - 70
+		local xOffset = res.x * (self.SmiteMenu.AutoSmiteUI.XPos:Value()/100)
+		local yOffset = res.y * (self.SmiteMenu.AutoSmiteUI.YPos:Value()/100)
 		local fontSize = 20
 		Draw.Rect(xOffset-10, yOffset-5, 160, fontSize*2 +12, Draw.Color(215, 0, 0, 0))
 		Draw.Text("Auto-Smite Status:", fontSize, xOffset, yOffset)
