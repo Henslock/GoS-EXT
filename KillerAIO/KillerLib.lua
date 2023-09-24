@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.49
+local kLibVersion = 2.50
 
 -- [ AutoUpdate ]
 do
@@ -573,6 +573,22 @@ function GetClosestPointToCursor(tbl)
 	return closestPoint
 end
 
+function GetClosestUnitToCursor(units)
+	local closestPoint = nil
+	local closestDist = math.huge
+	for i = 1, #units do
+		if(IsValid(units[i])) then
+			local point = units[i].pos
+			local dist = GetDistance2D(point:To2D(), cursorPos)
+			if(dist <= closestDist) then	
+				closestPoint = point
+				closestDist = dist
+			end
+		end
+	end
+	return closestPoint
+end
+
 function GetTarget(range) 
 	if _G.SDK then
 		if myHero.ap > myHero.totalDamage then
@@ -1027,6 +1043,19 @@ function GetMinionsAroundMinion(checkrange, range, minion)
         local m = minions[i]
         local Range = range * range
         if GetDistanceSqr(minion.pos, m.pos) < Range and IsValid(minion) and (m ~= minion) then
+			table.insert(results, m)
+        end
+    end
+	return results
+end
+
+function GetMinionsAroundPosition(checkrange, range, pos)
+    local minions = _G.SDK.ObjectManager:GetEnemyMinions(checkrange)
+	local results = {}
+    for i = 1, #minions do 
+        local m = minions[i]
+        local Range = range * range
+        if GetDistanceSqr(pos, m.pos) < Range then
 			table.insert(results, m)
         end
     end
@@ -1597,7 +1626,7 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 	collisionRadiusOverride = collisionRadiusOverride or SpellData.Radius or 0
 	local collisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}
 
-	if(CantKill(target, true, true, false)==false) then
+	if(CantKill(target, true, false, false)==false) then
 		local isStrafing, avgPos = StrafePred:IsStrafing(target)
 		local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
 		
