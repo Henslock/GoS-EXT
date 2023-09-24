@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.11
+scriptVersion = 1.12
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -91,6 +91,7 @@ function Karthus:LoadMenu()
 	-- Harass
 	self.Menu:MenuElement({id = "Harass", name = "Harass", type = MENU})
 	self.Menu.Harass:MenuElement({id = "UseQ", name = "Use Q in Harass", value = true})
+	self.Menu.Harass:MenuElement({id = "QIsolated", name = "Only Q if Isolated", value = false})
 	self.Menu.Harass:MenuElement({id = "QMana", name = "Q Min Mana", value = 30, min = 0, max = 100, step = 5, identifier = "%"})
 	
 	-- Last Hit
@@ -234,6 +235,7 @@ end
 local gameTick = GameTimer()
 
 function Karthus:CanQ()
+	if(myHero.activeSpell.valid and myHero.activeSpell.name == "KarthusQ") then return false end
 	return myHero:GetSpellData(_Q).ammo == 2 and myHero.mana > myHero:GetSpellData(_Q).mana
 end
 
@@ -306,9 +308,24 @@ function Karthus:Harass()
 	local target = GetTarget(Q.Range + Q.Radius*0.5) --Extend out of the Q range a little bit
 	if(target ~= nil and IsValid(target)) then
 		if(self:CanQ() and self.Menu.Harass.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
-			local didCast = CastPredictedSpell(HK_Q, target, Q, true)
-			if(didCast) then
-				gameTick = GameTimer() + 0.2
+
+			local shouldCast = true
+			if(self.Menu.Harass.QIsolated:Value()) then
+				local tarPredPos = GGPrediction:SpellPrediction(Q)
+				tarPredPos:GetPrediction(target, myHero)
+				tarPredPos = tarPredPos.CastPosition or target.pos
+
+				local nearbyMinions = GetMinionsAroundPosition(Q.Range + Q.Radius, Q.Radius + 15, tarPredPos)
+				if(#nearbyMinions > 0) then
+					shouldCast = false
+				end
+			end
+
+			if(shouldCast) then
+				local didCast = CastPredictedSpell(HK_Q, target, Q, true)
+				if(didCast) then
+					gameTick = GameTimer() + 0.2
+				end
 			end
 		end
 	end
