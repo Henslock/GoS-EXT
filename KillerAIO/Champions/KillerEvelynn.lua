@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.00
+scriptVersion = 1.01
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Evelynn will exit.")
@@ -86,6 +86,7 @@ function Evelynn:LoadMenu()
 	self.Menu.Combo:MenuElement({id = "UseWMelee", name = "Use W in Melee After Level", value = 9, min = 1, max = 18, step = 1})
 	self.Menu.Combo:MenuElement({id = "UseE", name = "Use E", value = true})
 	self.Menu.Combo:MenuElement({id = "UseR", name = "Use R to Kill", value = true})
+	self.Menu.Combo:MenuElement({id = "ROverkillProtection", name = "R Overkill Protection", value = true})
 	self.Menu.Combo:MenuElement({id = "SmiteSettings", name = "Smite Settings", type = MENU})
 	self.Menu.Combo:MenuElement({id = "HextechSettings", name = "Hextech Rocketbelt", type = MENU})
 
@@ -133,6 +134,7 @@ function Evelynn:LoadMenu()
 	-- Killsteal
 	self.Menu:MenuElement({id = "KillSteal", name = "Kill Steal", type = MENU})
 	self.Menu.KillSteal:MenuElement({id = "UseR", name = "Use R", value = true})
+	self.Menu.KillSteal:MenuElement({id = "ROverkillProtection", name = "R Overkill Protection", value = false})
 	self.Menu.KillSteal:MenuElement({id = "RBlacklist", name = "R Killsteal Blacklist (Unless Solo)", type = MENU})
 
 	-- Dragon & Baron Steal
@@ -272,7 +274,17 @@ function Evelynn:Combo()
 				dmg = CalcMagicalDamage(myHero, tar, dmg)
 				local castPos = self:GenerateCastUltDirection(tar)
 				if(tar.health - dmg < 0) then
-					Control.CastSpell(HK_R, castPos)
+
+					local shouldCast = true
+					if(self.Menu.Combo.ROverkillProtection:Value()) then
+						if(self:IsROverkill(tar)) then
+							shouldCast = false
+						end
+					end
+
+					if(shouldCast) then
+						Control.CastSpell(HK_R, castPos)
+					end
 				end
 			end
 		end
@@ -687,7 +699,7 @@ function Evelynn:LaneClear(minions)
 	end
 end
 
-function Evelynn:KillSteal()	
+function Evelynn:KillSteal()
 	--R
 	if(self.Menu.KillSteal.UseR:Value()) then
 		if(Ready(_R)) then
@@ -705,15 +717,34 @@ function Evelynn:KillSteal()
 
 							if(#enemies == 1) then --We can KS on solo targets
 								if(enemy.health - dmg < 0) then
-									Control.CastSpell(HK_R, castPos)
-									return
+									local shouldCast = true
+									if(self.Menu.KillSteal.ROverkillProtection:Value()) then
+										if(self:IsROverkill(enemy)) then
+											shouldCast = false
+										end
+									end
+
+									if(shouldCast) then
+										Control.CastSpell(HK_R, castPos)
+										return
+									end
 								end
 							else
 								if(self.Menu.KillSteal.RBlacklist[enemy.charName]) then
 									if(self.Menu.KillSteal.RBlacklist[enemy.charName]:Value() == false) then
 										if(enemy.health - dmg < 0) then
-											Control.CastSpell(HK_R, castPos)
-											return
+
+											local shouldCast = true
+											if(self.Menu.KillSteal.ROverkillProtection:Value()) then
+												if(self:IsROverkill(enemy)) then
+													shouldCast = false
+												end
+											end
+
+											if(shouldCast) then
+												Control.CastSpell(HK_R, castPos)
+												return
+											end
 										end
 									end
 								end
@@ -962,6 +993,71 @@ function Evelynn:IsUnitCharmed(unit)
 	end
 
 	return false, 0
+end
+
+function Evelynn:IsUnitQMarked(unit)
+	if(IsValid(unit)) then
+		for i = 0, unit.buffCount do
+			local buff = unit:GetBuff(i)
+			if buff.name == "evelynnqdebuff" and buff.count > 0 then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function Evelynn:IsROverkill(unit)
+	--[[
+		Conditions for an overkill, using R when:
+		- The target is less than 100 HP and theres an ally within range of the target.
+			- Check if the ally is ranged or melee
+		- When you are within range of your E and it will kill. Your E has to either be up, or up within 0.5 seconds.
+		- When the target has less than 100 health and your Q2 will kill them while in Q2 range.
+	]]
+	--Condition 1:
+	if(unit.health <= 100) then
+		for _, ally in ipairs(Allies) do
+			if(IsValid(ally)) then
+				if(GetDistance(ally, unit) <= ally.range) then
+					return true
+				end
+			end
+		end
+	end
+
+	--Condition 2:
+	if(GetDistance(myHero, unit) <= E.Range) then
+		if(Ready(_E) or myHero:GetSpellData(_E).currentCd <= 0.5) then
+			local eDmg = self:GetRawAbilityDamage("E", unit)
+			eDmg = CalcMagicalDamage(myHero, unit, eDmg)
+			if(unit.health - eDmg <= 0) then
+				return true
+			end
+		end
+	end
+
+	--Condition 3:
+	if(unit.health <= 100) then
+		if(myHero:GetSpellData(_Q).name ~= "EvelynnQ") and GetDistance(myHero, unit) <= Q2Range then
+			local q2Dmg = self:GetRawAbilityDamage("Q")
+			q2Dmg = CalcMagicalDamage(myHero, unit, q2Dmg)
+
+			local qBonusDmg = self:GetRawAbilityDamage("QBonus")
+			qBonusDmg = CalcMagicalDamage(myHero, unit, qBonusDmg)
+
+			if(self:IsUnitQMarked(unit)) then
+				q2Dmg = q2Dmg + qBonusDmg
+			end
+
+			if(unit.health - q2Dmg <= 0) then
+				return true
+			end
+		end
+	end
+
+	return false
 end
 
 function Evelynn:GetWRange()
