@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Evelynn will exit.")
@@ -427,7 +427,7 @@ function Evelynn:Combo()
 			if(chargeCheck) then
 
 				--Use smite to kill
-				if(self.Menu.Combo.SmiteSettings.UseRKillRange:Value()) then
+				if(self.Menu.Combo.SmiteSettings.UseKill:Value()) then
 					local tar = GetTarget(500) -- Smite Range
 					if(IsValid(tar)) then
 						if(tar.health - self:GetSmiteDamage(tar) <= 0) then
