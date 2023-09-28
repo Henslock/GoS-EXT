@@ -15,7 +15,7 @@ end
 
 -- [ AutoUpdate ]
 
---UpdateMyHeroScript()
+UpdateMyHeroScript()
 
 
 ----------------------------------------------------
