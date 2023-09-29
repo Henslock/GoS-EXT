@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Nocturne will exit.")
@@ -130,6 +130,7 @@ function Nocturne:LoadMenu()
 	self.Menu:MenuElement({id = "Drawings", name = "Draws", type = MENU})
 	self.Menu.Drawings:MenuElement({id = "DrawQ", name = "Draw Q Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawE", name = "Draw E Range", value = true})
+	self.Menu.Drawings:MenuElement({id = "DrawR", name = "Draw R Range on Minimap", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawKillableTargets", name = "Draw Killable Targets", value = true})
 	self.Menu.Drawings:MenuElement({id = "DamageHPBar", name = "Damage HP Bar", type = MENU})
 
@@ -505,6 +506,11 @@ function Nocturne:LaneClear(minions)
 	end
 end
 
+function Nocturne:GetRRange()
+	local range = ({2500, 3250, 4000})[myHero:GetSpellData(_R).level]
+	return range
+end
+
 function Nocturne:AutoW()
 	if not Ready(_W) then return end
 	
@@ -794,6 +800,11 @@ function Nocturne:Draw()
 		end
 	end
 
+	if(self.Menu.Drawings.DrawR:Value()) then
+		if(Ready(_R)) then
+			Draw.CircleMinimap(myHero.pos, self:GetRRange(), 1, DrawColor(185, 255, 255, 255))
+		end
+	end
 
 	if(self.Menu.Drawings.DamageHPBar.DrawDamageHPBar:Value()) then
 		self:DrawDamageHPBars()
