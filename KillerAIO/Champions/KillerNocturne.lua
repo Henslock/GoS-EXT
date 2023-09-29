@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.00
+scriptVersion = 1.01
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Nocturne will exit.")
@@ -94,6 +94,10 @@ function Nocturne:LoadMenu()
 	self.Menu:MenuElement({id = "Clear", name = "Clear", type = MENU})
 	self.Menu.Clear:MenuElement({id = "Lane", name = "Lane", type = MENU})
 	self.Menu.Clear:MenuElement({id = "Jungle", name = "Jungle", type = MENU})
+
+	-- Flee
+	self.Menu:MenuElement({id = "Flee", name = "Flee", type = MENU})
+	self.Menu.Flee:MenuElement({id = "UseQ", name = "Use Q at Cursor", value = true})
 
 	-- Lane Clear
 	self.Menu.Clear.Lane:MenuElement({id = "UseQ", name = "Use Q", value = true})
@@ -210,6 +214,8 @@ function Nocturne:Tick()
 	local mode = GetMode()
 	if(mode == "Combo") then
 		self:Combo()
+	elseif(mode == "Flee") then
+		self:Flee()
 	elseif(mode == "Harass") then
 		self:Harass()
 	elseif(mode == "LastHit") then
@@ -293,6 +299,17 @@ end
 function Nocturne:LastHit()
 	if(gameTick > GameTimer()) then return end	
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+end
+
+function Nocturne:Flee()
+	if(gameTick > GameTimer()) then return end
+	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+
+	if(self.Menu.Flee.UseQ:Value()) then
+		if(Ready(_Q)) then
+			Control.CastSpell(HK_Q)
+		end
+	end
 end
 
 function Nocturne:Clear()
