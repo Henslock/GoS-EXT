@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.03
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Evelynn will exit.")
@@ -928,7 +928,7 @@ end
 function Evelynn:HasOffensiveSmite()
 
 	local smiteName = myHero:GetSpellData(self.SmiteSlot).name
-	if(smiteName == "SummonerSmiteAvatarOffensive" or smiteName == "SummonerSmiteAvatarUtility" or smiteName == "SummonerSmiteAvatarDefensive") then
+	if(smiteName == "SummonerSmiteAvatarOffensive" or smiteName == "SummonerSmiteAvatarUtility" or smiteName == "SummonerSmiteAvatarDefensive" or smiteName == "S5_SummonerSmitePlayerGanker") then
 		return true
 	end
 
