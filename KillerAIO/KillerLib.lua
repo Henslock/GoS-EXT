@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.50
+local kLibVersion = 2.51
 
 -- [ AutoUpdate ]
 do
@@ -574,19 +574,19 @@ function GetClosestPointToCursor(tbl)
 end
 
 function GetClosestUnitToCursor(units)
-	local closestPoint = nil
+	local closestUnit = nil
 	local closestDist = math.huge
 	for i = 1, #units do
 		if(IsValid(units[i])) then
 			local point = units[i].pos
 			local dist = GetDistance2D(point:To2D(), cursorPos)
 			if(dist <= closestDist) then	
-				closestPoint = point
+				closestUnit = units[i]
 				closestDist = dist
 			end
 		end
 	end
-	return closestPoint
+	return closestUnit
 end
 
 function GetTarget(range) 
@@ -1615,16 +1615,113 @@ function GetPrediction(target, spell_speed, casting_delay)
 	return Vector(interception_point)
 end
 
+function GetPredictionPrecise(target, spell_speed, casting_delay, spell_radius, Circular)
+	local latency = _G.LATENCY > 1 and _G.LATENCY * 0.001 or _G.LATENCY
+	casting_delay = casting_delay + latency
+	local caster_position = myHero.pos
+	local target_position = target.pos
+	local direction_vector = target.pathing.hasMovePath and (target:GetPath(target.pathing.pathIndex) - target_position):Normalized() or target.dir
+	local movement_speed = target.pathing.hasMovePath and target.ms or 0
+ 	local target_radius = Circular and 0 or target.boundingRadius
+	-- Normalize direction_vector
+	local magnitude = math.sqrt(direction_vector.x^2 + direction_vector.z^2)
+	local normalized_direction_vector = {x = direction_vector.x / magnitude, z = direction_vector.z / magnitude}
+	-- Target velocity vector
+	local target_velocity = {x = normalized_direction_vector.x * movement_speed, z = normalized_direction_vector.z * movement_speed}
+  
+	-- Calculate difference in positions
+	local delta_position = {x = target_position.x - caster_position.x, z = target_position.z - caster_position.z}
+  
+	local function adjustPosition(position, t)
+		local delay = t or casting_delay
+		local potential_adjusted_position = {
+			x = position.x - normalized_direction_vector.x * (spell_radius),
+			y = position.y,
+			z = position.z  - normalized_direction_vector.z * (spell_radius)
+		}
+		local potential_adjusted_position2 = {
+		  x = target_position.x + target_velocity.x * (latency+0.1),
+		  y = target_position.y,
+		  z = target_position.z  + target_velocity.z *(latency+0.1) 
+	  	}
+		local distance_target_would_travel = movement_speed * delay
+		return distance_target_would_travel < (spell_radius + target_radius + 20) and potential_adjusted_position2 or potential_adjusted_position
+	end
+	-- If the spell_speed is math.huge (i.e., the spell travels instantaneously), return the predicted target_position after casting_delay
+	if spell_speed == math.huge then
+		local target_position = {
+			x = target_position.x + target_velocity.x * casting_delay,
+			y = target_position.y,
+			z = target_position.z + target_velocity.z * casting_delay
+		}
+		return Vector(adjustPosition(target_position)), target_position
+	end
+  
+	-- Quadratic equation coefficients
+	local a = (target_velocity.x^2 + target_velocity.z^2) - spell_speed^2
+	local b = 2 * (delta_position.x * target_velocity.x + delta_position.z * target_velocity.z)
+	local c = delta_position.x^2 + delta_position.z^2
+  
+	-- Discriminant
+	local discriminant = b^2 - 4*a*c
+  
+	-- If the discriminant is negative, no real solution exists
+	if discriminant < 0 then
+		return nil
+	end
+  
+	-- Find the smallest positive solution
+	local t = (function()
+		local t1 = (-b + math.sqrt(discriminant)) / (2 * a)
+		local t2 = (-b - math.sqrt(discriminant)) / (2 * a)
+		if t1 > 0 and t2 > 0 then
+			return math.min(t1, t2)
+		elseif t1 > 0 then
+			return t1
+		elseif t2 > 0 then
+			return t2
+		end
+	end)()
+  
+	if not t then
+		return nil
+	end
+  
+	-- Compute the interception point
+	t=t+casting_delay
+	local interception_point = {
+		x = target_position.x + target_velocity.x * t,
+		y = target_position.y,
+		z = target_position.z + target_velocity.z * t
+	}
 
-function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollision, collisionRadiusOverride)
+	return Vector(adjustPosition(interception_point, t)), interception_point
+end
+
+
+function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollision, collisionRadiusOverride, shouldInterpolate)
 	if(IsValid(target) == false) then return end
 	if(SpellData.Range == nil) then return end
 
 	SpellData.Speed = SpellData.Speed or math.huge
 	SpellData.Delay = SpellData.Delay or 0
 	maxCollision = maxCollision or 0
+	shouldInterpolate = shouldInterpolate or false
 	collisionRadiusOverride = collisionRadiusOverride or SpellData.Radius or 0
 	local collisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}
+
+	local function CheckCollisionAndCastSpell(pos, maxCollision, collisionTypes)
+		if(maxCollision > 0) then
+			local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, pos, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
+			if(collisionCount < maxCollision) then
+				Control.CastSpell(hotkey, pos)
+				return true
+			end
+		else    
+			Control.CastSpell(hotkey, pos)
+			return true
+		end
+	end
 
 	if(CantKill(target, true, false, false)==false) then
 		local isStrafing, avgPos = StrafePred:IsStrafing(target)
@@ -1632,30 +1729,12 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 		
 		if(isStrafing) then
 			if(avgPos:DistanceTo(myHero.pos) < SpellData.Range) then
-				if(maxCollision > 0) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
-					if(collisionCount < maxCollision) then
-						Control.CastSpell(hotkey, avgPos)
-						return true
-					end
-				else
-					Control.CastSpell(hotkey, avgPos)
-					return true
-				end
+				CheckCollisionAndCastSpell(avgPos, maxCollision, collisionTypes)
 			end
 		end
 		if(isStutterDancing) then
 			if(avgPos2:DistanceTo(myHero.pos) < SpellData.Range) then
-				if(maxCollision > 0) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, avgPos2, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
-					if(collisionCount < maxCollision) then
-						Control.CastSpell(hotkey, avgPos2)
-						return true
-					end
-				else
-					Control.CastSpell(hotkey, avgPos2)
-					return true
-				end
+				CheckCollisionAndCastSpell(avgPos2, maxCollision, collisionTypes)
 			end
 		end
 		
@@ -1672,55 +1751,32 @@ function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollisi
 				SpellPrediction:GetPrediction(target, myHero)
 				if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) then
 					if(GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
-	
-						if(maxCollision > 0) then
-							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, SpellPrediction.CastPosition, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
-							if(collisionCount < maxCollision) then
-								Control.CastSpell(hotkey, SpellPrediction.CastPosition)
-								return true
-							end
-						else
-							Control.CastSpell(hotkey, SpellPrediction.CastPosition)
-							return true
-						end
-	
+						CheckCollisionAndCastSpell(SpellPrediction.CastPosition, maxCollision, collisionTypes)
 					end
 				end				
 			end
 		else
+			--[[
 			local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
 			SpellPrediction:GetPrediction(target, myHero)
 			if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) then
 				if(GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
-
-					if(maxCollision > 0) then
-						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, SpellPrediction.CastPosition, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
-						if(collisionCount < maxCollision) then
-							Control.CastSpell(hotkey, SpellPrediction.CastPosition)
-							return true
-						end
-					else
-						Control.CastSpell(hotkey, SpellPrediction.CastPosition)
-						return true
-					end
-
+					--CheckCollisionAndCastSpell(SpellPrediction.CastPosition, maxCollision, collisionTypes)
 				end
 			end
+			--]]
 		end
 
 		--If pred still doesn't want to go, we'll just use KillerLib pred
-		local enemyPredPos = GetPrediction(target, SpellData.Speed, SpellData.Delay)
+		local enemyPredPos, interpolatedPos = GetPredictionPrecise(target, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, SpellData.Type == GGPrediction.SPELLTYPE_CIRCLE)
 		if(enemyPredPos) then
-			if(GetDistance(enemyPredPos, myHero.pos) <= SpellData.Range - 50) then
-				if(maxCollision > 0) then
-					local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, enemyPredPos, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
-					if(collisionCount < maxCollision) then
-						Control.CastSpell(hotkey, enemyPredPos)
-						return true
-					end
-				else
-					Control.CastSpell(hotkey, enemyPredPos)
-					return true
+			if(shouldInterpolate) then
+				if(GetDistance(interpolatedPos, myHero.pos) <= SpellData.Range - 50) then
+					CheckCollisionAndCastSpell(interpolatedPos, maxCollision, collisionTypes)
+				end
+			else
+				if(GetDistance(enemyPredPos, myHero.pos) <= SpellData.Range - 50) then
+					CheckCollisionAndCastSpell(enemyPredPos, maxCollision, collisionTypes)
 				end
 			end
 		end
