@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Evelynn will exit.")
@@ -1247,7 +1247,7 @@ function Evelynn:Draw()
 					local tar = GetTarget(self:GetWRange())
 					local closestTar = nil
 					if(#enemies > 0) then
-						local closestTar = GetClosestUnitToCursor(enemies)
+						closestTar = GetClosestUnitToCursor(enemies)
 					end
 					if(closestTar and IsValid(closestTar)) then
 						Control.CastSpell(HK_W, closestTar)
