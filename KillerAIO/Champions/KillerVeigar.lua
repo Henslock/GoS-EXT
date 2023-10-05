@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.14
+scriptVersion = 1.15
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -387,7 +387,7 @@ function Veigar:Combo()
 		if(Ready(_Q)) then
 			local target = GetTarget(Q.Range -10)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
-				CastPredictedSpell(HK_Q, target, Q, false, 2, Q.Radius + 15)
+				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, maxCollision = 2, collisionRadiusOverride = Q.Radius + 15})
 			end
 		end
 	end
@@ -651,7 +651,7 @@ function Veigar:Harass()
 			
 			local target = GetTarget(Q.Range)
 			if(IsValid(target)) then
-				CastPredictedSpell(HK_Q, target, Q, false, 2, Q.Radius + 15)
+				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, maxCollision = 2, collisionRadiusOverride = Q.Radius + 15})
 			end
 		end
 	end
