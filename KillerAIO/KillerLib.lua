@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.51
+local kLibVersion = 2.53
 
 -- [ AutoUpdate ]
 do
@@ -1562,6 +1562,10 @@ function GetPrediction(target, spell_speed, casting_delay)
 	-- Normalize direction_vector
 	local magnitude = math.sqrt(direction_vector.x^2 + direction_vector.z^2)
 	local normalized_direction_vector = {x = direction_vector.x / magnitude, z = direction_vector.z / magnitude}
+
+	if(target.pathing.hasMovePath and target.pathing.isDashing) then
+		return Vector(target.pathing.endPos), Vector(target.pathing.endPos)
+	end
 	
 	-- Target velocity vector
 	local target_velocity = {x = normalized_direction_vector.x * movement_speed, z = normalized_direction_vector.z * movement_speed}
@@ -1632,6 +1636,10 @@ function GetPredictionPrecise(target, spell_speed, casting_delay, spell_radius, 
 	-- Calculate difference in positions
 	local delta_position = {x = target_position.x - caster_position.x, z = target_position.z - caster_position.z}
   
+	if(target.pathing.hasMovePath and target.pathing.isDashing) then
+		return Vector(target.pathing.endPos), Vector(target.pathing.endPos)
+	end
+
 	local function adjustPosition(position, t)
 		local delay = t or casting_delay
 		local potential_adjusted_position = {
@@ -1699,88 +1707,123 @@ function GetPredictionPrecise(target, spell_speed, casting_delay, spell_radius, 
 end
 
 
-function CastPredictedSpell(hotkey, target, SpellData, extendedCheck, maxCollision, collisionRadiusOverride, shouldInterpolate)
+function CastPredictedSpell(args)
+
+	local hotkey = args.Hotkey
+	local target = args.Target 
+	local SpellData = args.SpellData
+	local extendedCheck = args.ExtendedCheck or false
+	local maxCollision = args.maxCollision or 0
+	local collisionRadiusOverride = args.collisionRadiusOverride or SpellData.Radius or 0
+	local ignoreUnkillable = args.IgnoreUnkillable ~= false
+	local ignoreSS = args.IgnoreSpellshields or false
+	local ignoreAA = args.IgnoreAAImmune or false
+	local validcheck = args.ValidCheck or false
+	local ggpred = args.GGPred or false
+	local strafecheck = args.StrafePred ~= false
+	local killerpred = args.KillerPred ~= false
+	local interpolatedPred = args.InterpolatedPred or false --A subset of KillerPred that will cast the spell at the exact path point the unit and spell will meet.
+	local extensionBuffer = args.extensionBuffer or 2
+	local offscreenLinearSkillshots = args.offscreenLinearSkillshots ~= false
+	local returnpos = args.ReturnPos or false
+
+	local function CastSpell(hotkey, position)
+		if returnpos then
+			return position
+		end
+
+		if Vector(position):To2D().onScreen then
+			if (ignoreUnkillable or ignoreSS or ignoreAA) == false or (CantKill(target, ignoreUnkillable, ignoreSS, ignoreAA) == false) then
+				Control.CastSpell(hotkey, position)
+				return true
+			end
+		else
+			local distances = {700, 500, 300}
+			if(offscreenLinearSkillshots and SpellData.Type ~= GGPrediction.SPELLTYPE_CIRCLE) then
+				if (ignoreUnkillable or ignoreSS or ignoreAA) == false or (CantKill(target, ignoreUnkillable, ignoreSS, ignoreAA) == false) then
+					for _, distance in ipairs(distances) do
+						local extendedPosition = myHero.pos:Extended(position, distance)
+						if extendedPosition:ToScreen().onScreen then
+							Control.CastSpell(hotkey, extendedPosition)      
+							return true
+						end
+					end
+				end
+			end
+		end
+	end
+
 	if(IsValid(target) == false) then return end
 	if(SpellData.Range == nil) then return end
 
 	SpellData.Speed = SpellData.Speed or math.huge
 	SpellData.Delay = SpellData.Delay or 0
-	maxCollision = maxCollision or 0
-	shouldInterpolate = shouldInterpolate or false
-	collisionRadiusOverride = collisionRadiusOverride or SpellData.Radius or 0
+
 	local collisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}
 
 	local function CheckCollisionAndCastSpell(pos, maxCollision, collisionTypes)
 		if(maxCollision > 0) then
 			local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, pos, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
 			if(collisionCount < maxCollision) then
-				Control.CastSpell(hotkey, pos)
-				return true
+				return CastSpell(hotkey, pos)
 			end
 		else    
-			Control.CastSpell(hotkey, pos)
-			return true
+			return CastSpell(hotkey, pos)
 		end
 	end
 
-	if(CantKill(target, true, false, false)==false) then
+	if(strafecheck) then
 		local isStrafing, avgPos = StrafePred:IsStrafing(target)
 		local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
 		
 		if(isStrafing) then
 			if(avgPos:DistanceTo(myHero.pos) < SpellData.Range) then
-				CheckCollisionAndCastSpell(avgPos, maxCollision, collisionTypes)
+				return CheckCollisionAndCastSpell(avgPos, maxCollision, collisionTypes)
 			end
 		end
 		if(isStutterDancing) then
 			if(avgPos2:DistanceTo(myHero.pos) < SpellData.Range) then
-				CheckCollisionAndCastSpell(avgPos2, maxCollision, collisionTypes)
+				return CheckCollisionAndCastSpell(avgPos2, maxCollision, collisionTypes)
 			end
 		end
-		
-		if(extendedCheck) then
-			local SpellPrediction, isExtended = GetExtendedSpellPrediction(target, SpellData)
-			if(isExtended) then
-				if SpellPrediction:CanHit(HITCHANCE_HIGH) then
-					local result = myHero.pos:Extended(SpellPrediction.CastPosition, SpellData.Range-2)
-					Control.CastSpell(hotkey, result)
-					return true
-				end
-			else
-				local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
-				SpellPrediction:GetPrediction(target, myHero)
-				if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) then
-					if(GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
-						CheckCollisionAndCastSpell(SpellPrediction.CastPosition, maxCollision, collisionTypes)
-					end
-				end				
+	end
+	
+	if(extendedCheck) then
+		local SpellPrediction, isExtended = GetExtendedSpellPrediction(target, SpellData)
+		if(isExtended) then
+			if SpellPrediction:CanHit(HITCHANCE_HIGH) then
+				local result = myHero.pos:Extended(SpellPrediction.CastPosition, SpellData.Range - extensionBuffer)
+				return CheckCollisionAndCastSpell(result, maxCollision, collisionTypes)
 			end
 		else
-			--[[
 			local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
 			SpellPrediction:GetPrediction(target, myHero)
-			if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) then
-				if(GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
-					--CheckCollisionAndCastSpell(SpellPrediction.CastPosition, maxCollision, collisionTypes)
-				end
-			end
-			--]]
+			if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) and GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50 then
+				return CheckCollisionAndCastSpell(SpellPrediction.CastPosition, maxCollision, collisionTypes)
+			end				
 		end
+	elseif ggpred then
+		local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
+		SpellPrediction:GetPrediction(target, myHero)
+		if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) and (GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
+			return CheckCollisionAndCastSpell(SpellPrediction.CastPosition, maxCollision, collisionTypes)
+		end
+	end
 
-		--If pred still doesn't want to go, we'll just use KillerLib pred
+	if killerpred then
 		local enemyPredPos, interpolatedPos = GetPredictionPrecise(target, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, SpellData.Type == GGPrediction.SPELLTYPE_CIRCLE)
 		if(enemyPredPos) then
-			if(shouldInterpolate) then
+			if(interpolatedPred) then
 				if(GetDistance(interpolatedPos, myHero.pos) <= SpellData.Range - 50) then
-					CheckCollisionAndCastSpell(interpolatedPos, maxCollision, collisionTypes)
+					return CheckCollisionAndCastSpell(interpolatedPos, maxCollision, collisionTypes)
 				end
 			else
 				if(GetDistance(enemyPredPos, myHero.pos) <= SpellData.Range - 50) then
-					CheckCollisionAndCastSpell(enemyPredPos, maxCollision, collisionTypes)
+					return CheckCollisionAndCastSpell(enemyPredPos, maxCollision, collisionTypes)
 				end
 			end
 		end
 	end
 
-	return
+	return false
 end
