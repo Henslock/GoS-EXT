@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.09
+scriptVersion = 1.10
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -535,7 +535,7 @@ function Naafiri:Combo()
 			
 			local target = GetTarget(Q.Range - 75)
 			if(IsValid(target)) then
-				CastPredictedSpell(HK_Q, target, Q, false)
+				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q})
 			end
 		end
 	end
@@ -681,7 +681,7 @@ function Naafiri:Harass()
 			
 			local target = GetTarget(Q.Range - 75)
 			if(IsValid(target)) then
-				CastPredictedSpell(HK_Q, target, Q, false)
+				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q})
 			end
 
 		end
