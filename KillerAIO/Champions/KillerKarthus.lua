@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.12
+scriptVersion = 1.13
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -248,7 +248,7 @@ function Karthus:Combo()
 	local target = GetTarget(Q.Range + Q.Radius*0.5) --Extend out of the Q range a little bit
 	if(target ~= nil and IsValid(target)) then
 		if(self:CanQ() and self.Menu.Combo.UseQ:Value()) then
-			local didCast = CastPredictedSpell(HK_Q, target, Q, true)
+			local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ExtendedCheck = true})
 			if(didCast) then
 				gameTick = GameTimer() + 0.2
 			end
@@ -322,7 +322,7 @@ function Karthus:Harass()
 			end
 
 			if(shouldCast) then
-				local didCast = CastPredictedSpell(HK_Q, target, Q, true)
+				local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ExtendedCheck = true})
 				if(didCast) then
 					gameTick = GameTimer() + 0.2
 				end
