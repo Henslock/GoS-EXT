@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Cho'Gath will exit.")
@@ -52,7 +52,7 @@ local FeastTable = {
 }
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.4, Range = 925, Radius = 250, Speed = math.huge, Collision = false}
+local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.2, Range = 925, Radius = 250, Speed = math.huge, Collision = false}
 local W = {Type = GGPrediction.SPELLTYPE_CONE, Delay = 0.5, Radius = 175, Range = 625, Speed = 28000, Collision = false}
 local ESpikes = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.3, Radius = 170, Range = 650, Speed = 1800, Collision = false}
 local R = {Range = 175}
@@ -523,7 +523,15 @@ function Chogath:Combo()
 		if(target ~= nil and IsValid(target)) then
 		
 			if(myHero.pos:DistanceTo(target.pos) < Q.Range) then
+
+				--local pos = GetPredictedSpellPosition(HK_Q, target, Q, false, 0, Q.Radius-50, false)
+				local pos = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ReturnPos = true, collisionRadiusOverride = Q.Radius - 50})
 				
+				if(pos ~= nil) then
+					local isQinWall, correctedPosition = self:WallQCheck(pos, Q.Radius*0.5)
+					Control.CastSpell(HK_Q, correctedPosition)
+				end
+				--[[
 				local isStrafing, avgPos = StrafePred:IsStrafing(target)
 				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
 				if(isStrafing) then
@@ -572,7 +580,7 @@ function Chogath:Combo()
 						end
 					end
 				end
-		
+				--]]
 			end
 		end
 	end
