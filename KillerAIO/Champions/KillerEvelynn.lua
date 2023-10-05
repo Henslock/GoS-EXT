@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Evelynn will exit.")
@@ -312,9 +312,11 @@ function Evelynn:Combo()
 
 					if(charmCheck or GetDistance(myHero, tar)<= E.Range) then
 						if(GetDistance(myHero, tar)<= E.Range) then
-							CastPredictedSpell(HK_Q, tar, Q, false) --If we are on top of the target, dont worry about collision
+							--If we are on top of the target, dont worry about collision
+							CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q})
 						else
-							CastPredictedSpell(HK_Q, tar, Q, false, 1) --We need to make sure we dont hit minions
+							--We need to make sure we dont hit minions
+							CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1})
 
 						end
 					end
@@ -472,7 +474,7 @@ function Evelynn:Harass()
 					end
 
 					if(charmCheck or GetDistance(myHero, tar)<= E.Range) then
-						CastPredictedSpell(HK_Q, tar, Q, false, 1)
+						CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1})
 					end
 				end
 			else
