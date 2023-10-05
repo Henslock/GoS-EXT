@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.16
+scriptVersion = 1.17
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -496,7 +496,7 @@ function Syndra:Combo()
 		if(IsValid(target)) then
 		
 			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius) then
-				CastPredictedSpell(HK_Q, target, Q, true)
+				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ExtendedCheck = true})
 			end
 		end
 	end
@@ -608,7 +608,7 @@ function Syndra:Harass()
 		local target = GetTarget(Q.Range + Q.Radius) 
 		if(IsValid(target)) then
 			if(myHero.pos:DistanceTo(target.pos) < Q.Range + Q.Radius) then
-				CastPredictedSpell(HK_Q, target, Q, true)
+				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ExtendedCheck = true})
 			end
 		end
 	end
