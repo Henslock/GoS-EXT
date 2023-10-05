@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Nocturne will exit.")
@@ -56,7 +56,7 @@ Nocturne.ComboDamageData = {}
 Nocturne.Menu = MenuElement({type = MENU, id = "KillerNocturne", name = "Killer Nocturne", leftIcon=ChampIcon})
 Nocturne.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 
-
+Nocturne.cachedObjects = {}
 function Nocturne:__init()
 	self:LoadMenu()
 	Callback.Add("Tick", function() self:Tick() end)
@@ -72,7 +72,6 @@ function Nocturne:__init()
 		self.SmiteSlot = SUMMONER_2
 		self.SmiteCastSlot = HK_SUMMONER_2
 	end
-	  
 
 	self:UpdateGoSMenuAutoLevel()
 end
@@ -237,6 +236,7 @@ function Nocturne:Tick()
 	end	
 end
 
+
 function Nocturne:Combo()
 	if(gameTick > GameTimer()) then return end
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
@@ -244,7 +244,7 @@ function Nocturne:Combo()
 	if(self.Menu.Combo.UseQ:Value() and Ready(_Q)) then
 		local tar = GetTarget(Q.Range)
 		if(IsValid(tar) and GetDistance(myHero, tar) < Q.Range - 100) then
-			CastPredictedSpell(HK_Q, tar, Q, false, 0, 110, true)
+			CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, interpolatedPred = true, collisionRadiusOverride = 110})
 		end
 	end
 
@@ -782,7 +782,6 @@ local alphaLerp = 0
 
 function Nocturne:Draw()
 	if myHero.dead then return end
-
 
 	if(self.Menu.Drawings.DrawQ:Value()) then
 		if(Ready(_Q)) then
