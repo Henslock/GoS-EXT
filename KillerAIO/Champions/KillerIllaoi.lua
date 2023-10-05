@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.14
+scriptVersion = 1.15
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -479,7 +479,7 @@ function Illaoi:Combo()
 				end
 
 				if(shouldUseE) then
-					CastPredictedSpell(HK_E, tar, E, false, 1)
+					CastPredictedSpell({Hotkey = HK_E, Target = tar, SpellData = E, maxCollision = 1})
 				end
 			end
 		end
@@ -620,7 +620,7 @@ function Illaoi:Harass()
 		if(Ready(_Q) and (myHero.mana / myHero.maxMana) * 100 >= self.Menu.Harass.QMana:Value() ) then
 			local tar = GetTarget(Q.Range)
 			if(tar and IsValid(tar) and tar.toScreen.onScreen) then
-				CastPredictedSpell(HK_Q, tar, Q)
+				CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q})
 			end
 		end
 	end
@@ -771,7 +771,7 @@ function Illaoi:SemiManualE()
 	if(Ready(_E)) then
 		local tar = GetTarget(Q.Range + 25)
 		if(IsValid(tar) and tar.toScreen.onScreen) then	
-			CastPredictedSpell(HK_E, tar, E, false, 1)
+			CastPredictedSpell({Hotkey = HK_E, Target = tar, SpellData = E, maxCollision = 1})
 		end
 	end
 end
