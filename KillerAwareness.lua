@@ -1,7 +1,8 @@
 require "2DGeometry"
 require "MapPositionGOS"
+require "KillerAIO\\KillerLib"
 
-local scriptVersion = 1.30
+local scriptVersion = 1.31
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
