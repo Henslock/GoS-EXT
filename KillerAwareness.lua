@@ -1,7 +1,7 @@
 require "2DGeometry"
 require "MapPositionGOS"
 
-local scriptVersion = 1.29
+local scriptVersion = 1.30
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -388,7 +388,14 @@ function KillerAwareness:LoadMenu()
 
 	--Smite Manager
 	self.Menu:MenuElement({id = "SmiteManager", name = "Smite Manager", type = MENU})
-	
+
+	--Cached Extra Units
+	self.Menu:MenuElement({id = "CacheExtraMinions", name = "Cache Extra Minions", type = MENU})
+	self.Menu.CacheExtraMinions:MenuElement({name = "Allows GGOrbwalker to hit stuff like:", type = SPACE})
+	self.Menu.CacheExtraMinions:MenuElement({name = "Zyra Plants, Heimer turrets, GP Barrels, etc...", type = SPACE})
+	self.Menu.CacheExtraMinions:MenuElement({name = "==================================", type = SPACE})
+	self.Menu.CacheExtraMinions:MenuElement({id = "Enabled", name = "Enabled", value = true})
+
 	--Health Tracker
 	self.Menu:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = false})
 
@@ -397,6 +404,11 @@ function KillerAwareness:LoadMenu()
 end
 
 function KillerAwareness:Tick()
+
+	if(self.Menu.CacheExtraMinions.Enabled:Value()) then
+		self:CacheChampionMinions()
+	end
+
 end
 
 function KillerAwareness:CreateSprites()
@@ -430,6 +442,65 @@ function KillerAwareness:OnWndMsg(msg, wParam)
 			and self:IsInStatusBox(cursorPos)
 			and { x = self.Window.x - cursorPos.x, y = self.Window.y - cursorPos.y }
 		or nil
+end
+
+local gTick = GameTimer()
+local mNames = {
+	--[[
+	["SRU_ChaosMinionMelee"] = 1,
+	["SRU_ChaosMinionRanged"] = 1,
+	["SRU_ChaosMinionSiege"] = 1,
+	["SRU_ChaosMinionSuper"] = 1,
+	["SRU_OrderMinionMelee"] = 1,
+	["SRU_OrderMinionRanged"] = 1,
+	["SRU_OrderMinionSiege"] = 1,
+	["SRU_OrderMinionSuper"] = 1,
+	["HA_ChaosMinionMelee"] = 1,
+	["HA_ChaosMinionRanged"] = 1,
+	["HA_ChaosMinionSiege"] = 1,
+	["HA_ChaosMinionSuper"] = 1,
+	["HA_OrderMinionMelee"] = 1,
+	["HA_OrderMinionRanged"] = 1,
+	["HA_OrderMinionSiege"] = 1,
+	["HA_OrderMinionSuper"] = 1,
+	--]]
+	["GangplankBarrel"] = 1,
+	["ZyraGraspingPlant"] = 1,
+	["ZyraThornPlant"] = 1,
+	["IllaoiMinion"] = 1,
+	["TeemoMushroom"] = 1,
+	["ShacoBox"] = 1,
+	["NidaleeSpear"] = 1,
+	["KalistaSpawn"] = 1,
+	["HeimerTBlue"] = 1,
+	["HeimerTYellow"] = 1,
+	["ApheliosTurret"] = 1,
+}
+function KillerAwareness:CacheChampionMinions()
+	local mode = GetMode()
+
+	local hov = Game.GetUnderMouseObject()
+	if(hov) then
+		if(hov.valid) then
+			if(mNames[hov.charName] and hov.isEnemy) then
+				_G.SDK.Cached:AddCachedMinion(hov)
+			end
+		end
+	end
+
+	if(mode == "LaneClear" or mode == "LastHit" or mode == "Harass") then
+		if gTick > GameTimer() then return end
+
+		for i = 500, 2000 do
+			local obj = Game.Object(i)
+			if(mNames[obj.charName] and obj.isEnemy) then
+				_G.SDK.Cached:AddCachedMinion(obj)
+			end
+		end
+
+		gTick = GameTimer() + 1.5
+	end
+
 end
 
 function KillerAwareness:Draw()
@@ -1973,12 +2044,18 @@ end)
 Callback.Add("Tick", function()
 	ChampionTracker:OnTick()
 	MinimapHack:OnTick()
-	SmiteManager:OnTick()
 end)
 
 Callback.Add("Draw", function()
 	ChampionTracker:Draw()
 	MinimapHack:Draw()
+end)
+
+table.insert(_G.SDK.OnTick, function()
+	SmiteManager:OnTick()
+end)
+
+table.insert(_G.SDK.OnDraw, function()
 	SmiteManager:Draw()
 end)
 
