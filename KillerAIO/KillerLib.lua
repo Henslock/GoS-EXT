@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.53
+local kLibVersion = 2.54
 
 -- [ AutoUpdate ]
 do
@@ -1482,6 +1482,63 @@ function CalculateBestCirclePosition(targets, radius, edgeDetect, spellRange, sp
 			return checkPos, #newCluster, newCluster
 		end
 
+	end
+	
+	return avgCastPos, #targets, targets
+end
+
+function CalculateBestLinePosition(targets, radius, spellRange, spellSpeed, spellDelay)
+	local avgCastPos = CalculateBoundingBoxAvg(targets, spellSpeed, spellDelay)
+	local newCluster = {}
+	local distantEnemies = {}
+
+	local lineEndPos = myHero.pos:Extended(avgCastPos, spellRange)
+	
+	for _, enemy in pairs(targets) do
+		local ePredPos = GGPrediction:SpellPrediction({Type = GGPrediction.SPELLTYPE_LINE, Delay = spellDelay, Range = spellRange, Radius = radius, Speed = spellSpeed})
+		ePredPos:GetPrediction(enemy, myHero)
+		if(ePredPos.CastPosition) then
+			ePredPos = Vector(ePredPos.CastPosition.x, enemy.pos.y, ePredPos.CastPosition.z)
+		else
+			ePredPos = enemy.pos
+		end
+
+		local point, isOnSegment = ClosestPointOnLineSegment(ePredPos, myHero.pos, lineEndPos)
+		if(ePredPos:DistanceTo(point) > radius) then
+			table.insert(distantEnemies, enemy)
+		else
+			table.insert(newCluster, enemy)
+		end
+	end
+	
+	if(#distantEnemies > 0) then
+		local closestDistantEnemy = nil
+		local closestDist = 10000
+		for _, distantEnemy in pairs(distantEnemies) do
+
+			local dPredPos = GGPrediction:SpellPrediction({Type = GGPrediction.SPELLTYPE_LINE, Delay = spellDelay, Range = spellRange, Radius = radius, Speed = spellSpeed})
+			dPredPos:GetPrediction(distantEnemy, myHero)
+			if(dPredPos.CastPosition) then
+				dPredPos = Vector(dPredPos.CastPosition.x, distantEnemy.pos.y, dPredPos.CastPosition.z)
+			else
+				dPredPos = distantEnemy.pos
+			end
+
+			local point, isOnSegment = ClosestPointOnLineSegment(dPredPos, myHero.pos, lineEndPos)
+			local dist = dPredPos:DistanceTo(point)
+			if( dist < closestDist ) then
+				closestDistantEnemy = distantEnemy
+				closestDist = dist
+			end
+		end
+		if(closestDistantEnemy ~= nil) then
+			table.insert(newCluster, closestDistantEnemy)
+		end
+		
+		--Recursion, we are discarding the furthest target and recalculating the best position
+		if(#newCluster ~= #targets) then
+			return CalculateBestLinePosition(newCluster, radius)
+		end
 	end
 	
 	return avgCastPos, #targets, targets
