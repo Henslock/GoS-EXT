@@ -2,7 +2,7 @@ require "2DGeometry"
 require "MapPositionGOS"
 require "KillerAIO\\KillerLib"
 
-local scriptVersion = 1.31
+local scriptVersion = 1.32
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -662,6 +662,14 @@ function KillerAwareness:DrawTurretAwareness()
 	end
 end
 
+local TrackerColors = {
+	Grey = DrawColor(215, 23, 23, 23),
+	GreyFaded = DrawColor(55, 255, 255, 255),
+	Black = DrawColor(255, 0, 0, 0),
+	White = DrawColor(255, 255, 255, 255),
+	Green = DrawColor(255, 0, 255, 125),
+	GreenFaded = DrawColor(55, 0, 255, 125),
+}
 function KillerAwareness:DrawHealthTracker()
 	if not (myHero.networkID)then return end
 	if (Game.Timer() <= 1) then return end
@@ -669,9 +677,9 @@ function KillerAwareness:DrawHealthTracker()
 		KillerAwareness.Window = { x = cursorPos.x + KillerAwareness.AllowMove.x, y = cursorPos.y + KillerAwareness.AllowMove.y }
 	end
 
-	local rectHeight = #Enemies * 30	
-	Draw.Rect(self.Window.x, self.Window.y, 300, rectHeight, Draw.Color(224, 23, 23, 23))
-	Draw.Text("Health Tracker", 18, self.Window.x + 10, self.Window.y + 5, DrawColor(255, 255, 255, 255))
+	local rectHeight = 30 + (#Enemies*20) + 8
+	Draw.Rect(self.Window.x, self.Window.y, 300, rectHeight, TrackerColors.Grey)
+	Draw.Text("Health Tracker", 18, self.Window.x + 10, self.Window.y + 5, TrackerColors.White)
 	local yOffset = 0
 	
 	local barWidth = 180
@@ -685,18 +693,22 @@ function KillerAwareness:DrawHealthTracker()
 		
 		--HealthBarDraws
 		if(not miaCheck and v.alive) then
-			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, DrawColor(255, 0, 0, 0))
-			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth * hpRatio -1, 8, IsValid(v) and DrawColor(255, 0, 255, 125) or DrawColor(55, 0, 255, 125))
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, TrackerColors.Black)
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth * hpRatio -1, 8, IsValid(v) and TrackerColors.Green or TrackerColors.GreenFaded)
 		else
-			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, DrawColor(55, 255, 255, 255))
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, TrackerColors.GreyFaded)
 		end
 		
 		-- Name
+		local name = v.charName
+		if(name:find("Practice")) then
+			name = "Dummy"
+		end
 
 		if(not miaCheck and v.alive) then
-			Draw.Text(v.charName, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, DrawColor(255, 55, 255, 155))
+			Draw.Text(name, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, TrackerColors.Green)
 		else
-			Draw.Text(v.charName, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, DrawColor(125, 255, 255, 255))
+			Draw.Text(name, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, TrackerColors.GreyFaded)
 		end
 		
 		yOffset = yOffset + 20
