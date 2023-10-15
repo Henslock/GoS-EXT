@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.35
+scriptVersion = 1.38
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Annie will exit.")
@@ -47,8 +46,14 @@ Annie.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 
 function Annie:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
 	
 	--Load AutoE Champ Spell Toggles
 	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
@@ -59,6 +64,8 @@ function Annie:__init()
 		self.Menu.AutoE.Ignore[champName]:MenuElement({id = enemy:GetSpellData(_E).name, name = "E", value = false})
 		self.Menu.AutoE.Ignore[champName]:MenuElement({id = enemy:GetSpellData(_R).name, name = "R", value = false})
 	end)
+
+	DelayEvent(function() end, 0.5)
 
 	self:UpdateGoSMenuAutoLevel()
 
@@ -402,14 +409,17 @@ end
 
 function Annie:GetRawAbilityDamage(spell)
 	if(spell == "Q") then
-		 return ({70, 105, 140, 175, 210})[myHero:GetSpellData(_Q).level] + (0.75 * myHero.ap)
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
+		return ({70, 105, 140, 175, 210})[myHero:GetSpellData(_Q).level] + (0.75 * myHero.ap)
 	end
 	
 	if(spell == "W") then
+		if myHero:GetSpellData(_W).level == 0 then return 0 end
 		return ({70, 115, 160, 205, 250})[myHero:GetSpellData(_W).level] + (0.85 * myHero.ap)
 	end
 	
 	if(spell == "R") then
+		if myHero:GetSpellData(_R).level == 0 then return 0 end
 		return ({150, 275, 400})[myHero:GetSpellData(_R).level] + (0.75 * myHero.ap)
 	end
 	
@@ -1056,7 +1066,7 @@ end
 function Annie:IsKillable(unit)
 	local isKillable = false
 	local igniteOverkill = false
-	local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+	local igniteDmg = GetIgniteDamage()
 	
 	if(comboDamageData[unit.name] ~= nil) then	
 		local dmg = comboDamageData[unit.name]
@@ -1073,61 +1083,54 @@ function Annie:IsKillable(unit)
 	return isKillable, igniteOverkill
 end
 
-function Annie:HasElectrocute(unit)
-    for i = 0, unit.buffCount do
-        local buff = unit:GetBuff(i)
-        if buff and buff.count>0 and buff.name:lower():find("electrocute.lua") then
-			return true
-        end
-    end
-    return false
-end
 
 function Annie:GetTotalDamage(unit)
 	local totalDmg = 0
 	
 	if(Ready(_Q)) then
-		totalDmg = totalDmg + getdmg("Q", unit, myHero)
+		local QDmg = self:GetRawAbilityDamage("Q")
+		QDmg = CalcMagicalDamage(myHero, unit, QDmg)
+		totalDmg = totalDmg + QDmg
 	end
 	
 	if(Ready(_W)) then
-		totalDmg = totalDmg + getdmg("W", unit, myHero)
+		local WDmg = self:GetRawAbilityDamage("W")
+		WDmg = CalcMagicalDamage(myHero, unit, WDmg)
+		totalDmg = totalDmg + WDmg
 	end
 	
 	if(Ready(_R) and not self:HasTibbers()) then
-		totalDmg = totalDmg + getdmg("R", unit, myHero)
+		local RDmg = self:GetRawAbilityDamage("R")
+		RDmg = CalcMagicalDamage(myHero, unit, RDmg)
+		totalDmg = totalDmg + RDmg
 		
-		--[[
 		local TibbersAA = ((myHero:GetSpellData(_R).level * 25) + 25) + 0.15 * myHero.ap
 		local TibbersAOE = ((myHero:GetSpellData(_R).level * 20) + (0.12 * myHero.ap))
 		local TibbersAAdmg = CalcMagicalDamage(myHero, unit, TibbersAA)
 		local TibbersAOEdmg = CalcMagicalDamage(myHero, unit, TibbersAOE)
-		--]]
+
+		totalDmg = totalDmg + TibbersAAdmg + TibbersAOEdmg
+
 	end
 	
 	if myHero:GetSpellData(SUMMONER_1).name == "SummonerDot" and Ready(SUMMONER_1) then
-		local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+		local igniteDmg = GetIgniteDamage()
 		totalDmg = totalDmg + igniteDmg
 	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerDot" and Ready(SUMMONER_2) then
-		local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+		local igniteDmg = GetIgniteDamage()
 		totalDmg = totalDmg + igniteDmg
 	end
 	
-	if self:HasElectrocute(myHero) then
-		local baseDmg = 30+(150/(17*(myHero.levelData.lvl)))
-		local bonusDmg = (myHero.ap * 0.25)+(myHero.bonusDamage*0.4)
-		local value = baseDmg + bonusDmg 
-		local ElecDmg=_G.SDK.Damage:CalculateDamage(myHero, unit, _G.SDK.DAMAGE_TYPE_MAGICAL , value )
-		totalDmg= totalDmg + ElecDmg
+	if HasElectrocute() then
+		local elecDmg = GetElectrocuteDamage()
+		elecDmg = CalcMagicalDamage(myHero, unit, elecDmg)
+		totalDmg= totalDmg + elecDmg
 	end
 	
-	--6655 = Ludens
-	local ludensCheck, ludensIsUp = CheckDmgItems(6655)
-	if(ludensCheck and ludensIsUp) then
-		local ludensDmg = 100 + (myHero.ap * 0.1)
-		local ludensCalcDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
-		
-		totalDmg = totalDmg + ludensCalcDmg
+	if(HasItem(Item.LudensTempest)) then
+		local ludensDmg = GetItemDamage(Item.LudensTempest)
+		ludensDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
+		totalDmg = totalDmg + ludensDmg
 	end
 	
 	local AAdmg = getdmg("AA", unit, myHero)
@@ -1158,21 +1161,17 @@ function Annie:GetTotalComboDamage(unit)
 		totalDmg = totalDmg + RDmg
 	end
 	
-	if self:HasElectrocute(myHero) then
-		local baseDmg = 30+(150/(17*(myHero.levelData.lvl)))
-		local bonusDmg = (myHero.ap * 0.25)+(myHero.bonusDamage*0.4)
-		local value = baseDmg + bonusDmg 
-		local ElecDmg=_G.SDK.Damage:CalculateDamage(myHero, unit, _G.SDK.DAMAGE_TYPE_MAGICAL , value )
-		totalDmg= totalDmg + ElecDmg
+	if HasElectrocute() then
+		local elecDmg = GetElectrocuteDamage()
+		elecDmg = CalcMagicalDamage(myHero, unit, elecDmg)
+		totalDmg= totalDmg + elecDmg
 	end
 	
-	--6655 = Ludens
-	local ludensCheck, ludensIsUp = CheckDmgItems(6655)
-	if(ludensCheck and ludensIsUp) then
-		local ludensDmg = 100 + (myHero.ap * 0.1)
-		local ludensCalcDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
-		
-		totalDmg = totalDmg + ludensCalcDmg
+	if(HasItem(Item.LudensTempest)) then
+		local ludensDmg = GetItemDamage(Item.LudensTempest)
+		ludensDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
+
+		totalDmg = totalDmg + ludensDmg
 	end
 	
 	return totalDmg
