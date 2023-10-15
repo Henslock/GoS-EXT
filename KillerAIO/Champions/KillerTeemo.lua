@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Teemo will exit.")
@@ -97,12 +96,11 @@ class "Teemo"
 
 local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/teemo.png"
 
-local gameTick = GameTimer()
-Teemo.AutoLevelCheck = false
 Teemo.LeftClickCheck = nil
 
 -- GG PRED
-local Q, R = {}, {}
+local Q = {Range = 680, Speed = 2500, Delay = 0.25}
+local R = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.4, Range = 600, Radius = 160, Speed = 1000}
 
 --Main Menu
 Teemo.Menu = MenuElement({type = MENU, id = "KillerTeemo", name = "Killer Teemo", leftIcon = ChampIcon})
@@ -110,9 +108,22 @@ Teemo.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 
 function Teemo:__init()
 	self:LoadMenu()
-	self:InitPred()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
+
+	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
+		self:OnWndMsg(msg, wParam)
+	end)
+
+	_G.SDK.Orbwalker:OnPostAttack(function(...) Teemo:OnPostAttack(...) end)
+
+	self:UpdateGoSMenuAutoLevel()
 end
 
 function Teemo:LoadMenu()                     	
@@ -155,35 +166,70 @@ function Teemo:LoadMenu()
 	-- Draws
 	self.Menu:MenuElement({id = "Drawings", name = "Draws", type = MENU})
 	self.Menu.Drawings:MenuElement({id = "DrawQ", name = "Draw Q Range", value = true})
+	self.Menu.Drawings:MenuElement({id = "DrawR", name = "Draw R Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawBlind", name = "Draw Blind Duration", value = true})
 	self.Menu.Drawings:MenuElement({id = "Debug", name = "Debug Drawings", type = MENU})
 	
-	-- debug.debug
-	self.Menu.Drawings.Debug:MenuElement({id = "DrawParticles", name = "Draw Particles", value = false})
+	--AutoLeveler	
+	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
+	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.AutoLevel:MenuElement({id = "StartingLevel", name = "Start Using At Level:", value = 3, min = 2, max = 18, step = 1})
+	self.Menu.AutoLevel:MenuElement({id = "FirstSkill", name = "First Skill Priority", drop = {"Q", "W", "E"}, value = 3, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.SecondSkill:Value() == 3) then
+					self.Menu.AutoLevel.SecondSkill:Value(1)
+				else
+					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+
+	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 1, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.FirstSkill:Value() == 3) then
+					self.Menu.AutoLevel.FirstSkill:Value(1)
+				else
+					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
 	
-		
-	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (E - Q - W)", value = false})
 	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
 	
 end
 
-function Teemo:InitPred()
-	Q = {Range = 680, Speed = 2500, Delay = 0.25}
-	R = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.4, Range =  self:GetRRange(), Radius = 160, Speed = 1000, Collision = false}
+function Teemo:UpdateGoSMenuAutoLevel()
+	self.Menu.AutoLevel.InfoText:Remove()
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	local thirdSkill = 0
+	local enumTable = {1, 2, 3}
+	enumTable[firstSkill] = nil
+	enumTable[secondSkill] = nil
+	for k, v in pairs(enumTable) do
+		thirdSkill = v
+	end
+
+	local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
 end
 
-function Teemo:GetPred(tbl)
-	if(tbl == Q) then
-		Q = {Range = 680, Speed = 2500, Delay = 0.25}
-		return Q
-	end
+function Teemo:AutoLevel()
 	
-	if(tbl == R) then
-		R = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.4, Range =  self:GetRRange(), Radius = 160, Speed = 1000, Collision = false}
-		return R
-	end
-	
-	return nil
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	skillPriority = GenerateSkillPriority(firstSkill, secondSkill)
+
+	AutoLeveler(skillPriority)
 end
 
 function Teemo:Tick()
@@ -209,7 +255,7 @@ function Teemo:Tick()
 	elseif(mode == "LaneClear") then
 		self:Clear()
 	end
-	
+
 	self:KillSteal()
 	
 	if(self.Menu.AutoQ:Value()) then
@@ -224,68 +270,37 @@ function Teemo:Tick()
 		self:MushroomAssistant()
 	end
 	
-	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
+	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
 	end	
 end
-
-
-function Teemo:AutoLevel()
-	if self.AutoLevelCheck then return end
-	
-	local level = myHero.levelData.lvl
-	local levelPoints = myHero.levelData.lvlPts
-
-	if (levelPoints == 0) or (level == 1) then return end
-	if (Game.mapID == HOWLING_ABYSS and level <= 3) then return end
-	--Order = E > Q > W
-	if(levelPoints >0) then
-		self.AutoLevelCheck = true
-		DelayAction(function()				
-				
-				if level == 6 or level == 11 or level == 16 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_R)
-					Control.KeyUp(HK_R)
-					Control.KeyUp(HK_LUS)
-				elseif level == 1 or level == 4 or level == 5 or level == 7 or level == 9 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_E)
-					Control.KeyUp(HK_E)
-					Control.KeyUp(HK_LUS)
-				elseif level == 2 or level == 8 or level == 10 or level == 12 or level == 13 then
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_Q)
-					Control.KeyUp(HK_Q)
-					Control.KeyUp(HK_LUS)
-				elseif level == 3 or level == 14 or level == 15 or level == 17 or level == 18 then				
-					Control.KeyDown(HK_LUS)
-					Control.KeyDown(HK_W)
-					Control.KeyUp(HK_W)
-					Control.KeyUp(HK_LUS)
-				end
-		
-			self.AutoLevelCheck = false
-		end, 0.5)
-	end
+function Teemo:OnPostAttack(args)
+    if GetMode() == "Combo" then
+		if(self.Menu.Combo.UseQ:Value() and Ready(_Q)) then
+			local tar = GetTarget(Q.Range)
+			if(IsValid(tar)) then 
+				Control.CastSpell(HK_Q, tar)
+				return
+			end
+		end
+    end
 end
 
 local RComboCD = 5
 local RComboTimer = GameTimer()
 function Teemo:Combo()
-	if(gameTick > GameTimer()) then return end
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
 	
 
 	if(self.Menu.Combo.UseIgnite:Value()) then
-		local target = GetTarget(myHero.range)
+		local target = GetTarget(_G.SDK.Data:GetAutoAttackRange(myHero))
 		if(target and IsValid(target)) then
-			local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+			local igniteDmg = GetIgniteDamage()
 			
-			local EDmg = ({14, 25, 36, 47, 58})[myHero:GetSpellData(_E).level] + (0.3 * myHero.ap)
+			local EDmg = self:GetRawAbilityDamage("E")
 			EDmg = CalcMagicalDamage(myHero, target, EDmg)
 			
-			local EDotDmg = ({6, 12, 18, 24, 30})[myHero:GetSpellData(_E).level] + (0.1 * myHero.ap)
+			local EDotDmg = self:GetRawAbilityDamage("EDot")
 			EDotDmg = CalcMagicalDamage(myHero, target, EDotDmg)
 
 			if(target.health - igniteDmg - (EDmg*2) - (EDotDmg*4) <= 0) and (target.health - igniteDmg > 0) then
@@ -296,10 +311,9 @@ function Teemo:Combo()
 	end
 
 	if(self.Menu.Combo.UseQ:Value() and Ready(_Q)) then
-		self:GetPred(Q) --Update Data
 		local target = GetTarget(Q.Range)
 		if(target and IsValid(target)) then
-			if(myHero.pos:DistanceTo(target.pos) < Q.Range) then
+			if(GetDistance(myHero, target) <= Q.Range and GetDistance(myHero, target) > _G.SDK.Data:GetAutoAttackRange(myHero)) then
 				Control.CastSpell(HK_Q, target)
 				return
 			end
@@ -307,17 +321,15 @@ function Teemo:Combo()
 	end
 	
 	if(self.Menu.Combo.UseR:Value() and Ready(_R) and RComboTimer < GameTimer()) then
-		self:GetPred(R) --Update Data
-		local target = GetTarget(R.Range)
+		local target = GetTarget(self:GetRRange())
 		if(target and IsValid(target)) then
-			if(myHero.pos:DistanceTo(target.pos) < R.Range) then
+			if(myHero.pos:DistanceTo(target.pos) < self:GetRRange()) then
 				
 				--Condition 1: A melee enemy is walking towards Teemo, place mushroom on yourself
 				if(target.range <= 300 and myHero.pos:DistanceTo(target.pos) <= 500) then
 					local checkRunDir = GetUnitRunDirection(myHero, target)
 					if(checkRunDir == RUNNING_TOWARDS) then
 						Control.CastSpell(HK_R, myHero)
-						gameTick = GameTimer() + 0.2
 						RComboTimer = GameTimer() + RComboCD
 						return
 					end
@@ -334,7 +346,6 @@ function Teemo:Combo()
 						local RPrediction = GetExtendedSpellPrediction(target, R)
 						if RPrediction:CanHit(HITCHANCE_HIGH) then
 							Control.CastSpell(HK_R, RPrediction.CastPosition)
-							gameTick = GameTimer() + 0.2
 							RComboTimer = GameTimer() + RComboCD
 							return
 						end
@@ -348,11 +359,9 @@ function Teemo:Combo()
 end
 
 function Teemo:Harass()
-	if(gameTick > GameTimer()) then return end	
-	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	if not (IsValid(myHero)) or myHero.isChanneling then return end
 
 	if(self.Menu.Combo.UseQ:Value() and Ready(_Q) and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
-		self:GetPred(Q) --Update Data
 		local target = GetTarget(Q.Range)
 		if(myHero.pos:DistanceTo(target.pos) < Q.Range) then
 			Control.CastSpell(HK_Q, target)
@@ -362,7 +371,6 @@ function Teemo:Harass()
 end
 
 function Teemo:LastHit()
-	if(gameTick > GameTimer()) then return end	
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
 	
 	--Q
@@ -390,7 +398,6 @@ function Teemo:LastHit()
 				
 				if ((hp > 0) and (canonMinion.health + (canonMinion.health*0.02) - QDam <= 0)) then
 					Control.CastSpell(HK_Q, canonMinion)
-					gameTick = GameTimer() + 0.2
 					return
 				end
 			end
@@ -478,8 +485,7 @@ end
 local RClearCD = 7
 local RClearTimer = GameTimer()
 function Teemo:Clear()
-	if(gameTick > GameTimer()) then return end	
-	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	if not (IsValid(myHero)) or myHero.isChanneling then return end
 	
 	--Q
 	if(self.Menu.Clear.UseQ:Value()) then
@@ -493,7 +499,6 @@ function Teemo:Clear()
 				
 				if ((hp > 0) and (canonMinion.health + (canonMinion.health*0.02) - QDam <= 0)) then
 					Control.CastSpell(HK_Q, canonMinion)
-					gameTick = GameTimer() + 0.2
 					return
 				end
 			end
@@ -503,13 +508,11 @@ function Teemo:Clear()
 	--R
 	if(self.Menu.Clear.UseR:Value() and RClearTimer < GameTimer()) then
 		if(Ready(_R) and myHero:GetSpellData(_R).ammo > self.Menu.Clear.KeepMushrooms:Value()) then
-			self:GetPred(R)
-			local minions = _G.SDK.ObjectManager:GetEnemyMinions(R.Range)
-			for i = 1, #minions do		
-				local minion = minions[i]
+			local minions = _G.SDK.ObjectManager:GetEnemyMinions(self:GetRRange())
+			for _, minion in pairs(minions) do		
 				if IsValid(minion) then
-					if(myHero.pos:DistanceTo(minion.pos) < R.Range) then
-						local clusterMinions = GetMinionsAroundMinion(R.Range, R.Radius, minion)
+					if(myHero.pos:DistanceTo(minion.pos) < self:GetRRange()) then
+						local clusterMinions = GetMinionsAroundMinion(self:GetRRange(), R.Radius, minion)
 						if(#clusterMinions >= 3) then
 							local clusterMinionsAvgPos = AverageClusterPosition(clusterMinions)
 							Control.CastSpell(HK_R, clusterMinionsAvgPos)
@@ -525,9 +528,6 @@ function Teemo:Clear()
 end
 
 function Teemo:KillSteal()
-	if(gameTick > GameTimer()) then return end
-	
-	--Q
 	if(self.Menu.KillSteal.UseQ:Value()) then
 		if(Ready(_Q)) and not myHero.isChanneling then
 			local enemies = GetEnemyHeroes(Q.Range)
@@ -538,7 +538,7 @@ function Teemo:KillSteal()
 						local QDmg = self:GetRawAbilityDamage("Q")
 						QDmg = CalcMagicalDamage(myHero, enemy, QDmg)
 						isKillable = (enemy.health - QDmg < 0)
-						if(isKillable and (self:CantKill(enemy, true, true, false))==false) then
+						if(isKillable and (CantKill(enemy, true, true, false))==false) then
 							Control.CastSpell(HK_Q, enemy)
 							return
 						end
@@ -547,20 +547,16 @@ function Teemo:KillSteal()
 			end
 		end
 	end
-	
 end
 
 function Teemo:AutoQ()
-	if(gameTick > GameTimer()) then return end
-	
 	--Auto Q won't work if you are in stealth
 	if(self:HasStealthBuff()) then return end
 	--Anti-melee
 	if(Ready(_Q)) then
 		local meleeTarget = GetTarget(300)
-		if(meleeTarget ~= nil and IsValid(meleeTarget)) then
-			Control.CastSpell(HK_Q, meleeTarget.pos)
-			gameTick = GameTimer() + 0.2
+		if(meleeTarget and IsValid(meleeTarget)) then
+			Control.CastSpell(HK_Q, meleeTarget)
 			return
 		end
 	end
@@ -572,8 +568,7 @@ function Teemo:AutoR()
 	if(RCC_Timer > GameTimer()) then return end	
 	
 	if(Ready(_R)) then
-		self:GetPred(R)
-		local enemy = GetTarget(R.Range)
+		local enemy = GetTarget(self:GetRRange())
 		if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
 			if(IsImmobile(enemy) >= 0.5) then
 				local RPrediction = GGPrediction:SpellPrediction(R)
@@ -618,11 +613,28 @@ end
 
 function Teemo:GetRawAbilityDamage(spell)
 	if(spell == "Q") then
-		 return ({80, 125, 170, 215, 260})[myHero:GetSpellData(_Q).level] + (0.8 * myHero.ap)
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
+		return ({80, 125, 170, 215, 260})[myHero:GetSpellData(_Q).level] + (0.8 * myHero.ap)
 	end
 
 	if(spell == "E") then
-		 return ({21, 37.5, 54, 70.5, 87})[myHero:GetSpellData(_E).level] + (0.45 * myHero.ap) --Damage to monsters
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
+		return ({14, 25, 36, 47, 58})[myHero:GetSpellData(_E).level] + (0.3 * myHero.ap)
+	end
+
+	if(spell == "EDot") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
+		return ({6, 12, 18, 24, 30})[myHero:GetSpellData(_E).level] + (0.1 * myHero.ap)
+	end
+
+	if(spell == "EJungle") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
+		return ({21, 37.5, 54, 70.5, 87})[myHero:GetSpellData(_E).level] + (0.45 * myHero.ap) --Damage to monsters
+	end
+
+	if(spell == "EDotJungle") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
+		return ({9, 18, 27, 36, 45})[myHero:GetSpellData(_E).level] + (0.15 * myHero.ap) --Damage to monsters
 	end
 	
 	return 0
@@ -638,60 +650,6 @@ function Teemo:HasStealthBuff()
 	return HasBuff(myHero, "camouflagestealth")
 end
 
-function Teemo:CantKill(unit, kill, ss, aa)
-	--set kill to true if you dont want to waste on undying/revive targets
-	--set ss to true if you dont want to cast on spellshield
-	--set aa to true if ability applies onhit (yone q, ez q etc)
-	
-	for i = 0, unit.buffCount do
-	
-		local buff = unit:GetBuff(i)
-		if buff.name:lower():find("kayler") and buff.count==1 then
-			return true
-		end
-	
-		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
-			return true
-		end
-		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
-			return true
-		end	
-		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
-			return true
-		end			
-		
-		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
-			return true
-		end
-
-		if  buff.name:lower():find("morganae") and ss and buff.count==1 then
-			return true
-		end
-		
-		if (buff.name:lower():find("fioraw") or buff.name:lower():find("pantheone")) and buff.count==1 then
-			return true
-		end
-		
-		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
-			return true
-		end	
-	end
-	
-	if HasBuffType(unit, 4) and ss then
-		return true
-	end
-	
-	return false
-end
-
 function Teemo:OnWndMsg(msg, wParam)
 	self.LeftClickCheck = msg == 513
 			and wParam == 0
@@ -700,12 +658,20 @@ end
 
 function Teemo:Draw()
 	if myHero.dead then return end
-	
+
 	if(self.Menu.Drawings.DrawQ:Value()) then
 		if(Ready(_Q)) then
-			DrawCircle(myHero, self:GetPred(Q).Range, 1, DrawColor(150, 80, 215, 255)) --(Alpha, R, G, B)
+			DrawCircle(myHero, Q.Range, 1, DrawColor(150, 80, 215, 255)) --(Alpha, R, G, B)
 		else
-			DrawCircle(myHero, self:GetPred(Q).Range, 1, DrawColor(50, 80, 215, 255)) --(Alpha, R, G, B)
+			DrawCircle(myHero, Q.Range, 1, DrawColor(50, 80, 215, 255)) --(Alpha, R, G, B)
+		end
+	end
+
+	if(self.Menu.Drawings.DrawR:Value()) then
+		if(Ready(_R)) then
+			DrawCircle(myHero, self:GetRRange(), 1, DrawColor(150, 120, 215, 125)) --(Alpha, R, G, B)
+		else
+			DrawCircle(myHero, self:GetRRange(), 1, DrawColor(50, 120, 215, 125)) --(Alpha, R, G, B)
 		end
 	end
 	
@@ -717,16 +683,6 @@ function Teemo:Draw()
 	
 	if(self.Menu.MushroomMode:Value()) then
 		self:DrawMushroomSpots()
-	end
-
-	if(self.Menu.Drawings.Debug.DrawParticles:Value()) then
-		local particleCount = Game.ParticleCount()
-		for i = particleCount, 1, -1 do
-			local obj = Game.Particle(i)
-			if obj and obj.type == "obj_GeneralParticleEmitter" and obj.name:find("Teemo") then
-				DrawText(obj.name, 18, obj.pos:To2D())
-			end
-		end
 	end
 end
 
@@ -803,9 +759,3 @@ end
 
 Teemo()
 LoadUnits()
-
-if Teemo.OnWndMsg then
-	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
-		Teemo:OnWndMsg(msg, wParam)
-	end)
-end
