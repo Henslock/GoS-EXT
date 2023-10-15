@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.06
+scriptVersion = 1.08
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -131,11 +130,16 @@ Azir.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 
 function Azir:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+	
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
 
 	--Custom Callbacks
-	StrafePred()
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
 	_G.SDK.Orbwalker:OnPostAttack(function(...) Azir:OnPostAttack(...) end)
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Azir:OnPreAttack(...) end)
@@ -1821,18 +1825,22 @@ local azirWBaseDamage = {
 
 function Azir:GetRawAbilityDamage(spell)
 	if(spell == "Q") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		return ({60, 80, 100, 120, 140})[myHero:GetSpellData(_Q).level] + (0.35 * myHero.ap)
 	end
 	
 	if(spell == "W") then
+		if myHero:GetSpellData(_W).level == 0 then return 0 end
 		return ({50, 67, 84, 101, 118})[myHero:GetSpellData(_W).level] + (0.6 * myHero.ap) + azirWBaseDamage[myHero.levelData.lvl]
 	end
 
 	if(spell == "E") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
 		return ({60, 100, 140, 180, 220})[myHero:GetSpellData(_E).level] + (0.4 * myHero.ap)
 	end
 	
 	if(spell == "R") then
+		if myHero:GetSpellData(_R).level == 0 then return 0 end
 		return ({200, 400, 600})[myHero:GetSpellData(_R).level] + (0.75 * myHero.ap)
 	end
 
