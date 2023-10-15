@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.07
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Evelynn will exit.")
@@ -27,16 +26,12 @@ local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champ
 
 local gameTick = GameTimer()
 
-local ItemHotKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6,}
-
 -- GG PRED
 local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.3, Range = 800, Radius = 60, Speed = 2400}
 local E = {Delay = 0.25, Range = 300}
 local R = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.35, Range = 0, Radius = 500, Speed = math.huge}
 
 local Q2Range = 550
-local ITEM_ROCKETBELT = 3152
-local ITEM_AEROPACK = 7011
 
 local SmiteNames = {
 	["SummonerSmite"]=1,
@@ -58,8 +53,18 @@ Evelynn.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 
 function Evelynn:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
+
+	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
+		self:OnWndMsg(msg, wParam)
+	end)
 
 	--Assign our smite slot
 	if(SmiteNames[myHero:GetSpellData(SUMMONER_1).name] == 1) then
@@ -256,6 +261,12 @@ function Evelynn:Tick()
 	end	
 end
 
+function Evelynn:OnWndMsg(msg, wParam)
+	if wParam == HK_W then
+		self:SemiManualW()
+	end
+end
+
 function Evelynn:GenerateCastUltDirection(tar)
 	return tar.pos
 end
@@ -361,7 +372,7 @@ function Evelynn:Combo()
 					if not (MapPosition:intersectsWall(myHero.pos, tar.pos)) then
 						local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, tar.pos, predData.Speed, predData.Delay, predData.Radius, {GGPrediction.COLLISION_ENEMYHERO, GGPrediction.COLLISION_MINION}, tar.networkID)
 						if(collisionCount == 0) then
-							local beltDmg = 125 + (0.15 * myHero.ap)
+							local beltDmg = GetItemDamage(Item.HextechRocketbelt)
 							beltDmg = CalcMagicalDamage(myHero, tar, beltDmg)
 
 							if(tar.health - beltDmg <= 0) then
@@ -769,6 +780,29 @@ function Evelynn:CalculateDragonMitigation()
 	return bonus/100
 end
 
+function Evelynn:SemiManualW()
+	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	
+	if(Ready(_W)) then
+		if(GetMode() == "Combo") then
+			local enemies = GetEnemyHeroes(self:GetWRange())
+			local tar = GetTarget(self:GetWRange())
+			local closestTar = nil
+			if(#enemies > 0) then
+				closestTar = GetClosestUnitToCursor(enemies)
+			end
+
+			if(closestTar and IsValid(closestTar)) then
+				Control.CastSpell(HK_W, closestTar)
+			else
+				if(IsValid(tar)) then
+					Control.CastSpell(HK_W, tar)
+				end
+			end
+		end
+	end
+end
+
 function Evelynn:DnBKillsteal()
 	_G.SDK.Orbwalker:Orbwalk()
 
@@ -1068,34 +1102,27 @@ function Evelynn:GetWRange()
 end
 
 function Evelynn:HasHextechRocketbelt()
-    for i = ITEM_1, ITEM_7 do
-		local id = myHero:GetItemData(i).itemID
-        if id == ITEM_ROCKETBELT or id == ITEM_AEROPACK then
-			if(myHero:GetSpellData(i).currentCd == 0) then
-				return true, i
-			else
-				return false
-			end
-        end
-    end
-
-	return false 
+    return HasItem({Item.HextechRocketbelt, Item.UpgradedAeropack})
 end
 
 function Evelynn:GetRawAbilityDamage(spell, tar)
 	if(spell == "Q") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		return ({25, 30, 35, 40, 45})[myHero:GetSpellData(_Q).level] + (0.30 * myHero.ap)
 	end
 
 	if(spell == "QBonus") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		return ({15, 25, 35, 45, 55})[myHero:GetSpellData(_Q).level] + (0.25 * myHero.ap)
 	end
 
 	if(spell == "WMinion") then
+		if myHero:GetSpellData(_W).level == 0 then return 0 end
 		return ({250, 300, 350, 400, 450})[myHero:GetSpellData(_W).level] + (0.6 * myHero.ap)
 	end
 
 	if(spell == "E") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
 		if(tar and IsValid(tar)) then
 			if(self:IsEmpowered()) then
 				local healthRatio = tar.maxHealth * (((myHero.ap/100)*2.5) + 4)/100
@@ -1108,10 +1135,12 @@ function Evelynn:GetRawAbilityDamage(spell, tar)
 	end
 	
 	if(spell == "R") then
+		if myHero:GetSpellData(_R).level == 0 then return 0 end
 		return ({125, 250, 375})[myHero:GetSpellData(_R).level] + (0.75 * myHero.ap)
 	end
 
 	if(spell == "RExecute") then
+		if myHero:GetSpellData(_R).level == 0 then return 0 end
 		return ({300, 600, 900})[myHero:GetSpellData(_R).level] + (1.8 * myHero.ap)
 	end
 
@@ -1191,18 +1220,16 @@ function Evelynn:GetTotalDamage(unit)
 
 	--Belt
 	if(self:HasHextechRocketbelt()) then
-		local beltDmg = 125 + (0.15 * myHero.ap)
+		local beltDmg = GetItemDamage(Item.HextechRocketbelt)
 		beltDmg = CalcMagicalDamage(myHero, unit, beltDmg)
 		totalDmg = totalDmg + beltDmg
 	end
 
 	--Electrocute
 	if HasElectrocute() then
-		local baseDmg = 30+(150/(17*(myHero.levelData.lvl)))
-		local bonusDmg = (myHero.ap * 0.25)+(myHero.bonusDamage*0.4)
-		local value = baseDmg + bonusDmg 
-		local ElecDmg =CalcMagicalDamage(myHero, unit, value)
-		totalDmg= totalDmg + ElecDmg
+		local elecDmg = GetElectrocuteDamage()
+		elecDmg = CalcMagicalDamage(myHero, unit, elecDmg)
+		totalDmg= totalDmg + elecDmg
 	end
 	
 	totalDmg = totalDmg + CalcPhysicalDamage(myHero, unit, myHero.totalDamage)
@@ -1240,29 +1267,6 @@ function Evelynn:Draw()
 	if myHero.dead then return end
 
 	--Placing this in Draw for better accuracy
-
-	if(self.Menu.Combo.SemiManualW:Value()) then
-		if(GetMode() == "Combo") then
-			if(Ready(_W)) then
-				if(Control.IsKeyDown(HK_W)) then
-					local enemies = GetEnemyHeroes(self:GetWRange())
-					local tar = GetTarget(self:GetWRange())
-					local closestTar = nil
-					if(#enemies > 0) then
-						closestTar = GetClosestUnitToCursor(enemies)
-					end
-					if(closestTar and IsValid(closestTar)) then
-						Control.CastSpell(HK_W, closestTar)
-					else
-						if(IsValid(tar)) then
-							Control.CastSpell(HK_W, tar)
-						end
-					end
-				end
-			end
-		end
-	end
-
 	if self.Menu.DnBStealer.StealDragon:Value() then
 		self:DnBKillsteal()
 	end
