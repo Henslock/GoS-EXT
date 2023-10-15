@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.15
+scriptVersion = 1.17
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -212,18 +211,6 @@ GANGPLANK Item IDS
 3036 = LORD DOMINIKS REGARDS
 --]]
 
-local ITEM_SHEEN = 3057
-local ITEM_TRIFORCE = 3078
-local ITEM_INFINITYFORCE = 7018
-local ITEM_ESSENCEREAVER = 3508
-local ITEM_NAVORI = 6675
-local ITEM_PROWLERSCLAW = 6693
-local ITEM_SANDSHRIKESCLAW = 7000
-local ITEM_COLLECTOR = 6676
-local ITEM_DOMINIKS = 3036
-
-local ItemHotKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6,}
-
 --Main Menu
 Gangplank.Menu = MenuElement({type = MENU, id = "KillerGangplank", name = "Killer Gangplank", leftIcon = ChampIcon})
 Gangplank.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
@@ -237,8 +224,15 @@ Gangplank.ASRatio = 0.69
 
 function Gangplank:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
+
 	--Custom Callbacks
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Gangplank:OnPreAttack(...) end)
@@ -265,8 +259,6 @@ function Gangplank:LoadMenu()
 	self.Menu.Combo:MenuElement({id = "PhantomBarrelKey", name = "Phantom Barrel Combo", key = string.byte("Z")})
 	self.Menu.Combo:MenuElement({id = "TripleBarrelKey", name = "Triple Barrel Semi-Manual", key = string.byte("C")})
 	self.Menu.Combo:MenuElement({id = "ClampPBMovement", name = "Phantom Barrel Movement Assist", value = true})
-	--NOTE** In patch 13.10, Prowler's claw lost its leap ability, and is no longer used on Gangplank
-	--self.Menu.Combo:MenuElement({id = "ProwlersSettings", name = "Prowlers Claw Settings", type = MENU})
 	
 	--R Dueling
 	self.Menu.Combo.RDuel:MenuElement({id = "UseR", name = "Use R to Duel", value = true})
@@ -283,10 +275,6 @@ function Gangplank:LoadMenu()
 	self.Menu.Combo.EModules:MenuElement({id = "EMelee", name = "Use E on Enemies in Melee Range", value = true})
 	self.Menu.Combo.EModules:MenuElement({id = "EClusters", name = "Use E on Enemy Clusters [Lv. 13+]", value = true})
 	self.Menu.Combo.EModules:MenuElement({id = "EFleeing", name = "Use E on Fleeing Enemies [Lv. 13+]", value = true})
-	
-	--Prowlers Claw Settings
-	--self.Menu.Combo.ProwlersSettings:MenuElement({id = "UseProwlersClaw", name = "Auto Use Prowlers Claw", value = true})
-	--self.Menu.Combo.ProwlersSettings:MenuElement({id = "SemiManualProwler", name = "Use Semi-manual Prowlers", value = true})
 	
 	-- Harass
 	self.Menu:MenuElement({id = "Harass", name = "Harass", type = MENU})
@@ -637,87 +625,32 @@ function Gangplank:UpdateBarrels()
 end
 
 function Gangplank:GetSpellbladeDamage()
-	 for _, item in pairs({ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}) do
-        local id = myHero:GetItemData(item).itemID
-		if(id == ITEM_SHEEN or id == ITEM_TRIFORCE or id == ITEM_INFINITYFORCE or id == ITEM_ESSENCEREAVER) then --Spellblade Procs
-			if(myHero:GetSpellData(item).currentCd == 0) then
+	local hasItem, slot = HasItem({Item.Sheen, Item.TrinityForce, Item.InfinityForce, Item.EssenceReaver})
+	if(hasItem) then
+		return GetItemDamage(myHero:GetItemData(slot).itemID)
+	end
 
-				if(id == ITEM_SHEEN) then -- SHEEN
-					return myHero.baseDamage
-				end
-				
-				if(id == ITEM_TRIFORCE) then -- TRIFORCE
-					return myHero.baseDamage * 2
-				end
-				
-				if(id == ITEM_INFINITYFORCE) then -- INFINITY FORCE
-					return myHero.baseDamage * 2
-				end
-				
-				if(id == ITEM_ESSENCEREAVER) then -- ESSENCE REAVER
-					return (myHero.baseDamage * 1.3) + (myHero.bonusDamage * 0.2)
-				end
-				
-			end
-		end
-    end
 	return 0
 end
 
 function Gangplank:HasNavori()
-	 for _, item in pairs({ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}) do
-        local id = myHero:GetItemData(item).itemID
-		if(id == ITEM_NAVORI) then
-			return true
-		end
-    end
-	return false
+	return HasItem(Item.NavoriQuickblades)
 end
 
 function Gangplank:HasEssenceReaver()
-	 for _, item in pairs({ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}) do
-        local id = myHero:GetItemData(item).itemID
-		if(id == ITEM_ESSENCEREAVER) then
-			return true
-		end
-    end
-	return false
+	return HasItem(Item.EssenceReaver)
 end
 
 function Gangplank:HasCollector()
-	 for _, item in pairs({ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}) do
-        local id = myHero:GetItemData(item).itemID
-		if(id == ITEM_COLLECTOR) then
-			return true
-		end
-    end
-	return false
+	return HasItem(Item.TheCollector)
 end
 
---[[
 function Gangplank:HasProwlers()
-    for i = ITEM_1, ITEM_7 do
-		local id = myHero:GetItemData(i).itemID
-        if id == ITEM_PROWLERSCLAW or id == ITEM_SANDSHRIKESCLAW then
-			if(myHero:GetSpellData(i).currentCd == 0) then
-				return true, i
-			else
-				return false
-			end
-        end
-    end
-	return false
+	return HasItem(Item.ProwlersClaw)
 end
---]]
 
 function Gangplank:HasPassive()
-    for i = 0, myHero.buffCount do
-        local buff = myHero:GetBuff(i)
-        if buff and buff.count > 0 and buff.name:lower():find("gangplankpassiveattack") then
-			return true
-		end
-    end
-	return false
+	return myHero:GetSpellData(63).currentCd == 0
 end
 
 function Gangplank:GetBarrelCharges()
@@ -1234,7 +1167,7 @@ function Gangplank:Combo()
 		local igniteTarget = GetTarget(590)
 		if(igniteTarget and IsValid(igniteTarget)) then
 
-			local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+			local igniteDmg = GetIgniteDamage()
 			local dmgCheck = self:GetQDamage()
 			local phsDmg = CalcPhysicalDamage(myHero, igniteTarget, dmgCheck)
 
@@ -1849,40 +1782,12 @@ function Gangplank:Combo()
 				passiveCheck = false
 			end
 			
-			if(GetDistance(myHero, tarQRange) <= Q.Range -15) and passiveCheck and self:CantKill(tarQRange, false, false, true) == false then
+			if(GetDistance(myHero, tarQRange) <= Q.Range -15) and passiveCheck and CantKill(tarQRange, false, false, true) == false then
 				Control.CastSpell(HK_Q, tarQRange)
 				return
 			end
 		end
 	end
-	
-	--[[
-	if(self.Menu.Combo.ProwlersSettings.UseProwlersClaw:Value()) then
-		local hasProwlers, slot = self:HasProwlers()
-		if(hasProwlers) then
-			local tar = GetTarget(1000)
-			if(tar and IsValid(tar)) then
-				if(GetDistance(myHero, tar) <= 500) then
-					Control.CastSpell(ItemHotKey[slot], tar)
-					return
-				end
-			end
-		end
-	end
-	
-	if(self.Menu.Combo.ProwlersSettings.SemiManualProwler:Value()) then
-		local hasProwlers, slot = self:HasProwlers()
-		if(hasProwlers) then
-			local tar = GetTarget(500) --Prowlers Claw Range
-			if(tar and IsValid(tar)) then
-				if(Control.IsKeyDown(ItemHotKey[slot])) then
-					Control.CastSpell(ItemHotKey[slot], tar)
-					return
-				end
-			end
-		end
-	end
-	--]]
 
 end
 
@@ -2013,7 +1918,7 @@ function Gangplank:RDuel()
 			if(GetDistance(myHero, target) <= self.AARange + 200) and self:HasPassive() and (myHero.health/myHero.maxHealth >= 0.3) then --Conditions 2, 3, and 6
 				local igniteDmg = 0
 				if(HasIgnite() and self.Menu.Combo.RDuel.RequireIgnite:Value()) then
-					igniteDmg = 50 + (20 * myHero.levelData.lvl)
+					igniteDmg = GetIgniteDamage()
 				end
 				local passiveDamage = (200/17 * (myHero.levelData.lvl - 1) + 50) + myHero.bonusDamage + ((myHero.critChance * 100) * 2)
 				local AADamage = myHero.totalDamage
@@ -2714,10 +2619,10 @@ function Gangplank:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy)) then
-						if(self:CantKill(enemy, true, true, false)==false) then
+						if(CantKill(enemy, true, true, false)==false) then
 							local dmgCheck = self:GetQDamage()
 							local phsDmg = CalcPhysicalDamage(myHero, enemy, dmgCheck)
-							local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+							local igniteDmg = GetIgniteDamage()
 							if(self:HasCollector()) then --Execute at 5%
 								if(enemy.health - phsDmg - igniteDmg <= enemy.maxHealth*0.05 and enemy.health - igniteDmg > 0) then
 									UseIgnite(enemy)
@@ -2749,8 +2654,8 @@ function Gangplank:KillSteal()
 			if(#enemies > 0 and #allies == 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy)) then
-						if(self:CantKill(enemy, true, true, false)==false) and GetDistance(myHero.pos, enemy.pos) >= self.AARange + 100 then
-							local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+						if(CantKill(enemy, true, true, false)==false) and GetDistance(myHero.pos, enemy.pos) >= self.AARange + 100 then
+							local igniteDmg = GetIgniteDamage()
 							if(self:HasCollector()) then --Execute at 5%
 								if(enemy.health - igniteDmg <= enemy.maxHealth*0.05) then
 									UseIgnite(enemy)
@@ -2775,7 +2680,7 @@ function Gangplank:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
-						if(self:CantKill(enemy, true, true, false)==false) then
+						if(CantKill(enemy, true, true, false)==false) then
 							local dmgCheck = self:GetQDamage()
 							local phsDmg = CalcPhysicalDamage(myHero, enemy, dmgCheck)
 							if(self:HasCollector()) then --Execute at 5%
@@ -2867,60 +2772,6 @@ function Gangplank:AutoWHeal()
 	if(Ready(_W) and myHero.health/myHero.maxHealth <= (hpPercent / 100) and myHero.toScreen.onScreen and IsRecalling(myHero) == false) then
 		Control.CastSpell(HK_W)	
 	end
-end
-
-function Gangplank:CantKill(unit, kill, ss, aa)
-	--set kill to true if you dont want to waste on undying/revive targets
-	--set ss to true if you dont want to cast on spellshield
-	--set aa to true if ability applies onhit (yone q, ez q etc)
-	
-	for i = 0, unit.buffCount do
-	
-		local buff = unit:GetBuff(i)
-		if buff.name:lower():find("kayler") and buff.count==1 then
-			return true
-		end
-	
-		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
-			return true
-		end
-		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
-			return true
-		end	
-		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
-			return true
-		end			
-		
-		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
-			return true
-		end
-
-		if  buff.name:lower():find("morganae") and ss and buff.count==1 then
-			return true
-		end
-		
-		if (buff.name:lower():find("fioraw") or buff.name:lower():find("pantheone")) and buff.count==1 then
-			return true
-		end
-		
-		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
-			return true
-		end	
-	end
-	
-	if HasBuffType(unit, 4) and ss then
-		return true
-	end
-	
-	return false
 end
 
 function Gangplank:GetQDamage()
