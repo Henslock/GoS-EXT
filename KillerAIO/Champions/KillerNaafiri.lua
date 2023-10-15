@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.10
+scriptVersion = 1.12
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -176,19 +175,6 @@ local gameTick = GameTimer()
 local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 900, Radius = 60, Speed = 1100}
 local E = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0, Range = 350, Radius = 210, Speed = 1600}
 
---[[
-NAAFIRI Item IDS
-(Most commonly used items with Naafiri)
-
-6693 = PROWLERS CLAW
-6691 = DUSKBLADE
-
---]]
-
-local ITEM_DUSKBLADE = 6691
-local ITEM_PROWLERSCLAW = 6693
-local ITEM_SANDSHRIKESCLAW = 7000
-
 --Main Menu
 Naafiri.Menu = MenuElement({type = MENU, id = "KillerNaafiri", name = "Killer Naafiri", leftIcon = ChampIcon})
 Naafiri.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
@@ -201,15 +187,19 @@ local lastTick = GameTimer()
 function Naafiri:__init()
 
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
 
 	--Custom Callbacks
 	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
 	_G.SDK.Orbwalker:OnPreMovement(function(...) Naafiri:OnPreMovement(...) end)
 
 	self:UpdateGoSMenuAutoLevel()
-
 end
 
 function Naafiri:LoadMenu()                     	
@@ -491,7 +481,7 @@ function Naafiri:Combo()
 				if(GetDistance(target, myHero) <= igniteRange) and (CantKill(target, true, false, false)==false) then
 
 					local overkillCheck = self:CalculateOverkillAmount(target)
-					local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+					local igniteDmg = GetIgniteDamage()
 					local shouldUseIgnite = false
 
 					if(overkillCheck ~= nil and overkillCheck < 0.25) then
@@ -1110,7 +1100,7 @@ end
 function Naafiri:IsKillable(unit)
 	local isKillable = false
 	local igniteOverkill = false
-	local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+	local igniteDmg = GetIgniteDamage()
 
 	if(self.ComboDamageData[unit.networkID] ~= nil) then	
 		local dmg = self.ComboDamageData[unit.networkID]
@@ -1119,7 +1109,7 @@ function Naafiri:IsKillable(unit)
 		end
 		
 		if(unit.health - dmg <= 0) and (unit.health - (dmg - igniteDmg) <= 0) then
-			if(CanUseSummoner(myHero, "SummonerDot")) then
+			if(HasIgnite()) then
 				igniteOverkill = true
 			end
 		end
@@ -1167,24 +1157,22 @@ function Naafiri:GetTotalDamage(unit)
 	end
 
 	if(self.Menu.Combo.UseIgnite:Value()) then
-		if(CanUseSummoner(myHero, "SummonerDot")) then
-			local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+		if(HasIgnite()) then
+			local igniteDmg = GetIgniteDamage()
 			totalDmg = totalDmg + igniteDmg
 		end
 	end
 
 	if HasElectrocute() then
-		local baseDmg = 30+(150/(17*(myHero.levelData.lvl)))
-		local bonusDmg = (myHero.ap * 0.25)+(myHero.bonusDamage*0.4)
-		local value = baseDmg + bonusDmg 
-		local ElecDmg=_G.SDK.Damage:CalculateDamage(myHero, unit, _G.SDK.DAMAGE_TYPE_MAGICAL , value )
-		totalDmg= totalDmg + ElecDmg
+		local elecDmg = GetElectrocuteDamage()
+		elecDmg = CalcMagicalDamage(myHero, unit, elecDmg)
+		totalDmg= totalDmg + elecDmg
 	end
 
-	if(self:HasItem(ITEM_PROWLERSCLAW)) then
-		local prowlersDmg = 85 + (0.55 * myHero.bonusDamage)
+	if(HasItem(Item.ProwlersClaw)) then
+		local prowlersDmg = GetItemDamage(Item.ProwlersClaw)
 		prowlersDmg = CalcPhysicalDamage(myHero, unit, prowlersDmg)
-		totalDmg= totalDmg + prowlersDmg
+		totalDmg = totalDmg + prowlersDmg
 	end
 
 	--Bonus AA Calc
@@ -1193,8 +1181,11 @@ function Naafiri:GetTotalDamage(unit)
 
 	--This is not an accurate calculation of Duskblade since your damage would be dynamically updating with their health, but it's better than no calculation at all
 	if(self:HasDuskblade()) then
-		local duskMult = math.min(((1 - (unit.health / unit.maxHealth)) / 7) * 1.8, 0.18)
-		totalDmg= totalDmg * (1 + duskMult)
+		totalDmg = totalDmg * GetItemDamage(Item.DuskbladeofDraktharr, unit)
+	end
+
+	if(HasFirstStrike()) then
+		totalDmg = totalDmg * GetFirstStrikeBonus()
 	end
 
 	return totalDmg
@@ -1225,10 +1216,12 @@ end
 --Note: Q does 70% damage to minions
 function Naafiri:GetRawAbilityDamage(spell)
 	if(spell == "Q1") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		return ({35, 45, 55, 65, 75})[myHero:GetSpellData(_Q).level] + (0.2 * myHero.bonusDamage)
 	end
 
 	if(spell == "W") then
+		if myHero:GetSpellData(_W).level == 0 then return 0 end
 		local initDam = ({30, 70, 110, 150, 190})[myHero:GetSpellData(_W).level] + (0.8 * myHero.bonusDamage)
 		local packmateDam = (({3, 7, 11, 15, 19})[myHero:GetSpellData(_W).level] + (0.08 * myHero.bonusDamage)) * (#self.PackmateData)
 
@@ -1240,10 +1233,12 @@ function Naafiri:GetRawAbilityDamage(spell)
 	end
 
 	if(spell == "E") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
 		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_E).level] + (1.3 * myHero.bonusDamage)
 	end
 
 	if(spell == "EFlurry") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
 		return ({65, 100, 135, 170, 205})[myHero:GetSpellData(_E).level] + (0.8 * myHero.bonusDamage)
 	end
 
@@ -1287,29 +1282,8 @@ function Naafiri:GetPassiveCooldown()
 	return myHero:GetSpellData(63).currentCd
 end
 
-function Naafiri:HasItem(itemId)
-    for i = ITEM_1, ITEM_7 do
-		local id = myHero:GetItemData(i).itemID
-        if id == itemId then
-			if(myHero:GetSpellData(i).currentCd == 0) then
-				return true, i
-			else
-				return false
-			end
-        end
-    end
-	return false
-end
-
 function Naafiri:HasDuskblade()
-    for i = ITEM_1, ITEM_7 do
-		local id = myHero:GetItemData(i).itemID
-        if id == ITEM_DUSKBLADE then
-			return true
-        end
-    end
-
-	return false 
+    return HasItem(Item.DuskbladeofDraktharr)
 end
 
 function Naafiri:HasRActive()
@@ -1444,7 +1418,7 @@ local alphaLerp = 0
 local lerpS, lerpE = nil, nil
 function Naafiri:Draw()
 	if myHero.dead then return end
-	--local missileCount = memoizeMissileCount({}, 2)
+
 	if(self.Menu.Drawings.DrawQ:Value()) then
 		if(myHero:GetSpellData(_Q).level > 0) then
 			if(myHero:GetSpellData(_Q).currentCd == 0) then
