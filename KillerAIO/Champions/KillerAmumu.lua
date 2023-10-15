@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Amumu will exit.")
@@ -64,10 +63,14 @@ Amumu.InterruptableSpells = {
 
 function Amumu:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
 
-	--Custom Callbacks
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
+
 end
 
 function Amumu:LoadMenu()                     	
@@ -268,6 +271,8 @@ function Amumu:Combo()
 				end
 
 				if(shouldUseQ) then
+					CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1})
+					--[[
 					local isStrafing, avgPos = StrafePred:IsStrafing(tar)
 					local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(tar)
 					if(isStrafing) then
@@ -311,6 +316,7 @@ function Amumu:Combo()
 							return
 						end
 					end
+					--]]
 				end
 			end
 		end
@@ -421,6 +427,7 @@ end
 
 function Amumu:GetRawAbilityDamage(spell, target)
 	if(spell == "Q") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		return ({70, 95, 120, 145, 170})[myHero:GetSpellData(_Q).level] + (0.85 * myHero.ap)
    end
 	
