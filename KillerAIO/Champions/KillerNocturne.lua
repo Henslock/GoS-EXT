@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.03
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Nocturne will exit.")
@@ -28,16 +27,11 @@ local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champ
 
 local gameTick = GameTimer()
 
-local ItemHotKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6,}
-
 -- GG PRED
 local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 150, Speed = 1600}
 local E = {Delay = 0, Range = 425}
 local R = {Delay = 0, Range = 2500}
 
-local ITEM_IRONSPIKEWHIP = 6029
-local ITEM_STRIDEBREAKER = 6631
-local ITEM_DREAMSHATTER = 7016
 
 local SmiteNames = {
 	["SummonerSmite"]=1,
@@ -59,8 +53,13 @@ Nocturne.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 Nocturne.cachedObjects = {}
 function Nocturne:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
 
 	--Assign our smite slot
 	if(SmiteNames[myHero:GetSpellData(SUMMONER_1).name] == 1) then
@@ -619,45 +618,26 @@ function Nocturne:GetSmiteDamage(unit)
 end
 
 function Nocturne:HasStridebreaker()
-    for i = ITEM_1, ITEM_7 do
-		local id = myHero:GetItemData(i).itemID
-        if id == ITEM_STRIDEBREAKER or id == ITEM_DREAMSHATTER then
-			if(myHero:GetSpellData(i).currentCd == 0) then
-				return true, i
-			else
-				return false
-			end
-        end
-    end
-
-	return false 
+    return HasItem(Item.Stridebreaker)
 end
 
 function Nocturne:HasIronspikewhip()
-    for i = ITEM_1, ITEM_7 do
-		local id = myHero:GetItemData(i).itemID
-        if id == ITEM_IRONSPIKEWHIP then
-			if(myHero:GetSpellData(i).currentCd == 0) then
-				return true, i
-			else
-				return false
-			end
-        end
-    end
-
-	return false 
+    return HasItem(Item.IronspikeWhip)
 end
 
 function Nocturne:GetRawAbilityDamage(spell, tar)
 	if(spell == "Q") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		return ({65, 110, 155, 200, 245})[myHero:GetSpellData(_Q).level] + (0.85 * myHero.bonusDamage)
 	end
 
 	if(spell == "E") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
 		return ({80, 125, 170, 215, 260})[myHero:GetSpellData(_E).level] + (myHero.ap)
 	end
 	
 	if(spell == "R") then
+		if myHero:GetSpellData(_R).level == 0 then return 0 end
 		return ({150, 275, 400})[myHero:GetSpellData(_R).level] + (1.20 * myHero.bonusDamage)
 	end
 
@@ -746,19 +726,29 @@ function Nocturne:GetTotalDamage(unit)
 
 	--Stridebreaker
 	if(self:HasStridebreaker()) then
-		local strideDmg = (1.75 * myHero.baseDamage)
+		local strideDmg = GetItemDamage(Item.Stridebreaker)
 		strideDmg = CalcPhysicalDamage(myHero, unit, strideDmg)
 		totalDmg = totalDmg + strideDmg
 	end
 
 	--Ironspike Whip
 	if(self:HasIronspikewhip()) then
-		local whipDmg = myHero.baseDamage
+		local whipDmg = GetItemDamage(Item.IronspikeWhip)
 		whipDmg = CalcPhysicalDamage(myHero, unit, whipDmg)
 		totalDmg = totalDmg + whipDmg
 	end
+
+	if(HasItem(Item.ProwlersClaw)) then
+		local prowlersDmg = GetItemDamage(Item.ProwlersClaw)
+		prowlersDmg = CalcPhysicalDamage(myHero, unit, prowlersDmg)
+		totalDmg = totalDmg + prowlersDmg
+	end
 	
 	totalDmg = totalDmg + (CalcPhysicalDamage(myHero, unit, myHero.totalDamage)*3)
+
+	if(self:HasDuskblade()) then
+		totalDmg = totalDmg * GetItemDamage(Item.DuskbladeofDraktharr, unit)
+	end
 
 	return totalDmg
 end
