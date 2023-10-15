@@ -2,7 +2,7 @@ require "2DGeometry"
 require "MapPositionGOS"
 require "KillerAIO\\KillerLib"
 
-local scriptVersion = 1.32
+local scriptVersion = 1.33
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -343,8 +343,20 @@ function KillerAwareness:__init()
 	self:LoadMenu()
 	self:CreateSprites()
 	self:LoadHealthTrackerData()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
+	
+	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
+		self:OnWndMsg(msg, wParam)
+	end)
+
+	self.Window = { x = self.Menu.HealthTracker.HPosXY:Value()[1], y = self.Menu.HealthTracker.HPosXY:Value()[2] }
 end
 
 function KillerAwareness:LoadHealthTrackerData()
@@ -398,14 +410,19 @@ function KillerAwareness:LoadMenu()
 	self.Menu.CacheExtraMinions:MenuElement({id = "Enabled", name = "Enabled", value = true})
 
 	--Health Tracker
-	self.Menu:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = false})
+	self.Menu:MenuElement({id = "HealthTracker", name = "Health Tracker", type = MENU})
+	self.Menu.HealthTracker:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = false})
+	self.Menu.HealthTracker:MenuElement({id = "HPosXY", name = "============", value = {Game.Resolution().x * 0.5 + 200, Game.Resolution().y * 0.5}, type = SPACE})
+	self.Menu.HealthTracker:MenuElement({id = "ResetWindowPos", name = "[ Reset Health Tracker Pos ]", type = MENU, callback =
+	function ()
+		self.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolution().y * 0.5 }
+	end})
 
 
 	KillerAwareness.Menu = self.Menu
 end
 
 function KillerAwareness:Tick()
-
 	if(self.Menu.CacheExtraMinions.Enabled:Value()) then
 		self:CacheChampionMinions()
 	end
@@ -560,7 +577,7 @@ function KillerAwareness:Draw()
 	
 	self:DrawTurretAwareness()
 	
-	if(self.Menu.DrawHealthTracker:Value()) then
+	if(self.Menu.HealthTracker.DrawHealthTracker:Value()) then
 		self:UpdateHealthData()
 		self:DrawHealthTracker()
 	end
@@ -673,8 +690,9 @@ local TrackerColors = {
 function KillerAwareness:DrawHealthTracker()
 	if not (myHero.networkID)then return end
 	if (Game.Timer() <= 1) then return end
-	if KillerAwareness.AllowMove then
-		KillerAwareness.Window = { x = cursorPos.x + KillerAwareness.AllowMove.x, y = cursorPos.y + KillerAwareness.AllowMove.y }
+	if self.AllowMove then
+		self.Window = { x = cursorPos.x + self.AllowMove.x, y = cursorPos.y + self.AllowMove.y }
+		self.Menu.HealthTracker.HPosXY:Value({self.Window.x, self.Window.y})
 	end
 
 	local rectHeight = 30 + (#Enemies*20) + 8
