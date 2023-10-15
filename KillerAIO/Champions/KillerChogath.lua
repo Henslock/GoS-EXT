@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Cho'Gath will exit.")
@@ -26,10 +25,6 @@ class "Chogath"
 local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/chogath.png"
 
 local gameTick = GameTimer()
-
-local ITEM_EVERFROST = 6656
-local ITEM_ETERNALWINTER = 7014
-local ItemHotKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6}
 
 local FeastTable = {
 	SRU_Baron = "FeastBaron",
@@ -87,8 +82,14 @@ Chogath.InterruptableSpells = {
 
 function Chogath:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
 
 	--Custom Callbacks
 	_G.SDK.Orbwalker:OnPostAttack(function(...) Chogath:OnPostAttack(...) end)
@@ -315,6 +316,7 @@ function Chogath:OnPostAttack(args)
 	if(GetMode() == "LaneClear") then
 		if(Ready(_E)) then
 			if(self.Menu.Clear.UseE:Value() and myHero.levelData.lvl >= self.Menu.Clear.EStartLevel:Value()) then
+				print("Called")
 				Control.CastSpell(HK_E)
 			end
 		end
@@ -406,17 +408,7 @@ function Chogath:HasEActive()
 end
 
 function Chogath:HasEverfrost()
-	for i = ITEM_1, ITEM_7 do
-		local id = myHero:GetItemData(i).itemID
-		if id == ITEM_ETERNALWINTER or id == ITEM_EVERFROST then
-			if(myHero:GetSpellData(i).currentCd == 0) then
-				return true, i
-			else
-				return false
-			end
-		end
-	end
-	return false
+	return HasItem({Item.EternalWinter, Item.Everfrost})
 end
 
 function Chogath:IsEpicJungleMonster(unit)
@@ -504,7 +496,7 @@ function Chogath:Combo()
 	--R
 	if(Ready(_R) and self.Menu.Combo.UseR:Value()) then
 		local target = GetTarget(R.Range - 5)
-		if(IsValid(target) and self:CantKill(target, true, true, false) == false) then
+		if(IsValid(target) and CantKill(target, true, true, false) == false) then
 
 			if(self.Menu.Combo.RBlacklist[target.charName]) then
 				if(self.Menu.Combo.RBlacklist[target.charName]:Value() == false) then
@@ -524,63 +516,11 @@ function Chogath:Combo()
 		
 			if(myHero.pos:DistanceTo(target.pos) < Q.Range) then
 
-				--local pos = GetPredictedSpellPosition(HK_Q, target, Q, false, 0, Q.Radius-50, false)
 				local pos = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ReturnPos = true, collisionRadiusOverride = Q.Radius - 50})
-				
-				if(pos ~= nil) then
+				if(pos) then
 					local isQinWall, correctedPosition = self:WallQCheck(pos, Q.Radius*0.5)
-					Control.CastSpell(HK_Q, correctedPosition)
+					Control.CastSpell(HK_Q, pos)
 				end
-				--[[
-				local isStrafing, avgPos = StrafePred:IsStrafing(target)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < Q.Range - 15) then
-						Control.CastSpell(HK_Q, avgPos)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < Q.Range - 15) then
-						Control.CastSpell(HK_Q, avgPos2)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				
-				local QPrediction, isExtended = GetExtendedSpellPrediction(target, Q)
-				if QPrediction:CanHit(HITCHANCE_HIGH) then
-					if(isExtended) then
-					else
-						if(self:IsUnitFleeing(target)) then
-							Control.CastSpell(HK_Q, QPrediction.CastPosition)
-							gameTick = GameTimer() + 0.2
-							return
-						else
-							if(StrafePred:GetIdleStandingTime(target) >= target.attackData.windUpTime + 0.1 or target.pathing.hasMovePath == true) then
-								local finalPos = self:GenerateQBias(QPrediction.CastPosition, target)
-								local cutoffThreshold = math.max(target.ms - 50, 345)
-								if(GetDistance(finalPos, target.pos) >= cutoffThreshold) then return end
-
-								local isQinWall, correctedPosition = self:WallQCheck(finalPos, Q.Radius*0.5)
-
-								if(isQinWall) then
-									local posBias = Vector(correctedPosition):Lerp(target.pos, 0.85)
-									Control.CastSpell(HK_Q, correctedPosition)
-									gameTick = GameTimer() + 0.2
-									return
-								else
-									Control.CastSpell(HK_Q, finalPos)
-									gameTick = GameTimer() + 0.2
-									return
-								end
-							end
-						end
-					end
-				end
-				--]]
 			end
 		end
 	end
@@ -610,19 +550,13 @@ function Chogath:Combo()
 	if(Ready(_W) and self.Menu.Combo.UseW:Value()) then
 		local target = GetTarget(W.Range - 200)
 
-		if(Ready(_R)and self.Menu.Combo.UseR:Value() and self:IsConsumable(target)) then
-			return
-		end
-		if(target ~= nil and IsValid(target)) then
-				
-			local WPrediction = GGPrediction:SpellPrediction(W)
-			WPrediction:GetPrediction(target, myHero)
-			if WPrediction.CastPosition and WPrediction:CanHit(HITCHANCE_NORMAL) then
-				Control.CastSpell(HK_W, WPrediction.CastPosition)
-				gameTick = GameTimer() + 0.2
+		if(IsValid(target)) then
+
+			if(Ready(_R)and self.Menu.Combo.UseR:Value() and self:IsConsumable(target)) then
 				return
 			end
 
+			CastPredictedSpell({Hotkey = HK_W, Target = target, SpellData = W})
 		end
 	end
 
@@ -630,19 +564,14 @@ function Chogath:Combo()
 	if(Ready(_W) and self.Menu.Combo.UseW:Value()) then
 		local target = GetTarget(W.Range - 15)
 
-		if(Ready(_R)and self.Menu.Combo.UseR:Value() and self:IsConsumable(target)) then
-			return
-		end
+		if(IsValid(target)) then
 
-		if(target ~= nil and IsValid(target)) then
+			if(Ready(_R)and self.Menu.Combo.UseR:Value() and self:IsConsumable(target)) then
+				return
+			end
+
 			if(IsImmobile(target) >= 0.5) or self:IsTargetKnockedUp(target) then
-				local WPrediction = GGPrediction:SpellPrediction(W)
-				WPrediction:GetPrediction(target, myHero)
-				if WPrediction.CastPosition and WPrediction:CanHit(HITCHANCE_NORMAL) then
-					Control.CastSpell(HK_W, target.pos)
-					gameTick = GameTimer() + 0.2
-					return
-				end
+				CastPredictedSpell({Hotkey = HK_W, Target = target, SpellData = W})
 			end
 		end
 	end
@@ -654,8 +583,8 @@ function Chogath:Combo()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy)) then
-						if(self:CantKill(enemy, true, true, false)==false) then
-							local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+						if(CantKill(enemy, true, true, false)==false) then
+							local igniteDmg = GetIgniteDamage()
 
 							--Condition 1: Ignite will kill when all of our abilities are down, and we are out of melee range
 							if(enemy.health - igniteDmg <= 0) and (enemy.health > 100) and GetDistance(myHero.pos, enemy.pos) >= R.Range + 100 and Ready(_R) == false and Ready(_Q) == false and Ready(_W) == false then
@@ -852,7 +781,7 @@ function Chogath:KillSteal()
 
 						if(self.Menu.KillSteal.RBlacklist[enemy.charName]) then
 							if(self.Menu.KillSteal.RBlacklist[enemy.charName]:Value() == false) then
-								if(self:IsConsumable(enemy) and (self:CantKill(enemy, true, true, false)==false)) then
+								if(self:IsConsumable(enemy) and (CantKill(enemy, true, true, false)==false)) then
 									if(myHero.pos:DistanceTo(enemy.pos) < R.Range) then
 										Control.CastSpell(HK_R, enemy)
 										gameTick = GameTimer() + 0.2
@@ -875,7 +804,7 @@ function Chogath:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
-						if(self:CantKill(enemy, true, true, false)==false) then
+						if(CantKill(enemy, true, true, false)==false) then
 							if(myHero.pos:DistanceTo(enemy.pos) < W.Range - 75) then
 
 								local wDmg = self:GetRawAbilityDamage("W")
@@ -996,10 +925,12 @@ end
 function Chogath:GetRawAbilityDamage(spell)
 
 	if(spell == "Q") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		return ({80, 140, 200, 260, 320})[myHero:GetSpellData(_Q).level] + (myHero.ap)
 	end
 
 	if(spell == "W") then
+		if myHero:GetSpellData(_W).level == 0 then return 0 end
 		return ({80, 135, 190, 245, 300})[myHero:GetSpellData(_W).level] + (0.7 * myHero.ap)
 	end
 	
@@ -1069,14 +1000,14 @@ function Chogath:GetTotalComboDamage(unit)
 	end
 	
 	if(self:HasEverfrost()) then
-		local everfrostDmg = 100 + (myHero.ap * 0.3)
+		local everfrostDmg = GetItemDamage(Item.Everfrost)
 		everfrostDmg = CalcMagicalDamage(myHero, unit, everfrostDmg)
 		
 		totalDmg = totalDmg + everfrostDmg
 	end
 
 	if(HasIgnite()) then
-		local igniteDmg = 50 + (20 * myHero.levelData.lvl)
+		local igniteDmg = GetIgniteDamage()
 		totalDmg = totalDmg + igniteDmg
 	end
 	
@@ -1085,61 +1016,13 @@ function Chogath:GetTotalComboDamage(unit)
 		totalDmg = totalDmg + RDmg
 	end
 
+	if(HasArcaneComet()) then
+		local cDmg = GetArcaneCometDamage()
+		cDmg = CalcMagicalDamage(myHero, unit, cDmg)
+		totalDmg = totalDmg + cDmg
+	end
+
 	return totalDmg
-end
-
-function Chogath:CantKill(unit, kill, ss, aa)
-	--set kill to true if you dont want to waste on undying/revive targets
-	--set ss to true if you dont want to cast on spellshield
-	--set aa to true if ability applies onhit (yone q, ez q etc)
-	
-	for i = 0, unit.buffCount do
-	
-		local buff = unit:GetBuff(i)
-		if buff.name:lower():find("kayler") and buff.count==1 then
-			return true
-		end
-	
-		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
-			return true
-		end
-		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
-			return true
-		end	
-		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
-			return true
-		end			
-		
-		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
-			return true
-		end
-
-		if  buff.name:lower():find("morganae") and ss and buff.count==1 then
-			return true
-		end
-		
-		if (buff.name:lower():find("fioraw") or buff.name:lower():find("pantheone")) and buff.count==1 then
-			return true
-		end
-		
-		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
-			return true
-		end	
-	end
-	
-	if HasBuffType(unit, 4) and ss then
-		return true
-	end
-	
-	return false
 end
 
 local alphaLerp = 0
