@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.13
+scriptVersion = 1.16
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -35,10 +34,8 @@ local Q = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.1, Radius = 160, Rang
 local W = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.3, Radius = 75, Range = 1000, Speed = math.huge, Collision = false}
 local E = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0, Radius = 550, Range = 0, Speed = math.huge, Collision = false}
 
--- PREMIUM PRED
-local QPremium = {speed = MathHuge, range = 875, delay = 1, radius = 160, collision = {nil}, type = "circular"}
-local WPremium = {speed = MathHuge, range = 1000, delay = 0.3, radius = 75, collision = {nil}, type = "circular"}
-local EPremium= {speed = MathHuge, range = 0, delay =0, radius = 550, collision = {nil}, type = "circular"}
+Karthus.Menu = MenuElement({type = MENU, id = "KillerKarthus", name = "Killer Karthus", leftIcon = KarthusIcon})
+Karthus.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 
 Karthus.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolution().y * 0.5 }
 Karthus.AllowMove = nil
@@ -46,31 +43,38 @@ Karthus.AllowMove = nil
 function Karthus:__init()
 	self:LoadMenu()
 	self:LoadUltTrackerData()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
 
-	self:UpdateGoSMenuAutoLevel()
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
+
+	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
+		self:OnWndMsg(msg, wParam)
+	end)
+
+	_G.SDK.Orbwalker:OnPreAttack(function(...) Karthus:OnPreAttack(...) end)
+
+	self.Window = { x = self.Menu.Drawings.HPosXY:Value()[1], y = self.Menu.Drawings.HPosXY:Value()[2] }
 end
 
 
 function Karthus:LoadUltTrackerData()
 	
-	DelayAction(function()
+	DelayEvent(function()
 	
-	for k, v in pairs (Enemies) do
-		UltableChamps[v.name] = {champ = v.charName, ultdmg = 0, timelastspotted = 0, killable = false, mia = false}
-	end
-	print("KILLER Karthus: Loaded Ult Tracker Data")
-	end, 
-	4)
+		for k, v in pairs (Enemies) do
+			UltableChamps[v.name] = {champ = v.charName, ultdmg = 0, timelastspotted = 0, killable = false, mia = false}
+		end
+		print("KILLER Karthus: Loaded Ult Tracker Data")
+	end, 2)
 	
 end
 
 function Karthus:LoadMenu()                     	
-	--Main Menu
-	self.Menu = MenuElement({type = MENU, id = "KillerKarthus", name = "Killer Karthus", leftIcon = KarthusIcon})
-	self.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
-	
 	-- Combo
 	self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
 	self.Menu.Combo:MenuElement({id = "UseQ", name = "Use Q in Combo", value = true})
@@ -111,6 +115,7 @@ function Karthus:LoadMenu()
 	self.Menu.Clear:MenuElement({id = "QMana", name = "Q Min Mana", value = 20, min = 0, max = 100, step = 5, identifier = "%"})
 	self.Menu.Clear:MenuElement({id = "EMana", name = "E Min Mana", value = 30, min = 0, max = 100, step = 5, identifier = "%"})
 	self.Menu.Clear:MenuElement({id = "EHitCount", name = "E Min Hitcount", value = 3, min = 1, max = 7, step = 1})
+	self.Menu.Clear:MenuElement({id = "DisableESoloMinion", name = "Toggle off E for Solo Minion", value = true})
 	
 	-- Auto R
 	self.Menu:MenuElement({id = "AutoR", name = "Auto R Settings", type = MENU})
@@ -133,10 +138,11 @@ function Karthus:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawW", name = "Draw W", value = false})
 	self.Menu.Drawings:MenuElement({id = "DrawHealthTracker", name = "Draw Health Tracker", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawChampTracker", name = "Draw Proximity Champion Tracker", value = false})
-	
-end
-
-function Karthus:UpdateGoSMenuAutoLevel()
+	self.Menu.Drawings:MenuElement({id = "HPosXY", name = "============", value = {Game.Resolution().x * 0.5 + 200, Game.Resolution().y * 0.5}, type = SPACE})
+	self.Menu.Drawings:MenuElement({id = "ResetWindowPos", name = "[ Reset Health Tracker Pos ]", type = MENU, callback =
+	function ()
+		self.Window = { x = Game.Resolution().x * 0.5 + 200, y = Game.Resolution().y * 0.5 }
+	end})
 
 	--AutoLeveler	
 	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
@@ -152,9 +158,10 @@ function Karthus:UpdateGoSMenuAutoLevel()
 					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
 				end
 			end
-			UpdateInfo()
+			self:UpdateGoSMenuAutoLevel()
 		end, 0.15)
 	end})
+
 	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 3, callback = 
 	function ()
 		DelayEvent(function()
@@ -165,29 +172,29 @@ function Karthus:UpdateGoSMenuAutoLevel()
 					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
 				end
 			end
-			UpdateInfo()
+			self:UpdateGoSMenuAutoLevel()
 		end, 0.15)
 	end})
 	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
-	--
-	
-	function UpdateInfo()
-		self.Menu.AutoLevel.InfoText:Remove()
-		local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
-		local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
-		local thirdSkill = 0
-		local enumTable = {1, 2, 3}
-		enumTable[firstSkill] = nil
-		enumTable[secondSkill] = nil
-		for k, v in pairs(enumTable) do
-			thirdSkill = v
-		end
 
-		local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
-		self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
+	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
+	
+end
+
+function Karthus:UpdateGoSMenuAutoLevel()
+	self.Menu.AutoLevel.InfoText:Remove()
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	local thirdSkill = 0
+	local enumTable = {1, 2, 3}
+	enumTable[firstSkill] = nil
+	enumTable[secondSkill] = nil
+	for k, v in pairs(enumTable) do
+		thirdSkill = v
 	end
 
-	UpdateInfo()
+	local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
 end
 
 function Karthus:AutoLevel()
@@ -201,7 +208,18 @@ end
 
 function Karthus:Tick()
 
-	if(MyHeroNotReady()) then return end
+	if(self.Menu.DisableInFountain:Value()) then
+		if(IsInFountain() or not myHero.alive) then
+			_G.SDK.Orbwalker:SetMovement(false)
+		else
+			_G.SDK.Orbwalker:SetMovement(true)
+		end
+	else
+		_G.SDK.Orbwalker:SetMovement(true)
+	end
+	
+	if(MyHeroNotReady()) then return end	
+
 	local mode = GetMode()
 	if(mode == "Combo") then
 		self:Combo()
@@ -213,12 +231,10 @@ function Karthus:Tick()
 		self:Clear()
 	end
 	
-	
-	self:AABlock()
 	self:AutoRCheck()
 	self:AutoWCheck()
 	self:AutoQCheck()
-	
+
 	if(self.Menu.Combo.SemiW:Value()) then
 		self:SemiManualW()
 	end
@@ -229,35 +245,56 @@ function Karthus:Tick()
 
 	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
-	end	
+	end
 end
 
 local gameTick = GameTimer()
 
 function Karthus:CanQ()
-	if(myHero.activeSpell.valid and myHero.activeSpell.name == "KarthusQ") then return false end
+	if(myHero.activeSpell.valid and myHero.activeSpell.name == "KarthusQ") or myHero.isChanneling then return false end
 	return myHero:GetSpellData(_Q).ammo == 2 and myHero.mana > myHero:GetSpellData(_Q).mana
 end
 
+function Karthus:OnPreAttack(args)
+
+    if GetMode() == "LaneClear" then
+		local QManaCheck =  (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.QMana:Value() / 100)
+		local EManaCheck =  (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.EMana:Value() / 100)
+		if(Karthus.Menu.Clear.AABlock:Value() and (QManaCheck or EManaCheck)) then --If the setting is enabled and we have enough mana for Q OR E
+			args.Process = false
+		end
+    end
+
+	if(myHero.levelData.lvl >= Karthus.Menu.Combo.DisableAALevel:Value()) then
+		if(GetMode() == "Combo") and (myHero.mana / myHero.maxMana) >= 0.05 then
+			args.Process = false
+		end
+	end
+
+	if Karthus.Menu.LastHit.UseQ:Value() then
+		if(myHero.levelData.lvl >= Karthus.Menu.LastHit.DisableAALevel:Value()) then
+			if(GetMode() == "LastHit") and (myHero.mana / myHero.maxMana) >= 0.05 then
+				args.Process = false
+			end
+		end
+	end
+
+end
+
 function Karthus:Combo()
-	
-	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
 	if(myHero.isChanneling) then return end
 	
 	-- Q
 	local target = GetTarget(Q.Range + Q.Radius*0.5) --Extend out of the Q range a little bit
-	if(target ~= nil and IsValid(target)) then
+	if(IsValid(target)) then
 		if(self:CanQ() and self.Menu.Combo.UseQ:Value()) then
-			local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ExtendedCheck = true})
-			if(didCast) then
-				gameTick = GameTimer() + 0.2
-			end
+			CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ExtendedCheck = true, collisionRadiusOverride = Q.Radius - 35})
 		end
 	end
 	
 	--W
 	local target = GetTarget(W.Range)
-	if(target ~= nil and IsValid(target)) then
+	if(IsValid(target)) then
 	
 		local hpRatio = (target.health / target.maxHealth)
 		local hpCheck = self.Menu.Combo.WLogicSettings.WHealth:Value()
@@ -290,7 +327,6 @@ function Karthus:Combo()
 		end
 	end
 		
-	
 	-- Disable your E if there are no enemies nearby
 	local EDisableBuffer = 100
 	if HasBuff(myHero, "KarthusDefile") and (GetEnemyCount(E.Radius + EDisableBuffer, myHero) == 0) then 
@@ -298,7 +334,6 @@ function Karthus:Combo()
 		return
 	end
 end
-
 
 function Karthus:Harass()
 	
@@ -322,10 +357,7 @@ function Karthus:Harass()
 			end
 
 			if(shouldCast) then
-				local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ExtendedCheck = true})
-				if(didCast) then
-					gameTick = GameTimer() + 0.2
-				end
+				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, ExtendedCheck = true})
 			end
 		end
 	end
@@ -333,17 +365,15 @@ function Karthus:Harass()
 end
 
 function Karthus:LastHit()
-	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
+	if(gameTick > GameTimer()) then return end
 	if(myHero.isChanneling) then return end
 	
 	if(self:CanQ() and self.Menu.LastHit.UseQ:Value() and (myHero.mana / myHero.maxMana) >= (self.Menu.LastHit.QMana:Value() / 100)) then
 	    local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range)
-		for i = 1, #minions do
-			local minion = minions[i]
+		for _, minion in pairs(minions) do
 			local ShouldAA = false
 			local ShouldAngleQ = false
 			if IsValid(minion) then
-			
 				if(self.Menu.LastHit.UseAA:Value() and myHero.levelData.lvl < self.Menu.LastHit.DisableAALevel:Value() and myHero.pos:DistanceTo(minion.pos) < myHero.range) and not IsUnderFriendlyTurret(myHero) then
 					--If the minion is in AA range and we have the setting enabled, skip it!
 					if not (minion.charName == "SRU_ChaosMinionSiege" or minion.charName == "SRU_OrderMinionSiege") then
@@ -351,49 +381,45 @@ function Karthus:LastHit()
 					end
 				end
 				
-				local prediction = _G.PremiumPrediction:GetPrediction(myHero, minion, QPremium)
-				if prediction.CastPos and prediction.HitChance >= 0.15 and ShouldAA == false then
+				local qPred = GGPrediction:SpellPrediction(Q)
+				qPred:GetPrediction(minion, myHero)
+				if qPred.CastPosition and ShouldAA == false then
 					
-					local QDam = getdmg("Q", minion, myHero, 2, myHero:GetSpellData(_Q).level)
+					local QDam = self:GetRawAbilityDamage("Q")
 					local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
 					local IsolatedQDam = QDam * 1.75 -- It normally is double the damage, but we are giving ourselves a window to operate within for consistency
 				
 					if (hp > 0) and (hp + (minion.health*0.1) < IsolatedQDam) or (minion.health + 10 < IsolatedQDam) then -- First check to see if the minions health can be killed by isolated Q
 						
+						local castPos = qPred.CastPosition
 						local shouldUseIsolated = false
 						local onComingMinionCheck = false
 						
-						local clusterMinions = GetMinionsAroundMinion((Q.Range + Q.Radius + 25), Q.Radius + 30, minion)
+						local clusterMinions = GetTableMinionsAroundMinion(minions, Q.Radius + 30, minion)
 						if(#clusterMinions == 1) then
-							ShouldAngleQ = true
+							local nearbyMinions = GetTableMinionsAroundMinion(minions, 450, minion)
+							if(#nearbyMinions > 1) then
+								onComingMinionCheck = self:OnComingMinionCheck(minion, nearbyMinions)
+							end
 						end
 						
-						--On coming minion check
-						local nearbyMinions = GetMinionsAroundMinion((Q.Range + Q.Radius + 25), 450, minion)
-						if(#nearbyMinions >= 1) then
-							onComingMinionCheck = self:OnComingMinionCheck(minion, nearbyMinions)
-						end
-						
-						if(GetMinionCount(Q.Range + Q.Radius, Q.Radius + 30, minion.pos) == 1) or ShouldAngleQ and not onComingMinionCheck and (GetEnemyCountAtPos(Q.Range + Q.Radius, Q.Radius + 250, minion.pos) == 0) then
+						if(#clusterMinions == 0) or not onComingMinionCheck and (GetEnemyCountAtPos(Q.Range + Q.Radius, Q.Radius + 250, minion.pos) == 0) then
 							shouldUseIsolated = true
 						end
-						
-						
-						if(shouldUseIsolated) and not onComingMinionCheck then
-							if(ShouldAngleQ) then
+
+						if(shouldUseIsolated) then
+							if(#clusterMinions == 1) then
 								local angledPos = self:AngleQPos(minion, clusterMinions[1], Q.Radius)
-								Control.CastSpell(HK_Q, angledPos)
-								gameTick = GameTimer() + 0.1
-								return
-							else
-								Control.CastSpell(HK_Q, prediction.CastPos)
-								gameTick = GameTimer() + 0.1
-								return
+								castPos = angledPos
 							end
+						end
+						
+						if(shouldUseIsolated) and not onComingMinionCheck and GetDistance(myHero, castPos) < Q.Range - 10 then
+							Control.CastSpell(HK_Q, castPos)
+							return
 						else
-							if (hp > 0) and (hp + (minion.health*0.12) < QDam) or (minion.health + 12 < QDam) then
-								Control.CastSpell(HK_Q, prediction.CastPos)
-								gameTick = GameTimer() + 0.1
+							if (hp > 0) and (hp + (minion.health*0.12) < QDam) or (minion.health + 12 < QDam) and GetDistance(myHero, castPos) < Q.Range - 10 then
+								Control.CastSpell(HK_Q, castPos)
 								return
 							end
 						end
@@ -409,15 +435,14 @@ end
 function Karthus:AngleQPos(minion1, minion2, radius)
 	local dirVec = (minion1.pos - minion2.pos):Normalized()
 	local newPos = minion1.pos + (dirVec * radius)
-	--DrawLine(minion1.pos:To2D(), minion2.pos:To2D(), 10, DrawColor(255, 255, 255, 255))
-	--DrawCircle(newPos, radius, 4, DrawColor(255, 255, 255, 255)) --(Alpha, R, G, B)
 	
 	return newPos
 end
 
 function Karthus:OnComingMinionCheck(minion, minions)
 	for k, _nearbyMinion in pairs(minions) do
-		local pred = _G.PremiumPrediction:GetPrediction(myHero, _nearbyMinion, QPremium)
+		local pred = GGPrediction:SpellPrediction(Q)
+		pred:GetPrediction(minion, myHero)
 		if(pred.CastPos) then
 			local dist =  minion.pos.DistanceTo(Vector(pred.CastPos))
 			if dist <= Q.Radius then
@@ -432,35 +457,152 @@ function Karthus:Clear()
 	
 	if(gameTick > GameTimer()) then return end --This is to prevent the mouse from spasming out
 
-	local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range + 25)
+	local QManaCheck =  (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.QMana:Value() / 100)
+	local EManaCheck =  (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.EMana:Value() / 100)
+
+	local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range)
+	local highPrioMinions = {}
 	local canonMinion = nil
+	local killableMinion = nil
 	
 	if(self.Menu.Clear.PrioCanon:Value()) then
-		for i = 1, #minions do
-			local minion = minions[i]
-			if(IsValid(minion)) then
-				if (minion.charName == "SRU_ChaosMinionSiege" or minion.charName == "SRU_OrderMinionSiege") then
-					canonMinion = minion
+		canonMinion = GetCanonMinion(minions)
+	end
+
+	if(canonMinion and IsValid(canonMinion) and canonMinion.health/canonMinion.maxHealth <= 0.3) then
+		if(self:CanQ() and self.Menu.Clear.UseQ:Value() and QManaCheck) then
+			local QDam = self:GetRawAbilityDamage("Q")
+			local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay)
+
+			local clusterMinions = GetTableMinionsAroundMinion(minions, Q.Radius + 30, canonMinion)
+			if(#clusterMinions == 0) then
+				QDam = QDam * 2
+			end
+
+			if(canonMinion.health - QDam < 0 and hp > 0) then
+				Control.CastSpell(HK_Q, canonMinion)
+				return
+			end
+		end
+	end
+
+	for _, minion in pairs(minions) do
+		if(IsValid(minion)) then
+			local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
+			local QDam = self:GetRawAbilityDamage("Q")
+			if( hp > 0 and minion.health - (QDam*2) < 0 and (minion.health - hp > 0 or minion.health - QDam < 0)) then
+				table.insert(highPrioMinions, minion)
+			end
+		end
+	end
+
+	--Focus on clearing these minions first.
+	if(#highPrioMinions > 0) then
+		for _, minion in pairs(highPrioMinions) do
+			if(self:CanQ() and self.Menu.Clear.UseQ:Value() and QManaCheck) then
+				
+				local pred = GGPrediction:SpellPrediction(Q)
+				pred:GetPrediction(minion, myHero)
+				if pred.CastPosition and GetDistance(myHero, pred.CastPosition) < Q.Range - 10 then
+					local QDam = self:GetRawAbilityDamage("Q")
+					local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
+					local castPos = pred.CastPosition
+
+					local shouldUseIsolated = false
+					local onComingMinionCheck = false
+					
+					local clusterMinions = GetTableMinionsAroundMinion(minions, Q.Radius + 30, minion)
+					if(#clusterMinions == 1) then
+						local nearbyMinions = GetTableMinionsAroundMinion(minions, 450, minion)
+						if(#nearbyMinions > 1) then
+							onComingMinionCheck = self:OnComingMinionCheck(minion, nearbyMinions)
+						end
+					end
+					
+					if(#clusterMinions == 0) or not onComingMinionCheck and (GetEnemyCountAtPos(Q.Range + Q.Radius, Q.Radius + 250, minion.pos) == 0) then
+						shouldUseIsolated = true
+					end
+					
+					if(shouldUseIsolated) then
+						if(#clusterMinions == 1) then
+							local angledPos = self:AngleQPos(minion, clusterMinions[1], Q.Radius)
+							QDam = QDam * 1.85
+							castPos = angledPos
+						end
+					end
+
+					if hp - QDam < 0 and GetDistance(myHero, castPos) < Q.Range - 10 then
+						Control.CastSpell(HK_Q, castPos)
+						return
+					end
+
 				end
 			end
 		end
 	end
 	
-	for i = 1, #minions do
-		local minion = minions[i]
+	for _, minion in pairs(minions) do
 		
-		if(canonMinion ~= nil) then minion = canonMinion end -- Prioritize Canon
+		if killableMinion then minion = killableMinion end
+
+		if(canonMinion and IsValid(canonMinion) and canonMinion.health/canonMinion.maxHealth <= 0.3) then
+			minion = canonMinion 
+		end
+
 		if(IsValid(minion)) then
 			
-			local QManaCheck =  (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.QMana:Value() / 100)
-			local EManaCheck =  (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.EMana:Value() / 100)
-			
 			-- Q
-			if(self:CanQ() and self.Menu.Clear.UseQ:Value() and QManaCheck) then
-				local prediction = _G.PremiumPrediction:GetPrediction(myHero, minion, QPremium)
-				if prediction.CastPos and prediction.HitChance >= 0.15 then
-					Control.CastSpell(HK_Q, prediction.CastPos)
-					gameTick = GameTimer() + 0.25
+			if(self:CanQ() and self.Menu.Clear.UseQ:Value() and QManaCheck) and #highPrioMinions == 0 then
+				local pred = GGPrediction:SpellPrediction(Q)
+				pred:GetPrediction(minion, myHero)
+				if pred.CastPosition and GetDistance(myHero, pred.CastPosition) < Q.Range - 10 then
+					local QDam = self:GetRawAbilityDamage("Q")
+					local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay)
+					local hpDifferential = minion.health - hp --Incoming damage
+					local canQ = true
+					local castPos = pred.CastPosition
+
+					if(hp > 0) then
+						local shouldUseIsolated = false
+						local onComingMinionCheck = false
+						
+						local clusterMinions = GetTableMinionsAroundMinion(minions, Q.Radius + 30, minion)
+						if(#clusterMinions == 1) then
+
+							--On coming minion check
+							local nearbyMinions = GetTableMinionsAroundMinion(minions, 450, minion)
+							if(#nearbyMinions > 1) then
+								onComingMinionCheck = self:OnComingMinionCheck(minion, nearbyMinions)
+							end
+						end
+						
+						if(#clusterMinions == 0) or not onComingMinionCheck and (GetEnemyCountAtPos(Q.Range + Q.Radius, Q.Radius + 250, minion.pos) == 0) then
+							shouldUseIsolated = true
+						end
+						
+						
+						if(shouldUseIsolated) then
+							if(#clusterMinions == 1) then
+								local angledPos = self:AngleQPos(minion, clusterMinions[1], Q.Radius)
+								QDam = QDam * 1.85
+								castPos = angledPos
+							end
+						end
+
+						if(hpDifferential > 0) then
+							if hp - QDam < 0 and GetDistance(myHero, castPos) < Q.Range - 10 then
+								Control.CastSpell(HK_Q, castPos)
+								return
+							end
+						end
+
+
+						if ((hpDifferential == 0 or (hp - QDam)/minion.maxHealth >= 0.4)) and GetDistance(myHero, castPos) < Q.Range - 10 then
+							Control.CastSpell(HK_Q, castPos)
+							return
+						end
+					end
+
 				end
 			end
 			
@@ -485,40 +627,30 @@ function Karthus:Clear()
 	
 	-- Disable your E if there are no minions nearby
 	local EDisableBuffer = 50
-	if HasBuff(myHero, "KarthusDefile") and (GetMinionCount(E.Radius + EDisableBuffer, E.Radius, myHero.pos) == 0) then 
-		Control.CastSpell(HK_E)
-		return
-	end
+	if(self.Menu.Clear.DisableESoloMinion:Value()) then
+		if HasBuff(myHero, "KarthusDefile") and (GetMinionCount(E.Radius + EDisableBuffer, E.Radius, myHero.pos) == 1) then
+			local isJungleCreep = false
+			for _, minion in pairs(minions) do
+				if(minion.team == TEAM_JUNGLE) and GetDistance(minion, myHero) < E.Radius + EDisableBuffer then
+					isJungleCreep = true
+					break
+				end
+			end
 
-end
-
-function Karthus:AABlock()
-	local mode = GetMode()
-	local level = myHero.levelData.lvl
-	local modeCheck = (mode == "Combo" or mode == "LaneClear" or mode == "Flee" or mode == "Harass" or mode == "LastHit")
-	if(not modeCheck) then _G.SDK.Orbwalker:SetAttack(true) return end
-	
-	if(level >= self.Menu.Combo.DisableAALevel:Value()) then
-		if(mode == "Combo") and (myHero.mana / myHero.maxMana) >= 0.05 then
-			_G.SDK.Orbwalker:SetAttack(false)
-		end
-	end
-	
-	if self.Menu.LastHit.UseQ:Value() then
-		if(level >= self.Menu.LastHit.DisableAALevel:Value()) then
-			if(mode == "LastHit") and (myHero.mana / myHero.maxMana) >= 0.05 then
-				_G.SDK.Orbwalker:SetAttack(false)
+			if not isJungleCreep then
+				Control.CastSpell(HK_E)
+				gameTick = GameTimer() + 0.25
+				return
 			end
 		end
-	end
-	
-	local QManaCheck =  (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.QMana:Value() / 100)
-	local EManaCheck =  (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.EMana:Value() / 100)
-	if(self.Menu.Clear.AABlock:Value() and (QManaCheck or EManaCheck)) then --If the setting is enabled and we have enough mana for Q OR E
-		if(mode == "LaneClear") then
-			_G.SDK.Orbwalker:SetAttack(false)
+	else
+		if HasBuff(myHero, "KarthusDefile") and (GetMinionCount(E.Radius + EDisableBuffer, E.Radius, myHero.pos) == 0) then 
+			Control.CastSpell(HK_E)
+			gameTick = GameTimer() + 0.25
+			return
 		end
 	end
+
 end
 
 function Karthus:AutoRCheck()
@@ -649,6 +781,22 @@ function Karthus:SemiManualW()
 	end
 end
 
+function Karthus:GetRawAbilityDamage(spell)
+	if(spell == "Q") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
+		return ({43, 61, 79, 97, 115})[myHero:GetSpellData(_Q).level] + (myHero.ap * 0.35)
+	end
+	if(spell == "E") then
+		if myHero:GetSpellData(_E).level == 0 then return 0 end
+		return ({7.5, 12.5, 17.5, 22.5, 27.5})[myHero:GetSpellData(_E).level] + (myHero.ap * 0.05)
+	end
+	if(spell == "R") then
+		if myHero:GetSpellData(_R).level == 0 then return 0 end
+		return ({200, 350, 500})[myHero:GetSpellData(_R).level] + (0.75 * myHero.ap)
+	end
+	return 0
+end
+
 function Karthus:IsInStatusBox(pt)
 	return pt.x >= self.Window.x
 		and pt.x <= self.Window.x + 186
@@ -695,17 +843,31 @@ if myHero.dead then return end
 	end
 end
 
+local TrackerColors = {
+	Grey = DrawColor(215, 23, 23, 23),
+	GreyFaded = DrawColor(55, 255, 255, 255),
+	Black = DrawColor(255, 0, 0, 0),
+	White = DrawColor(255, 255, 255, 255),
+	Green = DrawColor(255, 0, 255, 125),
+	GreenFaded = DrawColor(55, 0, 255, 125),
+	Red = DrawColor(255, 255, 75, 135),
+	CriticalRed = DrawColor(255, 255, 0, 135),
+	SoftRed = DrawColor(255, 255, 115, 165),
+	MIARed = DrawColor(55, 255, 85, 185),
+}
+
 function Karthus:DrawHealthTracker()
 	if not (myHero.networkID)then return end
 	if (Game.Timer() <= 1) then return end
-	if Karthus.AllowMove then
-		Karthus.Window = { x = cursorPos.x + Karthus.AllowMove.x, y = cursorPos.y + Karthus.AllowMove.y }
+	if self.AllowMove then
+		self.Window = { x = cursorPos.x + self.AllowMove.x, y = cursorPos.y + self.AllowMove.y }
+		self.Menu.Drawings.HPosXY:Value({self.Window.x, self.Window.y})
 	end
 	
-	local rectHeight = #Enemies * 30
+	local rectHeight = 30 + (#Enemies*20) + 8
 	
-	Draw.Rect(self.Window.x, self.Window.y, 300, rectHeight, Draw.Color(224, 23, 23, 23))
-	Draw.Text("Health Tracker", 18, self.Window.x + 10, self.Window.y + 5, DrawColor(255, 255, 255, 255))
+	Draw.Rect(self.Window.x, self.Window.y, 300, rectHeight, TrackerColors.Grey)
+	Draw.Text("Health Tracker", 18, self.Window.x + 10, self.Window.y + 5, TrackerColors.White)
 	
 	local yOffset = 0
 	
@@ -717,13 +879,13 @@ function Karthus:DrawHealthTracker()
 	for k, v in pairs(Enemies) do
 
 		local hpRatio = v.health / math.floor(v.maxHealth)
-		local RDmg = 0 --getdmg("R", v, myHero)
+		local RDmg = 0 
 		
 		if(UltableChamps[v.name] ~= nil) then
 			miaCheck = ((GetTickCount() - UltableChamps[v.name].timelastspotted) / 1000 >= MIATimer)
 			RDmg = UltableChamps[v.name].ultdmg 
 		end
-		
+
 		local ultDmgRatio = RDmg / v.maxHealth
 		
 		if(ultDmgRatio > hpRatio) then
@@ -733,27 +895,30 @@ function Karthus:DrawHealthTracker()
 		
 		--HealthBarDraws
 		if(not miaCheck and v.alive) then
-			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, DrawColor(255, 0, 0, 0))
-			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth * hpRatio -1, 8, IsValid(v) and DrawColor(255, 0, 255, 125) or DrawColor(55, 0, 255, 125))
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, TrackerColors.Black)
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth * hpRatio -1, 8, IsValid(v) and TrackerColors.Green or TrackerColors.GreenFaded)
 			if(RDmg > v.health) then
-				Draw.Rect(self.Window.x + barOffset + (barWidth * hpRatio) - (barWidth * ultDmgRatio), self.Window.y + 39 + yOffset, barWidth * ultDmgRatio, 8, (IsValid(v) or not miaCheck) and DrawColor(255, 255, 0, 125) or DrawColor(75, 255, 0, 125))
+				Draw.Rect(self.Window.x + barOffset + (barWidth * hpRatio) - (barWidth * ultDmgRatio), self.Window.y + 39 + yOffset, barWidth * ultDmgRatio, 8, TrackerColors.CriticalRed)
 			else
-				Draw.Rect(self.Window.x + barOffset + (barWidth * hpRatio) - (barWidth * ultDmgRatio), self.Window.y + 39 + yOffset, barWidth * ultDmgRatio, 8, IsValid(v) and DrawColor(200, 225, 55, 125) or DrawColor(35, 255, 0, 125))
+				Draw.Rect(self.Window.x + barOffset + (barWidth * hpRatio) - (barWidth * ultDmgRatio), self.Window.y + 39 + yOffset, barWidth * ultDmgRatio, 8, IsValid(v) and TrackerColors.SoftRed or TrackerColors.MIARed)
 			end
 		else
-			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, DrawColor(55, 255, 255, 255))
+			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, TrackerColors.GreyFaded)
 		end
 		
 		-- Name
-
+		local name = v.charName
+		if(name:find("Practice")) then
+			name = "Dummy"
+		end
 		if(not miaCheck and v.alive) then
 			if(RDmg > v.health) then
-				Draw.Text(v.charName, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, DrawColor(255, 255, 75, 135))
+				Draw.Text(name, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, TrackerColors.Red)
 			else
-				Draw.Text(v.charName, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, DrawColor(255, 55, 255, 155))
+				Draw.Text(name, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, TrackerColors.Green)
 			end
 		else
-			Draw.Text(v.charName, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, DrawColor(125, 255, 255, 255))
+			Draw.Text(name, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, TrackerColors.GreyFaded)
 		end
 		
 		yOffset = yOffset + 20
@@ -780,10 +945,13 @@ function Karthus:RCheck()
 		
 		if(IsValid(enemy)) then
 			UltableChamps[enemy.name].timelastspotted = GetTickCount()
-			local RDmg = getdmg("R", enemy, myHero)
+
+			local RDmg = self:GetRawAbilityDamage("R")
+			RDmg = CalcMagicalDamage(myHero, enemy, RDmg)
+
 			UltableChamps[enemy.name].ultdmg = RDmg
 			local Hp = enemy.health + (6 * enemy.hpRegen)
-			if Hp <= RDmg and  not (self:CantKill(enemy, true, true, false)) then
+			if Hp <= RDmg and  not (CantKill(enemy, true, true, false)) then
 				UltableChamps[enemy.name].killable = true
 			else
 				UltableChamps[enemy.name].killable = false
@@ -805,47 +973,7 @@ function Karthus:RCheck()
 	
 end
 
-function Karthus:CantKill(unit, kill, ss, aa)
-	--set kill to true if you dont want to waste on undying/revive targets
-	--set ss to true if you dont want to cast on spellshield
-	--set aa to true if ability applies onhit (yone q, ez q etc)
-	for i = 0, unit.buffCount do
-	
-		local buff = unit:GetBuff(i)
-	
-		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 and buff.duration>3.2 then
-			return true
-		end
-		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1 and buff.duration>3.2   then
-			return true
-		end	
-		if buff.name:lower():find("chronoshift") and kill and buff.count==1 and buff.duration>3.2   then
-			return true
-		end			
-		
-		if  buff.name:lower():find("willrevive") and kill and buff.count==1 then
-			return true
-		end
-
-		if  buff.name:lower():find("morganae") and ss and not aa and buff.count==1 and buff.duration>3.2  then
-			return true
-		end
-		
-	end
-	if HasBuffType(unit, 4) and ss then
-		return true
-	end
-	
-	return false
-end
-
 
 Karthus()
 LoadUnits()
-
-if Karthus.OnWndMsg then
-	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
-		Karthus:OnWndMsg(msg, wParam)
-	end)
-end
 
