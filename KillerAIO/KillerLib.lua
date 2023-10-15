@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.54
+local kLibVersion = 2.55
 
 -- [ AutoUpdate ]
 do
@@ -418,6 +418,7 @@ function AutoLeveler(skillPriority)
 		-- Standard leveling
 		if(firstSkill.level ~= 5) then
 			if(firstSkill.level + 1 <= math.ceil(level/2)) then
+				
 				AutoLevelCheck = true
 				local cachedLevel = firstSkill.level
 				DelayEvent(function()
@@ -469,6 +470,437 @@ function AutoLeveler(skillPriority)
 	else
 		AutoLevelCheck = false
 	end
+end
+
+-- ITEM & RUNE DATA --
+
+ItemHotKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6}
+
+Item = {
+	Boots = 1001,
+	FaerieCharm = 1004,
+	RejuvenationBead = 1006,
+	GiantsBelt = 1011,
+	CloakofAgility = 1018,
+	BlastingWand = 1026,
+	SapphireCrystal = 1027,
+	RubyCrystal = 1028,
+	ClothArmor = 1029,
+	ChainVest = 1031,
+	NullMagicMantle = 1033,
+	Emberknife = 1035,
+	LongSword = 1036,
+	Pickaxe = 1037,
+	BFSword = 1038,
+	Hailblade = 1039,
+	ObsidianEdge = 1040,
+	Dagger = 1042,
+	RecurveBow = 1043,
+	AmplifyingTome = 1052,
+	VampiricScepter = 1053,
+	DoransShield = 1054,
+	DoransBlade = 1055,
+	DoransRing = 1056,
+	NegatronCloak = 1057,
+	NeedlesslyLargeRod = 1058,
+	DarkSeal = 1082,
+	Cull = 1083,
+	ScorchclawPup = 1101,
+	GustwalkerHatchling = 1102,
+	MosstomperSeedling = 1103,
+	EyeoftheHerald = 1104 or 3513,
+	PenetratingBullets = 1500,
+	Fortification = 1501 or 1521,
+	ReinforcedArmor = 1502 or 1506,
+	WardensEye = 1503,
+	Vanguard = 1504,
+	Overcharged = 1507,
+	AntitowerSocks = 1508,
+	Gusto = 1509,
+	PhreakishGusto = 1510,
+	SuperMechArmor = 1511,
+	SuperMechPowerField = 1512,
+	TurretPlating = 1515,
+	StructureBounty = 1516 or 1517 or 1518 or 1519,
+	OvererchargedHA = 1520,
+	TowerPowerUp = 1522,
+	HealthPotion = 2003,
+	TotalBiscuitofEverlastingWill = 2010,
+	KircheisShard = 2015,
+	SteelSigil = 2019,
+	RefillablePotion = 2031,
+	CorruptingPotion = 2033,
+	GuardiansAmulet = 2049,
+	GuardiansShroud = 2050,
+	GuardiansHorn = 2051 or 222051,
+	PoroSnax = 2052,
+	ControlWard = 2055,
+	ShurelyasBattlesong = 2065 or 222065,
+	ElixirofIron = 2138,
+	ElixirofSorcery = 2139,
+	ElixirofWrath = 2140,
+	CappaJuice = 2141,
+	JuiceofPower = 2142,
+	JuiceofVitality = 2143,
+	JuiceofHaste = 2144,
+	MinionDematerializer = 2403,
+	CommencingStopwatch = 2419,
+	Stopwatch = 2420,
+	BrokenStopwatch = 2421 or 2424,
+	SlightlyMagicalFootwear = 2422,
+	PerfectlyTimedStopwatch = 2423,
+	Evenshroud = 3001 or 223001,
+	ArchangelsStaff = 3003 or 223003,
+	Manamune = 3004 or 223004,
+	BerserkersGreaves = 3006 or 223006,
+	BootsofSwiftness = 3009 or 223009,
+	ChemtechPutrifier = 3011 or 223011,
+	ChaliceofBlessing = 3012,
+	SorcerersShoes = 3020 or 223020,
+	LifewellPendant = 3023,
+	GlacialBuckler = 3024,
+	GuardianAngel = 3026,
+	InfinityEdge = 3031 or 223026,
+	MortalReminder = 3033 or 223031,
+	LastWhisper = 3035 or 223033,
+	LordDominiksRegards = 3036 or 223036,
+	SeraphsEmbrace = 3040 or 223040,
+	MejaisSoulstealer = 3041,
+	Muramana = 3042 or 223042,
+	Phage = 3044,
+	PhantomDancer = 3046 or 223046,
+	PlatedSteelcaps = 3047 or 223047,
+	ZekesConvergence = 3050 or 223050,
+	HearthboundAxe = 3051,
+	SteraksGage = 3053 or 223053,
+	Sheen = 3057,
+	SpiritVisage = 3065 or 223065,
+	WingedMoonplate = 3066,
+	Kindlegem = 3067,
+	SunfireAegis = 3068 or 223068,
+	TearoftheGoddess = 3070,
+	BlackCleaver = 3071 or 223071,
+	Bloodthirster = 3072 or 223072,
+	RavenousHydra = 3074 or 223074,
+	Thornmail = 3075 or 223075,
+	BrambleVest = 3076,
+	Tiamat = 3077,
+	TrinityForce = 3078 or 223078,
+	WardensMail = 3082,
+	WarmogsArmor = 3083,
+	Heartsteel = 3084 or 223084,
+	RunaansHurricane = 3085 or 223085,
+	Zeal = 3086,
+	StatikkShiv = 3087 or 223087,
+	RabadonsDeathcap = 3089 or 223089,
+	WitsEnd = 3091 or 223091,
+	RapidFirecannon = 3094 or 223094,
+	Stormrazor = 3095 or 223095,
+	LichBane = 3100 or 223100,
+	BansheesVeil = 3102 or 223102,
+	AegisoftheLegion = 3105,
+	Redemption = 3107 or 223107,
+	FiendishCodex = 3108,
+	KnightsVow = 3109 or 223109,
+	FrozenHeart = 3110 or 223110,
+	MercurysTreads = 3111 or 223111,
+	GuardiansOrb = 3112 or 223112,
+	AetherWisp = 3113,
+	ForbiddenIdol = 3114,
+	NashorsTooth = 3115 or 223115,
+	RylaisCrystalScepter = 3116 or 223116,
+	MobilityBoots = 3117,
+	WintersApproach = 3119 or 223119,
+	Fimbulwinter = 3121 or 223121,
+	ExecutionersCalling = 3123,
+	GuinsoosRageblade = 3124 or 223124,
+	DeathfireGrasp = 3128,
+	CaulfieldsWarhammer = 3133,
+	SerratedDirk = 3134,
+	VoidStaff = 3135 or 223135,
+	MercurialScimitar = 3139 or 223139,
+	QuicksilverSash = 3140,
+	YoumuusGhostblade = 3142 or 223142,
+	RanduinsOmen = 3143 or 223143,
+	HextechAlternator = 3145,
+	HextechRocketbelt = 3152 or 223152,
+	BladeofTheRuinedKing = 3153 or 223153,
+	Hexdrinker = 3155,
+	MawofMalmortius = 3156 or 223156,
+	ZhonyasHourglass = 3157 or 223157,
+	IonianBootsofLucidity = 3158 or 223158,
+	SpearOfShojin = 3161 or 223161,
+	Morellonomicon = 3165 or 223165,
+	GuardiansBlade = 3177 or 223177,
+	UmbralGlaive = 3179,
+	Hullbreaker = 3181 or 223181,
+	GuardiansHammer = 3184 or 223184,
+	LocketoftheIronSolari = 3190 or 223190,
+	SeekersArmguard = 3191,
+	GargoyleStoneplate = 3193 or 223193,
+	SpectresCowl = 3211,
+	MikaelsBlessing = 3222 or 223222,
+	ScarecrowEffigy = 3330,
+	StealthWard = 3340,
+	ArcaneSweeper = 3348,
+	LucentSingularity = 3349,
+	FarsightAlteration = 3363,
+	OracleLens = 3364,
+	YourCut = 3400,
+	RiteOfRuin = 3430,
+	ArdentCenser = 3504 or 223504,
+	EssenceReaver = 3508 or 223508,
+	KalistasBlackSpear = 3599 or 3600,
+	DeadMansPlate = 3742 or 223742,
+	TitanicHydra = 3748 or 223748,
+	CrystallineBracer = 3801,
+	LostChapter = 3802,
+	CatalystofAeons = 3803,
+	EdgeofNight = 3814 or 223814,
+	SpellthiefsEdge = 3850,
+	Frostfang = 3851,
+	ShardofTrueIce = 3853,
+	SteelShoulderguards = 3854,
+	RunesteelSpaulders = 3855,
+	PauldronsofWhiterock = 3857,
+	RelicShield = 3858,
+	TargonsBuckler = 3859,
+	BulwarkoftheMountain = 3860,
+	SpectralSickle = 3862,
+	HarrowingCrescent = 3863,
+	BlackMistScythe = 3864,
+	FireatWill = 3901,
+	DeathsDaughter = 3902,
+	RaiseMorale = 3903,
+	OblivionOrb = 3916,
+	ImperialMandate = 4005 or 224005,
+	BloodlettersCurse = 4010,
+	ForceofNature = 4401 or 224401,
+	TheGoldenSpatula = 4403 or 224403,
+	HorizonFocus = 4628 or 224628,
+	CosmicDrive = 4629 or 224629,
+	BlightingJewel = 4630,
+	VerdantBarrier = 4632,
+	Riftmaker = 4633 or 224633,
+	LeechingLeer = 4635,
+	NightHarvester = 4636 or 224636,
+	DemonicEmbrace = 4637 or 224637,
+	WatchfulWardstone = 4638,
+	StirringWardstone = 4641,
+	BandleglassMirror = 4642,
+	VigilantWardstone = 4643,
+	CrownoftheShatteredQueen = 4644 or 224644,
+	Shadowflame = 4645 or 224645,
+	IronspikeWhip = 6029,
+	SilvermereDawn = 6035 or 226035,
+	DeathsDance = 6333 or 226333,
+	ChempunkChainsword = 6609 or 226609,
+	StaffofFlowingWater = 6616 or 226616,
+	MoonstoneRenewer = 6617 or 226617,
+	EchoesofHelia = 6620 or 226620,
+	Goredrinker = 6630 or 226630,
+	Stridebreaker = 6631 or 226631,
+	DivineSunderer = 6632 or 226632,
+	LiandrysAnguish = 6653 or 226653,
+	LudensTempest = 6655 or 226655,
+	Everfrost = 6656 or 226656,
+	RodofAges = 6657 or 226657,
+	BamisCinder = 6660,
+	IcebornGauntlet = 6662 or 226662,
+	TurboChemtank = 6664 or 226664,
+	JakShoTheProtean = 6665 or 226665,
+	RadiantVirtue = 6667 or 226667,
+	Noonquiver = 6670,
+	Galeforce = 6671 or 6671,
+	KrakenSlayer = 6672 or 6672,
+	ImmortalShieldbow = 6673 or 6673,
+	NavoriQuickblades = 6675 or 6675,
+	TheCollector = 6676 or 6676,
+	Rageknife = 6677,
+	DuskbladeofDraktharr = 6691 or 226691,
+	Eclipse = 6692 or 226692,
+	ProwlersClaw = 6693 or 226693,
+	SeryldasGrudge = 6694 or 226694,
+	SerpentsFang = 6695 or 226695,
+	AxiomArc = 6696 or 226696,
+	SandshrikesClaw = 7000,
+	Syzygy = 7001 or 227001,
+	DraktharrsShadowcarver = 7002 or 227002,
+	FrozenFist = 7005 or 227005,
+	Typhoon = 7006 or 227006,
+	IcathiasCurse = 7009 or 227009,
+	Vespertide = 7010 or 227010,
+	UpgradedAeropack = 7011 or 227011,
+	LiandrysLament = 7012 or 227012,
+	EyeofLuden = 7013 or 227013,
+	EternalWinter = 7014 or 227014,
+	CeaselessHunger = 7015 or 227015,
+	Dreamshatter = 7016 or 227016,
+	Deicide = 7017 or 227017,
+	InfinityForce = 7018 or 227018,
+	ReliquaryoftheGoldenDawn = 7019 or 227019,
+	ShurelyasRequiem = 7020 or 227020,
+	Starcaster = 7021 or 227021,
+	Equinox = 7023 or 227023,
+	Caesura = 7024 or 227024,
+	Leviathan = 7025 or 227025,
+	TheUnspokenParasite = 7026 or 227026,
+	PrimordialDawn = 7027 or 227027,
+	InfiniteConvergence = 7028 or 227028,
+	YoumuusWake = 7029 or 227029,
+	SeethingSorrow = 7030 or 227030,
+	EdgeofFinality = 7031 or 227031,
+	Flicker = 7032 or 227032,
+	CryoftheShriekingCity = 7033 or 227033,
+	GangplankPlaceholder = 7050,
+	AnathemasChains = 8001 or 228001,
+	AbyssalMask = 8020 or 228020,
+	Ghostcrawlers = 223005,
+	AtmasReckoning = 223039,
+	HextechGunblade = 223146,
+	Zephyr = 223172,
+	GuardiansDirk = 223185,
+	SpectralCutlass = 224004,
+}
+
+ItemDamage = {
+	[Item.Muramana] = function()
+		if(myHero.range < 400) then
+			return myHero.maxMana*0.035 + myHero.bonusDamage*0.06
+		else
+			return myHero.maxMana*0.027 + myHero.bonusDamage*0.06
+		end
+	end,
+	[Item.DivineSunderer] = function(args)
+		if(myHero.range < 400) then
+			return myHero.baseDamage * 1.6 + args.maxHealth * 0.04
+		else
+			return myHero.baseDamage * 1.6 + args.maxHealth * 0.02
+		end
+	end,
+	[Item.Everfrost] = function() return 100 + (myHero.ap * 0.3) end,
+	[Item.EternalWinter] = function() return 100 + (myHero.ap * 0.3) end,
+	[Item.LudensTempest] = function() return 100 + (myHero.ap * 0.1) end,
+	[Item.Sheen] = function() return myHero.baseDamage end,
+	[Item.TrinityForce] = function() return myHero.baseDamage * 2 end,
+	[Item.IcebornGauntlet] = function() return myHero.baseDamage end,
+	[Item.InfinityForce] = function() return myHero.baseDamage * 2 end,
+	[Item.EssenceReaver] = function() return (myHero.baseDamage * 1.3) + (myHero.bonusDamage * 0.2) end,
+	[Item.HextechRocketbelt] = function() return 125 + (0.15 * myHero.ap) end,
+	[Item.UpgradedAeropack] = function() return 125 + (0.15 * myHero.ap) end,
+	[Item.ProwlersClaw] = function() return 85 + (0.55 * myHero.bonusDamage) end,
+	[Item.Stridebreaker] = function() return 1.75 * myHero.baseDamage end,
+	[Item.IronspikeWhip] = function() return myHero.baseDamage end,
+	[Item.DuskbladeofDraktharr] = function(args) return (1 + math.min(((1 - (args.health / args.maxHealth)) / 7) * 1.6, 0.16)) end,
+}
+
+function HasItem(itemID)
+    for i = ITEM_1, ITEM_7 do
+		if(type(itemID) == "table") then
+			for _, item in pairs(itemID) do
+				local id = myHero:GetItemData(i).itemID
+				if id == item then
+					if(myHero:GetSpellData(i).currentCd == 0) then
+						return true, i
+					end
+				end
+			end
+		else
+			local id = myHero:GetItemData(i).itemID
+			if id == itemID then
+				if(myHero:GetSpellData(i).currentCd == 0) then
+					return true, i
+				else
+					return false
+				end
+			end
+		end
+    end
+	return false
+end
+
+function GetItemDamage(itemID, tar)
+	if(ItemDamage[itemID]) then
+		local hasArgs = (debug.getinfo(ItemDamage[itemID]).nparams) == 1
+		if(hasArgs) then
+			if(tar) then
+				return ItemDamage[itemID](tar)
+			else
+				print("Warning: GetItemDamage called without providing target for ID " .. itemID)
+			end
+		else
+			return ItemDamage[itemID]()
+		end
+	end
+	return 0
+end
+
+-- Rune Stuff
+
+function HasElectrocute()
+    for i = 0, myHero.buffCount do
+        local buff = myHero:GetBuff(i)
+        if buff and buff.count>0 and buff.name:lower():find("electrocute.lua") then
+			return true
+        end
+    end
+
+	return false
+end
+
+function GetElectrocuteDamage()
+	return 30 + ((190/17)*(myHero.levelData.lvl-1)) + (myHero.ap * 0.05) + (myHero.bonusDamage * 0.1)
+end
+
+function HasIgnite()
+	if myHero:GetSpellData(SUMMONER_1).name == "SummonerDot" and Ready(SUMMONER_1) then
+		return true
+	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerDot" and Ready(SUMMONER_2) then
+		return true
+	end
+	
+	return false
+end
+
+function UseIgnite(unit)
+	if myHero:GetSpellData(SUMMONER_1).name == "SummonerDot" and Ready(SUMMONER_1) then
+		Control.CastSpell(HK_SUMMONER_1, unit)
+	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerDot" and Ready(SUMMONER_2) then
+		Control.CastSpell(HK_SUMMONER_2, unit)
+	end
+end
+
+function GetIgniteDamage()
+	return 50 + (20 * myHero.levelData.lvl)
+end
+
+function HasArcaneComet()
+    for i = 0, myHero.buffCount do
+        local buff = myHero:GetBuff(i)
+        if buff and buff.count>0 and buff.name:lower():find("arcanecometsnipe.lua") then
+			return true
+        end
+    end
+
+	return false
+end
+
+function GetArcaneCometDamage()
+	return 30 + ((100/17)*(myHero.levelData.lvl-1)) + (myHero.ap * 0.05) + (myHero.bonusDamage * 0.1)
+end
+
+function HasFirstStrike()
+    for i = 0, myHero.buffCount do
+        local buff = myHero:GetBuff(i)
+        if buff and buff.count>0 and buff.name:lower():find("firststrikeavailable") then
+			return true
+        end
+    end
+
+	return false
+end
+function GetFirstStrikeBonus()
+	return 1.08
 end
 
 
@@ -1049,6 +1481,18 @@ function GetMinionsAroundMinion(checkrange, range, minion)
 	return results
 end
 
+function GetTableMinionsAroundMinion(tableMinions, range, minion)
+	local results = {}
+    for i = 1, #tableMinions do 
+        local m = tableMinions[i]
+        local Range = range * range
+        if GetDistanceSqr(minion.pos, m.pos) < Range and IsValid(minion) and (m ~= minion) then
+			table.insert(results, m)
+        end
+    end
+	return results
+end
+
 function GetMinionsAroundPosition(checkrange, range, pos)
     local minions = _G.SDK.ObjectManager:GetEnemyMinions(checkrange)
 	local results = {}
@@ -1259,44 +1703,18 @@ function CalcPhysicalDamage(source, target, amount)
 	return final
 end
 
-function HasIgnite()
-	if myHero:GetSpellData(SUMMONER_1).name == "SummonerDot" and Ready(SUMMONER_1) then
-		return true
-	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerDot" and Ready(SUMMONER_2) then
-		return true
-	end
-	
-	return false
-end
-
-function HasElectrocute()
-    for i = 0, myHero.buffCount do
-        local buff = myHero:GetBuff(i)
-        if buff and buff.count>0 and buff.name:lower():find("electrocute.lua") then
-			return true
-        end
-    end
-
-	return false
-end
-
-function UseIgnite(unit)
-	if myHero:GetSpellData(SUMMONER_1).name == "SummonerDot" and Ready(SUMMONER_1) then
-		Control.CastSpell(HK_SUMMONER_1, unit)
-	elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerDot" and Ready(SUMMONER_2) then
-		Control.CastSpell(HK_SUMMONER_2, unit)
-	end
-end
-
 function CanFlash()
 	local slot = nil
+	local castSlot = nil
 	local hasFlash = false
 	if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_1).name == "SummonerCherryFlash" then
 		slot = SUMMONER_1
+		castSlot = HK_SUMMONER_1
 		hasFlash = true
 	end
 	if myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" or myHero:GetSpellData(SUMMONER_2).name == "SummonerCherryFlash" then
 		slot = SUMMONER_2
+		castSlot = HK_SUMMONER_2
 		hasFlash = true
 	end
 
@@ -1314,7 +1732,7 @@ function CanFlash()
 		return false
 	end
 
-	return true
+	return true, castSlot
 end
 
 function UseFlash(pos)
@@ -1350,6 +1768,30 @@ function CanUseSummoner(unit, name)
 		return true
 	end
 	
+	return false
+end
+
+function IsPointLeftOfLine(a, b, c)
+	local d = (c.x - a.x)*(b.z - a.z) - (c.z - a.z)*(b.x - a.x)
+	return d < 0
+end
+
+function IsInCone(castPos, range, angle)
+	local vec = (castPos - myHero.pos):Normalized()
+	local vec1 = vec:Rotated(0, math.rad(angle), 0):Normalized()
+	local vec2 = vec:Rotated(0, math.rad(-angle), 0):Normalized()
+
+	local point, isOnSegment = ClosestPointOnLineSegment(castPos, myHero.pos, myHero.pos + vec*range)
+	if(isOnSegment) then
+		local point, isOnSegment = ClosestPointOnLineSegment(castPos, myHero.pos, myHero.pos + vec1*range)
+		if(isOnSegment) and IsPointLeftOfLine(myHero.pos,  myHero.pos + vec1*range, castPos) == false then
+			local point, isOnSegment = ClosestPointOnLineSegment(castPos, myHero.pos, myHero.pos + vec2*range)
+			if(isOnSegment) and IsPointLeftOfLine(myHero.pos,  myHero.pos + vec2*range, castPos) then
+				return true
+			end
+		end
+	end
+
 	return false
 end
 
@@ -1780,7 +2222,6 @@ function CastPredictedSpell(args)
 	local strafecheck = args.StrafePred ~= false
 	local killerpred = args.KillerPred ~= false
 	local interpolatedPred = args.InterpolatedPred or false --A subset of KillerPred that will cast the spell at the exact path point the unit and spell will meet.
-	local extensionBuffer = args.extensionBuffer or 2
 	local offscreenLinearSkillshots = args.offscreenLinearSkillshots ~= false
 	local returnpos = args.ReturnPos or false
 
@@ -1849,20 +2290,20 @@ function CastPredictedSpell(args)
 		local SpellPrediction, isExtended = GetExtendedSpellPrediction(target, SpellData)
 		if(isExtended) then
 			if SpellPrediction:CanHit(HITCHANCE_HIGH) then
-				local result = myHero.pos:Extended(SpellPrediction.CastPosition, SpellData.Range - extensionBuffer)
+				local result = myHero.pos:Extended(Vector(SpellPrediction.CastPosition), SpellData.Range)
 				return CheckCollisionAndCastSpell(result, maxCollision, collisionTypes)
 			end
 		else
 			local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
 			SpellPrediction:GetPrediction(target, myHero)
-			if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) and GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50 then
+			if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) and GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range then
 				return CheckCollisionAndCastSpell(SpellPrediction.CastPosition, maxCollision, collisionTypes)
 			end				
 		end
 	elseif ggpred then
 		local SpellPrediction = GGPrediction:SpellPrediction(SpellData)
 		SpellPrediction:GetPrediction(target, myHero)
-		if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) and (GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range - 50) then
+		if SpellPrediction.CastPosition and SpellPrediction:CanHit(HITCHANCE_HIGH) and (GetDistance(SpellPrediction.CastPosition, myHero.pos) <= SpellData.Range) then
 			return CheckCollisionAndCastSpell(SpellPrediction.CastPosition, maxCollision, collisionTypes)
 		end
 	end
@@ -1871,11 +2312,11 @@ function CastPredictedSpell(args)
 		local enemyPredPos, interpolatedPos = GetPredictionPrecise(target, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, SpellData.Type == GGPrediction.SPELLTYPE_CIRCLE)
 		if(enemyPredPos) then
 			if(interpolatedPred) then
-				if(GetDistance(interpolatedPos, myHero.pos) <= SpellData.Range - 50) then
+				if(GetDistance(interpolatedPos, myHero.pos) <= SpellData.Range) then
 					return CheckCollisionAndCastSpell(interpolatedPos, maxCollision, collisionTypes)
 				end
 			else
-				if(GetDistance(enemyPredPos, myHero.pos) <= SpellData.Range - 50) then
+				if(GetDistance(enemyPredPos, myHero.pos) <= SpellData.Range) then
 					return CheckCollisionAndCastSpell(enemyPredPos, maxCollision, collisionTypes)
 				end
 			end
