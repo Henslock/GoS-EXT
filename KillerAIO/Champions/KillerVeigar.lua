@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.15
+scriptVersion = 1.19
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -31,16 +30,37 @@ SpellCast.QDidCast = false
 SpellCast.WDidCast = false
 SpellCast.EDidCast = false
 SpellCast.RDidCast = false
- 
+
+SpellCast.QCastData = nil
+SpellCast.WCastData = nil
+SpellCast.ECastData = nil
+SpellCast.RCastData = nil
 function SpellCast:OnTick()
 	
+	if(myHero.activeSpell.name == myHero:GetSpellData(_Q).name) then
+		self.QCastData = myHero.activeSpell
+	end
+
+	if(myHero.activeSpell.name == myHero:GetSpellData(_W).name) then
+		self.WCastData = myHero.activeSpell
+	end
+
+	if(myHero.activeSpell.name == myHero:GetSpellData(_E).name) then
+		self.ECastData = myHero.activeSpell
+	end
+
+	if(myHero.activeSpell.name == myHero:GetSpellData(_R).name) then
+		self.RCastData = myHero.activeSpell
+	end
+
 	if(self.QDidCast == false) then
 		if(myHero:GetSpellData(_Q).currentCd) > 0 and myHero:GetSpellData(_Q).cd ~= 0 then
 			self.QDidCast = true
 			local spell = myHero:GetSpellData(_Q)
 			for i, Emit in pairs(self.OnSpellCastCallback) do
-				Emit(spell)
+				Emit(spell, self.QCastData)
 			end
+			self.QCastData = nil
 		end
 	end
 	
@@ -49,8 +69,9 @@ function SpellCast:OnTick()
 			self.WDidCast = true
 			local spell = myHero:GetSpellData(_W)
 			for i, Emit in pairs(self.OnSpellCastCallback) do
-				Emit(spell)
+				Emit(spell, self.WCastData)
 			end
+			self.WCastData = nil
 		end
 	end
 	
@@ -59,8 +80,9 @@ function SpellCast:OnTick()
 			self.EDidCast = true
 			local spell = myHero:GetSpellData(_E)
 			for i, Emit in pairs(self.OnSpellCastCallback) do
-				Emit(spell)
+				Emit(spell, self.ECastData)
 			end
+			self.ECastData = nil
 		end
 	end
 	
@@ -69,8 +91,9 @@ function SpellCast:OnTick()
 			self.RDidCast = true
 			local spell = myHero:GetSpellData(_R)
 			for i, Emit in pairs(self.OnSpellCastCallback) do
-				Emit(spell)
+				Emit(spell, self.RCastData)
 			end
+			self.RCastData = nil
 		end
 	end
 	
@@ -78,10 +101,10 @@ function SpellCast:OnTick()
 end
 
 function SpellCast:UpdateSpellChecks()
-	if(Ready(_Q)) then self.QDidCast = false end
-	if(Ready(_W)) then self.WDidCast = false end
-	if(Ready(_E)) then self.EDidCast = false end
-	if(Ready(_R)) then self.RDidCast = false end
+	if(Ready(_Q)) then self.QDidCast = false; self.QCastData = nil end
+	if(Ready(_W)) then self.WDidCast = false; self.WCastData = nil end
+	if(Ready(_E)) then self.EDidCast = false; self.ECastData = nil end
+	if(Ready(_R)) then self.RDidCast = false; self.RCastData = nil end
 end
 
 local function OnSpellCast(fn)
@@ -100,17 +123,16 @@ class "Veigar"
 local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/veigar.png"
 
 local gameTick = GameTimer()
-local WBufferTick = GameTimer()
-Veigar.AutoLevelCheck = false
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1050, Radius = 150, Speed = 2500, Collision = true, MaxCollision = 2, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
+local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 990, Radius = 70, Speed = 2200, Collision = true, MaxCollision = 2, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}}
 local W = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.47, Radius = 240, Range = 950, Speed = math.huge, Collision = false}
-local E = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.80, Radius = 390, Range = 725, Speed = math.huge, Collision = false}
+local E = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.75, Radius = 390, Range = 700, Speed = math.huge, Collision = false}
 local EEdge = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.80, Radius = 30, Range = 1100, Speed = math.huge, Collision = false}
 local R = {Range = 650, Collision = true, MaxCollision = 0, CollisionTypes = {GGPrediction.COLLISION_YASUOWALL}}
 
 Veigar.EData = {}
+Veigar.PreEData = {}
 Veigar.ComboDamageData = {}
 
 --Main Menu
@@ -143,10 +165,17 @@ Veigar.InterruptableSpells = {
 
 function Veigar:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
+
 	--Custom Callbacks
-	OnSpellCast(function(spell) self:OnSpellCast(spell) end)
+	OnSpellCast(function(spell, spellCastData) self:OnSpellCast(spell, spellCastData) end)
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Veigar:OnPreAttack(...) end)
 
 	self:UpdateGoSMenuAutoLevel()
@@ -156,6 +185,7 @@ function Veigar:LoadMenu()
 
 	-- Combo
 	self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
+	self.Menu.Combo:MenuElement({id = "EverfrostSettings", name = "Everfrost Settings", type = MENU})
 	self.Menu.Combo:MenuElement({id = "UseQ", name = "Use Q", value = true})
 	self.Menu.Combo:MenuElement({id = "WSettings", name = "W Settings", type = MENU})
 	self.Menu.Combo:MenuElement({id = "UseE", name = "Use E", value = true})
@@ -163,11 +193,18 @@ function Veigar:LoadMenu()
 	self.Menu.Combo:MenuElement({id = "OverkillRProtection", name = "Enable R Overkill Protection", value = true})
 	self.Menu.Combo:MenuElement({id = "SmartAABlock", name = "Smart AA Block", value = true})
 	self.Menu.Combo:MenuElement({id = "SemiManualE", name = "Semi-manual E", key = string.byte("Z")})
+
+	-- Everfrost Settings
+	self.Menu.Combo.EverfrostSettings:MenuElement({id = "UseEverfrost", name = "Use Everfrost", value = true})
+	self.Menu.Combo.EverfrostSettings:MenuElement({id = "AntiMelee", name = "Anti-Melee Peel", value = true})
+	self.Menu.Combo.EverfrostSettings:MenuElement({id = "AutoCC", name = "Use on Immobile", value = true})
+	self.Menu.Combo.EverfrostSettings:MenuElement({id = "BringToUlt", name = "Use to Bring into Ult Kill Range", value = true})
+	self.Menu.Combo.EverfrostSettings:MenuElement({id = "Killsteal", name = "Killsteal", value = true})
+	self.Menu.Combo.EverfrostSettings:MenuElement({id = "AoE", name = "AoE 3+ Targets in Combo", value = true})
 	
 	self.Menu.Combo.WSettings:MenuElement({id = "UseW", name = "Use W in Cage", value = true})
 	self.Menu.Combo.WSettings:MenuElement({id = "UseWNormal", name = "Use W while E is on CD", value = true})
 	self.Menu.Combo.WSettings:MenuElement({id = "WPeel", name = "Use W to Peel Off Melee", value = true})
-	self.Menu.Combo.WSettings:MenuElement({id = "WStrafing", name = "Use W on Strafing Targets", value = false})
 	self.Menu.Combo.WSettings:MenuElement({id = "WFleeing", name = "Use W on Fleeing Targets", value = true})
 	
 	-- Harass
@@ -187,6 +224,9 @@ function Veigar:LoadMenu()
 	self.Menu.Clear:MenuElement({id = "UseQ", name = "Use Q", value = true})
 	self.Menu.Clear:MenuElement({id = "UseW", name = "Use W", value = true})
 	self.Menu.Clear:MenuElement({id = "WMana", name = "W Min Mana", value = 20, min = 0, max = 100, step = 5, identifier = "%"})
+	self.Menu.Clear:MenuElement({id = "ChampCheck", name = "Only Use W When No Enemies Around", value = true})
+	self.Menu.Clear:MenuElement({id = "LevelCheck", name = "Only Use W After Level", value = 7, min = 1, max = 18, step = 1})
+	self.Menu.Clear:MenuElement({id = "LogicCheck", name = "Logic: ", value = 1, drop = {"OR", "AND"}})
 	
 	-- Kill Steal
 	self.Menu:MenuElement({id = "KillSteal", name = "Kill Steal", type = MENU})
@@ -281,7 +321,6 @@ function Veigar:AutoLevel()
 	AutoLeveler(skillPriority)
 end
 
-
 function Veigar:Tick()
 	if(self.Menu.DisableInFountain:Value()) then
 		if(IsInFountain() or not myHero.alive) then
@@ -309,11 +348,11 @@ function Veigar:Tick()
 	self:UpdateEData()
 	self:UpdateComboDamage()
 	self:KillSteal()
-	
-	if(self.Menu.Combo.SmartAABlock:Value()) then
-		self:SmartAABlock()
+
+	if(self.Menu.Combo.EverfrostSettings.UseEverfrost:Value()) then
+		self:EverfrostLogic()
 	end
-	
+
 	if(self.Menu.AutoW:Value()) then
 		self:AutoWImmobile()
 	end
@@ -336,16 +375,23 @@ function Veigar:Tick()
 end
 
 function Veigar:OnPreAttack(args)
-    if GetMode()=="Combo" and (Ready(_Q)) then
-        args.Process = false
+    if GetMode()=="Combo" and Ready(_Q) then
+		if (myHero.mana / myHero.maxMana) >= 0.08 and self.Menu.Combo.SmartAABlock:Value() then
+       		args.Process = false
+		end
     end
+
+	if(self.Menu.Combo.SemiManualE:Value()) then
+		args.Process = false
+	end
 end
 
-function Veigar:OnSpellCast(spell)
+function Veigar:OnSpellCast(spell, spellCastData)
 	if spell.name == "VeigarEventHorizon" then
+		self.PreEData = {pos = Vector(spellCastData.placementPos), age = GameTimer()}
 		DelayAction(function()
             self:CheckE()
-        end, E.Delay)
+        end, E.Delay+0.05)
 	end
 end
 
@@ -385,16 +431,16 @@ function Veigar:Combo()
 	--Q
 	if(self.Menu.Combo.UseQ:Value()) then
 		if(Ready(_Q)) then
-			local target = GetTarget(Q.Range -10)
+			local target = GetTarget(Q.Range -25)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
-				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, maxCollision = 2, collisionRadiusOverride = Q.Radius + 15})
+				CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, maxCollision = 2, GGPred = true, collisionRadiusOverride = Q.Radius + 15})
 			end
 		end
 	end
 	
 	--W
 	if(self.Menu.Combo.WSettings.UseW:Value()) then
-		if(Ready(_W) and WBufferTick < GameTimer()) then
+		if(Ready(_W)) then
 			local target = GetTarget(W.Range + W.Radius -10)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
 				local isInside, eObj = self:IsUnitInsideE(target)
@@ -440,56 +486,20 @@ function Veigar:Combo()
 					end
 					
 				end
-				
 			end
 		end
 	end
 	
 	--W Melee Peel
 	if(self.Menu.Combo.WSettings.WPeel:Value()) then
-		if(Ready(_W) and WBufferTick < GameTimer()) then
+		if(Ready(_W)) then
 			local target = GetTarget(W.Radius + 100)
 			if(target and IsValid(target) and target.range <= 200 and target.toScreen.onScreen) then
-				local isInside, eObj = self:IsUnitInsideE(target)
-				if(isInside) then return end
-				local checkRunDir = GetUnitRunDirection(myHero, target)
-				if(checkRunDir == RUNNING_TOWARDS) then
-					Control.CastSpell(HK_W, myHero)
-				else
-					local WPrediction = GetExtendedSpellPrediction(target, W)
-					if WPrediction:CanHit(HITCHANCE_HIGH) then
-						--Control.CastSpell(HK_W, WPrediction.CastPosition)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-			end
-		end
-	end
-	
-	--W Strafing
-	if(self.Menu.Combo.WSettings.WStrafing:Value()) then
-		if(Ready(_W) and WBufferTick < GameTimer()) then
-			local target = GetTarget(W.Range)
-			if(target and IsValid(target) and target.toScreen.onScreen) then
-				local WPrediction = GetExtendedSpellPrediction(target, W) --Merge pred chance
-				if WPrediction:CanHit(HITCHANCE_HIGH) then
-					local isStrafing, avgPos = StrafePred:IsStrafing(target)
-					local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-					if(isStrafing) then
-						if(avgPos:DistanceTo(myHero.pos) < W.Range) then
-							Control.CastSpell(HK_W, avgPos)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
-					if(isStutterDancing) then
-						if(avgPos2:DistanceTo(myHero.pos) < W.Range) then
-							Control.CastSpell(HK_W, avgPos2)
-							gameTick = GameTimer() + 0.2
-							return
-						end
-					end
+				local isInside = self:IsUnitInsideE(target)
+				if not (isInside) then
+			
+					Control.CastSpell(HK_W, myHero.pos:Extended(target.pos, GetDistance(myHero, target)/2))
+					return
 				end
 			end
 		end
@@ -497,7 +507,7 @@ function Veigar:Combo()
 	
 	--W Fleeing
 	if(self.Menu.Combo.WSettings.WFleeing:Value()) then
-		if(Ready(_W) and WBufferTick < GameTimer()) then
+		if(Ready(_W)) then
 			local target = GetTarget(W.Range)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
 				local checkRunDir = GetUnitRunDirection(myHero, target)
@@ -526,21 +536,23 @@ function Veigar:Combo()
 	
 	--W Normal
 	if(self.Menu.Combo.WSettings.UseWNormal:Value()) then
-		if(Ready(_W) and (Ready(_E) == false or myHero:GetSpellData(_E).cd < 3.5) and WBufferTick < GameTimer()) then
-			if (myHero:GetSpellData(_E).cd - myHero:GetSpellData(_E).currentCd) <= E.Delay then return end
-			local target = GetTarget(W.Range)
-			if(target and IsValid(target) and target.toScreen.onScreen) then
-				local isInside = self:IsUnitInsideE(target)
-				if(isInside == false) then
-					local ECurrCD = myHero:GetSpellData(_E).currentCd
-					local WTotalCD = myHero:GetSpellData(_W).cd
-					if(ECurrCD > WTotalCD) then --Only use W if your E is on CD
-						local WPrediction = GetExtendedSpellPrediction(target, W)
-						if WPrediction:CanHit(HITCHANCE_HIGH) then
-							Control.CastSpell(HK_W, WPrediction.CastPosition)
+		if(Ready(_W) and (Ready(_E) == false or myHero:GetSpellData(_E).cd < 3.5)) then
+			if not ((myHero:GetSpellData(_E).cd - myHero:GetSpellData(_E).currentCd) <= E.Delay) then
+
+				local target = GetTarget(W.Range + W.Radius * 0.5)
+				if(target and IsValid(target) and target.toScreen.onScreen) then
+					local isInside = self:IsUnitInsideE(target)
+					local preInside = self:IsUnitInsidePreE(target)
+					if(isInside == false and preInside == false) then
+						local ECurrCD = myHero:GetSpellData(_E).currentCd
+						local WTotalCD = myHero:GetSpellData(_W).cd
+						if(ECurrCD > WTotalCD) then --Only use W if your E is on CD
+							CastPredictedSpell({Hotkey = HK_W, Target = target, SpellData = W, ExtendedCheck = true, GGPred = true, KillerPred = true})
+							return
 						end
 					end
 				end
+
 			end
 		end
 	end
@@ -548,56 +560,12 @@ function Veigar:Combo()
 	--E
 	if(self.Menu.Combo.UseE:Value()) then
 		if(Ready(_E)) then
-			local target = GetTarget(E.Range + E.Radius -15)
+			local target = GetTarget(E.Range + E.Radius*0.5)
 
 			if(target and IsValid(target) and target.toScreen.onScreen) then
-				local isStrafing, avgPos = StrafePred:IsStrafing(target)
-				local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-				if(isStrafing) then
-					if(avgPos:DistanceTo(myHero.pos) < E.Range) then
-						Control.CastSpell(HK_E, avgPos)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				if(isStutterDancing) then
-					if(avgPos2:DistanceTo(myHero.pos) < E.Range) then
-						Control.CastSpell(HK_E, avgPos2)
-						gameTick = GameTimer() + 0.2
-						return
-					end
-				end
-				
-				local EPrediction, isExtended = GetExtendedSpellPrediction(target, E)
-				if EPrediction:CanHit(HITCHANCE_HIGH) then
-					if(isExtended == false) then
-						Control.CastSpell(HK_E, EPrediction.CastPosition)
-						gameTick = GameTimer() + 0.333
-						return
-					else
-						if(target.pathing.hasMovePath) then
-							local checkRunDir = GetUnitRunDirection(myHero, target)
-							if(checkRunDir == RUNNING_AWAY) then
-								--print("Running away")
-								return
-							else
-								--print("Running Towards")
-								if(target.distance <= (E.Range + E.Radius/2)) then
-									local castPos = myHero.pos:Extended(EPrediction.CastPosition, E.Range -10) --The extra number is a buffer to reduce stutter dancing
-									Control.CastSpell(HK_E, castPos)
-									gameTick = GameTimer() + 0.333
-									return
-								end
-							end
-						else
-							if(target.distance <= (E.Range + E.Radius/2)) then
-								local castPos = myHero.pos:Extended(EPrediction.CastPosition, E.Range -10)
-								Control.CastSpell(HK_E, castPos)
-								gameTick = GameTimer() + 0.333
-								return
-							end
-						end
-					end
+				local check = CastPredictedSpell({Hotkey = HK_E, Target = target, SpellData = E, ExtendedCheck = true, KillerPred = false, GGPred = true})
+				if(check) then
+					gameTick = GameTimer() + 0.2
 				end
 			end
 		end
@@ -608,7 +576,7 @@ function Veigar:Combo()
 		if(Ready(_R)) then
 			local target = GetTarget(R.Range)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
-				if(self:IsKillable(target) and (self:CantKill(target, true, true, false))==false) then
+				if(self:IsKillable(target) and (CantKill(target, true, true, false))==false) then
 					if(self.Menu.Combo.OverkillRProtection:Value()) then
 						if(self:ROverkillCheck(target) == false) then --Use R if it's not an overkill
 							Control.CastSpell(HK_R, target)
@@ -686,31 +654,14 @@ local avoidQMinionHandle = 0
 
 function Veigar:LastHit()
 	if(gameTick > GameTimer()) then return end	
-	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
+	if not (IsValid(myHero)) or myHero.isChanneling then return end
 
-	if(myHero.activeSpell.name:find("VeigarBasicAttack")) then
+	if(myHero.activeSpell.isAutoAttack) then
 		avoidQMinionHandle = myHero.activeSpell.target
 	end
 	
-	--Q
-		
+	--Q	
 	if(self.Menu.LastHit.UseQ:Value()) then
-	
-		--Turret last hitting
-		--[[
-		--Disabled this, this logic was frustrating to play with. May look at tuning this in the future.
-
-		local closestTurret = GetClosestFriendlyTurret()
-		local numTurretMinions = 0
-		if(closestTurret ~= nil) then
-			local turretMinions = GetEnemyMinionsUnderTurret(closestTurret)
-			if(#turretMinions > 0) then
-				numTurretMinions = #turretMinions
-				self:TurretLastHit(closestTurret, turretMinions)
-			end
-		end
-		--]]
-			
 		if(Ready(_Q)) then
 		
 			local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) --Just do 1 check for optimization
@@ -728,26 +679,23 @@ function Veigar:LastHit()
 				end
 			end
 			
-			--if(#minions ~= numTurretMinions) then --Optimization trick, if all of our minions are under the turret then dont iterate through because we'll do the turret last hitting anyways
 			for i = 1, #minions do
 				local minion = minions[i]
 				if(minion and IsValid(minion)) then
 					--This is to prevent us Q'ing a target we are going to kill with an AA 
 					local check = true
 					if(avoidQMinionHandle == minion.handle) then
-						if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
-							check = false
+						if _G.SDK.HealthPrediction:GetLastHitTarget() then
+							if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
+								check = false
+							end
 						end
 					end
 					if(myHero.pos:DistanceTo(minion.pos) <= Q.Range and check) then
-						--local isMinionUnderTurret, turretUnitMinion = IsUnderFriendlyTurret(minion)
-						--if (isMinionUnderTurret == false) then
 						self:StandardLastHit(minion)
-						--end
 					end
 				end
 			end
-			--end
 		end
 	end
 	
@@ -766,103 +714,40 @@ function Veigar:StandardLastHit(minion)
 	end
 end
 
-function Veigar:TurretLastHit(turret, minions)
-	local currentTurretTarget = GetTurretMinionTarget(turret, minions)
-	local turrDmg = GetTurretDamage()
-	local QDam = self:GetRawAbilityDamage("Q")
-	--Farming under tower follows a set of general rules that can dynamically change based on minion HP and other variables.
-	--This is my approach to successfully farm under tower and get as many last hits as possible
-	
-	local shouldCast = true
-	if(turret.activeSpell.valid) then
-		if(GameTimer() - turret.activeSpell.castEndTime) >= 0.9 then
-			shouldCast = false
-		end
-	end
-	
-	for i = 1, #minions do
-		local minion = minions[i]
-		if(minion and IsValid(minion)) then
-		
-			--Condition 1: We auto caster minions once if the primary focus of the turret is on a siege minion
-			if(myHero.pos:DistanceTo(minion.pos) <= myHero.range) then
-				if(currentTurretTarget ~= nil) then
-					if(GetMinionType(currentTurretTarget) == MINION_CANON) and (currentTurretTarget.health - (turrDmg*2) > 0) then
-						if(GetMinionType(minion) == MINION_CASTER and (minion.health/minion.maxHealth >= 0.95)) then
-							_G.SDK.Orbwalker:Attack(minion)
-						end
-					end
-				end
-			end
-			
-			--Condition 6: Cast W on a caster minion that will get 1 shot by the tower if your Q wont kill
-			if(GetMinionType(minion) == MINION_CASTER) and Ready(_W) and shouldCast then
-				if((minion.health/minion.maxHealth) <= 0.7 and minion.health > myHero.totalDamage) then
-					Control.CastSpell(HK_W, minion)
-					return
-				end
-			end
-			
-		end
-	end
-
-	if(myHero.pos:DistanceTo(currentTurretTarget.pos) <= Q.Range) then
-		if(currentTurretTarget ~= nil) then
-		
-			--Condition 2: If the turret is attacking a melee unit, and our Q will kill the target in time but an auto attack won't, then Q the target.
-			if(GetMinionType(currentTurretTarget) == MINION_MELEE) then
-				if(currentTurretTarget.health - turrDmg <= 0 and currentTurretTarget.health - myHero.totalDamage > 0 and currentTurretTarget.health - QDam <= 0 and Ready(_Q) and shouldCast) then
-					Control.CastSpell(HK_Q, currentTurretTarget)
-					return
-				end
-			end
-			
-			--Condition 3: Use Q on a caster minion if they cant be last hit
-			if(GetMinionType(currentTurretTarget) == MINION_CASTER) then
-				if(currentTurretTarget.health - turrDmg <= 0 and currentTurretTarget.health - myHero.totalDamage > 0 and currentTurretTarget.health - QDam <= 0) and Ready(_Q) and shouldCast then
-					Control.CastSpell(HK_Q, currentTurretTarget)
-					return
-				end
-			end
-			
-			--Condition 4: Our Q is on cooldown, and the casters are at full HP - Use W to put them in Q last hit range
-			if(Ready(_W) and Ready(_Q) == false) then
-				if(GetMinionType(currentTurretTarget) == MINION_CASTER) then
-					if(currentTurretTarget.health/currentTurretTarget.maxHealth >= 0.95) then
-						local clusterMinions = GetMinionsAroundMinion(W.Range, W.Radius, currentTurretTarget)
-						if(#clusterMinions >= 1) then
-							local clusterMinionsAvgPos = AverageClusterPosition(clusterMinions)
-							Control.CastSpell(HK_W, clusterMinionsAvgPos)
-							return
-						end
-					end
-				end
-			end
-			
-			--Condition 5: If a non-caster can be killed with a Q if it had one more auto attack, auto attack and Q it
-			if(GetMinionType(currentTurretTarget) ~= MINION_CASTER) then
-				if(myHero.pos:DistanceTo(minion.pos) <= myHero.range) then
-					if(currentTurretTarget.health - turrDmg <= 0 and currentTurretTarget.health - myHero.totalDamage > 0 and currentTurretTarget.health - QDam > 0 and currentTurretTarget.health - QDam - myHero.totalDamage <= 0) then
-						_G.SDK.Orbwalker:Attack(currentTurretTarget)
-					end
-				end
-			end
-			
-		end
-	end
-end
-
 function Veigar:Clear()
 	if(gameTick > GameTimer()) then return end	
 	if not (myHero.valid or IsValid(myHero)) or myHero.isChanneling then return end
 	
 	local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range)
-	local canonMinion = GetCanonMinion(minions)
+	local jungleMinions = {}
+	local laneMinions = {}
+	for i = 1, #minions do
+		local minion = minions[i]
+		if(IsValid(minion) and minion.pos:ToScreen().onScreen) then
+			if(minion.team == TEAM_JUNGLE) then
+				table.insert(jungleMinions, minion)
+			else
+				table.insert(laneMinions, minion)
+			end
+		end
+	end
+
+	if(#jungleMinions > 0) and (#laneMinions == 0) and IsUnderFriendlyTurret(myHero) == false and IsUnderTurret(myHero) == false then
+		self:JungleClear(jungleMinions)
+	end
+
+	if(#laneMinions > 0) then
+		self:LaneClear(laneMinions)
+	end
 	
-	if(myHero.activeSpell.name:find("VeigarBasicAttack")) then
+end
+
+function Veigar:LaneClear(minions)
+	local canonMinion = GetCanonMinion(minions)
+	if(myHero.activeSpell.isAutoAttack) then
 		avoidQMinionHandle = myHero.activeSpell.target
 	end
-			
+
 	--Q
 	if(self.Menu.Clear.UseQ:Value()) then
 		if(Ready(_Q)) then
@@ -876,7 +761,8 @@ function Veigar:Clear()
 					--This is to prevent us Q'ing a target we are going to kill with an AA 
 					local check = true
 					if(avoidQMinionHandle == canonMinion.handle) then
-						if canonMinion.health - myHero.totalDamage <= 0 then
+						local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, (GetDistance(myHero, canonMinion)/myHero.attackData.projectileSpeed))
+						if(hp - (myHero.totalDamage) < 0) then
 							check = false
 						end
 					end
@@ -889,14 +775,14 @@ function Veigar:Clear()
 				end
 			end
 					
-			for i = 1, #minions do
-				local minion = minions[i]
+			for _, minion in pairs(minions) do
 				if(minion and IsValid(minion)) then
 					
 					--This is to prevent us Q'ing a target we are going to kill with an AA 
 					local check = true
 					if(avoidQMinionHandle == minion.handle) then
-						if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
+						local hp = _G.SDK.HealthPrediction:GetPrediction(minion, (GetDistance(myHero, minion)/myHero.attackData.projectileSpeed))
+						if(hp - (myHero.totalDamage) < 0) then
 							check = false
 						end
 					end
@@ -907,7 +793,7 @@ function Veigar:Clear()
 						if(collisionCount <= Q.MaxCollision) then
 							local QDam = self:GetRawAbilityDamage("Q")
 							local hp = _G.SDK.HealthPrediction:GetPrediction(minion, Q.Delay + (myHero.pos:DistanceTo(minion.pos)/Q.Speed))
-							if ((hp > 0) and (hp + (minion.health*0.02) - QDam <= 0)) then
+							if ((hp > 0) and (hp + 15 - QDam <= 0)) then
 								Control.CastSpell(HK_Q, minion)
 								gameTick = GameTimer() + 0.2
 								return
@@ -920,8 +806,31 @@ function Veigar:Clear()
 		end
 	end
 	
+
+	local shouldUseW = true
+
+	local champCheck, levelCheck = true, true
+	if(self.Menu.Clear.ChampCheck:Value()) then
+		local numEnemies = GetEnemyCount(1500, myHero)
+		if(numEnemies ~= 0) then
+			champCheck = false
+		end
+	end
+
+	if(myHero.levelData.lvl < self.Menu.Clear.LevelCheck:Value()) then
+		levelCheck = false
+	end
+
+	if(self.Menu.Clear.LogicCheck:Value() == 1) then
+		-- OR
+		shouldUseW = champCheck or levelCheck
+	else
+		-- AND
+		shouldUseW = champCheck and levelCheck
+	end
+
 	--W
-	if(self.Menu.Clear.UseW:Value()) then
+	if(self.Menu.Clear.UseW:Value() and shouldUseW) then
 		if(Ready(_W) and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.WMana:Value() / 100)) then
 			for i = 1, #minions do		
 				local minion = minions[i]
@@ -939,7 +848,184 @@ function Veigar:Clear()
 			end
 		end
 	end
+end
+
+function Veigar:JungleClear(minions)		
+	--Q
+	if(self.Menu.Clear.UseQ:Value()) then
+		if(Ready(_Q)) then
+			for _, minion in pairs(minions) do
+				if(IsValid(minion)) then
+					local pred = GGPrediction:SpellPrediction(Q)
+					pred:GetPrediction(minion, myHero)
+					if pred.CastPosition and GetDistance(myHero, pred.CastPosition) < Q.Range then
+						Control.CastSpell(HK_Q, pred.CastPosition)
+					end
+				end
+			end
+		end
+	end
 	
+	--W
+	if(self.Menu.Clear.UseW:Value()) then
+		if(Ready(_W) and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.WMana:Value() / 100)) then
+			for _, minion in pairs(minions) do		
+				if IsValid(minion) then
+					local pred = GGPrediction:SpellPrediction(W)
+					pred:GetPrediction(minion, myHero)
+					if pred.CastPosition and GetDistance(myHero, pred.CastPosition) < W.Range then
+						Control.CastSpell(HK_W, pred.CastPosition)
+					end
+				end
+			end
+		end
+	end
+end
+
+local everfrostData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.3, Radius = 70, Range = 850, Angle = 28, Speed = math.huge}
+function Veigar:EverfrostLogic()
+
+	local HasEverfrost, iSlot = self:HasEverfrost()
+	local enemies = GetEnemyHeroes(everfrostData.Range - 25)
+
+	if(GetMode() == "Combo") then
+
+		--AoE logic
+		if(self.Menu.Combo.EverfrostSettings.AoE:Value()) then
+			if(HasEverfrost) then
+				if _G.SDK.Cursor.Step > 0 then
+					return
+				end
+
+				if #enemies >= 3 then
+					local bestPos, count = CalculateBestLinePosition(enemies, 380, everfrostData.Range, everfrostData.Speed, everfrostData.Delay)
+					local check = true
+					for _, enemy in ipairs(enemies) do
+						if(IsValid(enemy)) then
+							if not IsInCone(enemy.pos, everfrostData.Range-50, everfrostData.Angle) then
+								check = false
+							end
+						end
+					end
+
+					if(check) then
+						Control.CastSpell(ItemHotKey[iSlot], bestPos)
+						return
+					end
+				end
+			end
+		end
+	end
+
+	--Anti-melee
+	local function AntiMeleeEverfrost()
+		if(HasEverfrost) then
+			if _G.SDK.Cursor.Step > 0 then
+				return
+			end
+
+			if #enemies > 0 then
+				table.sort(enemies, function(a, b)
+					return a.health + (a.totalDamage * 2) + (a.attackSpeed * 100)
+						> b.health + (b.totalDamage * 2) + (b.attackSpeed * 100)
+				end)
+				for _, enemy in ipairs(enemies) do
+					if(IsValid(enemy)) then
+						if IsFacing(enemy) and GetDistance(myHero, enemy) < 400 then
+							Control.CastSpell(ItemHotKey[iSlot], enemy.pos)
+							return
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local function AutoCC()
+		if(HasEverfrost) then
+			if _G.SDK.Cursor.Step > 0 then
+				return
+			end
+
+			if #enemies > 0 then
+				for _, enemy in ipairs(enemies) do
+					if(IsValid(enemy)) then
+						if IsImmobile(enemy) >= 0.75 and GetDistance(enemy, myHero) <= everfrostData.Range then
+							Control.CastSpell(ItemHotKey[iSlot], enemy.pos)
+							return
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local function Killsteal()
+		if(HasEverfrost) then
+			if _G.SDK.Cursor.Step > 0 then
+				return
+			end
+
+			if #enemies > 0 then
+				for _, enemy in ipairs(enemies) do
+					if(IsValid(enemy)) then
+						local pred = GGPrediction:SpellPrediction(everfrostData)
+						pred:GetPrediction(enemy, myHero)
+						if pred.CastPosition and GetDistance(myHero, pred.CastPosition) < Q.Range - 25 then
+							local everfrostDmg = GetItemDamage(Item.Everfrost)
+							everfrostDmg = CalcMagicalDamage(myHero, enemy, everfrostDmg)
+							if(enemy.health - everfrostDmg < 0) then
+								Control.CastSpell(ItemHotKey[iSlot], enemy.pos)
+								return
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local function BringIntoUltRange()
+		if(HasEverfrost and Ready(_R)) then
+			if _G.SDK.Cursor.Step > 0 then
+				return
+			end
+
+			if #enemies > 0 then
+				for _, enemy in ipairs(enemies) do
+					if(IsValid(enemy) and CantKill(enemy, true, true, false)==false) then
+						local pred = GGPrediction:SpellPrediction(everfrostData)
+						pred:GetPrediction(enemy, myHero)
+						if pred.CastPosition and GetDistance(myHero, pred.CastPosition) < Q.Range - 25 then
+							local everfrostDmg = GetItemDamage(Item.Everfrost)
+							everfrostDmg = CalcMagicalDamage(myHero, enemy, everfrostDmg)
+							local RDmg = self:GetRDamage(enemy)
+							if(enemy.health - RDmg > 0 and enemy.health - everfrostDmg - RDmg <= 0) then
+								Control.CastSpell(ItemHotKey[iSlot], enemy.pos)
+								return
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if(self.Menu.Combo.EverfrostSettings.AntiMelee:Value()) then
+		AntiMeleeEverfrost()
+	end
+
+	if(self.Menu.Combo.EverfrostSettings.AutoCC:Value()) then
+		AutoCC()
+	end
+
+	if(self.Menu.Combo.EverfrostSettings.Killsteal:Value()) then
+		Killsteal()
+	end
+
+	if(self.Menu.Combo.EverfrostSettings.BringToUlt:Value()) then
+		BringIntoUltRange()
+	end
 end
 
 function Veigar:KillSteal()
@@ -952,7 +1038,7 @@ function Veigar:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
-						if(self:IsKillable(enemy) and (self:CantKill(enemy, true, true, false)==false)) then
+						if(self:IsKillable(enemy) and (CantKill(enemy, true, true, false)==false)) then
 							local isOverkill = false
 							if(self.Menu.KillSteal.OverkillRProtection:Value()) then
 								isOverkill = self:ROverkillCheck(enemy)
@@ -993,89 +1079,27 @@ function Veigar:AutoWImmobile()
 		if(target ~= nil and IsValid(target)) then
 			local WPrediction, isExtended = GetExtendedSpellPrediction(target, W)
 			if WPrediction:CanHit(HITCHANCE_IMMOBILE) then
-				if(isExtended) then
-					local castPos = myHero.pos:Extended(WPrediction.CastPosition, W.Range -10)
-					Control.CastSpell(HK_W, castPos)
-					return
-				else
-					Control.CastSpell(HK_W, WPrediction.CastPosition)
-					return
-				end
+				CastPredictedSpell({Hotkey = HK_W, Target = target, SpellData = W, ExtendedCheck = true})
 			end
 			
 			if(IsImmobile(target) >= 1.0) then
-				local WPrediction, isExtended = GetExtendedSpellPrediction(target, W)
-				if WPrediction:CanHit(HITCHANCE_HIGH) then
-					if(isExtended) then
-						local castPos = myHero.pos:Extended(WPrediction.CastPosition, W.Range -10)
-						Control.CastSpell(HK_W, castPos)
-						return
-					else
-						Control.CastSpell(HK_W, WPrediction.CastPosition)
-						return
-					end
-				end
+				CastPredictedSpell({Hotkey = HK_W, Target = target, SpellData = W, ExtendedCheck = true})
 			end
 		end
 	end
 end
 
 function Veigar:SemiManualE()
-	_G.SDK.Orbwalker:SetAttack(false)
 	_G.SDK.Orbwalker:Orbwalk()
 	
 	if(gameTick > GameTimer()) then return end	
 
-	if(Ready(_E)) then
-		local target = GetTarget(E.Range + E.Radius)
+	if(Ready(_E) and myHero.activeSpell.name ~= "VeigarE") then
+		local target = GetTarget(E.Range + E.Radius*0.5)
 		if(target and IsValid(target)) then
-			local isStrafing, avgPos = StrafePred:IsStrafing(target)
-			local isStutterDancing, avgPos2 = StrafePred:IsStutterDancing(target)
-			if(isStrafing) then
-				if(avgPos:DistanceTo(myHero.pos) < E.Range) then
-					Control.CastSpell(HK_E, avgPos)
-					gameTick = GameTimer() + 0.2
-					return
-				end
-			end
-			if(isStutterDancing) then
-				if(avgPos2:DistanceTo(myHero.pos) < E.Range) then
-					Control.CastSpell(HK_E, avgPos2)
-					gameTick = GameTimer() + 0.2
-					return
-				end
-			end
-			
-			local EPrediction, isExtended = GetExtendedSpellPrediction(target, E)
-			if EPrediction:CanHit(HITCHANCE_HIGH) then
-				if(isExtended == false) then
-					Control.CastSpell(HK_E, EPrediction.CastPosition)
-					gameTick = GameTimer() + 0.333
-					return
-				else
-					if(target.pathing.hasMovePath) then
-						local checkRunDir = GetUnitRunDirection(myHero, target)
-						if(checkRunDir == RUNNING_AWAY) then
-							--"Running away"
-							return
-						else
-							--"Running Towards"
-							if(target.distance <= (E.Range + E.Radius -75)) then
-								local castPos = myHero.pos:Extended(EPrediction.CastPosition, E.Range -10)
-								Control.CastSpell(HK_E, castPos)
-								gameTick = GameTimer() + 0.333
-								return
-							end
-						end
-					else
-						if(target.distance <= (E.Range + E.Radius -75)) then
-							local castPos = myHero.pos:Extended(EPrediction.CastPosition, E.Range -10)
-							Control.CastSpell(HK_E, castPos)
-							gameTick = GameTimer() + 0.333
-							return
-						end
-					end
-				end
+			local check = CastPredictedSpell({Hotkey = HK_E, Target = target, SpellData = E, ExtendedCheck = true})
+			if(check) then
+				gameTick = GameTimer() + 0.2
 			end
 		end
 	end
@@ -1139,97 +1163,31 @@ function Veigar:EInterrupterCC()
 	end
 end
 
-function Veigar:SmartAABlock()
-	local mode = GetMode()
-	
-	if(mode == "LaneClear") then
-	_G.SDK.Orbwalker:SetAttack(true)
-	elseif (mode == "Flee") then
-	_G.SDK.Orbwalker:SetAttack(true)
-	elseif (mode == "Harass") then
-	_G.SDK.Orbwalker:SetAttack(true)
-	elseif (mode == "LastHit") then
-	_G.SDK.Orbwalker:SetAttack(true)
-	elseif (mode == "Combo") then
-		if (myHero.mana / myHero.maxMana) >= 0.08 and self.Menu.Combo.SmartAABlock:Value() and (Ready(_Q)) then
-			_G.SDK.Orbwalker:SetAttack(false)
-		else
-			_G.SDK.Orbwalker:SetAttack(true)
-		end
-	end
-end
-
-function Veigar:CantKill(unit, kill, ss, aa)
-	--set kill to true if you dont want to waste on undying/revive targets
-	--set ss to true if you dont want to cast on spellshield
-	--set aa to true if ability applies onhit (yone q, ez q etc)
-	
-	for i = 0, unit.buffCount do
-	
-		local buff = unit:GetBuff(i)
-		if buff.name:lower():find("kayler") and buff.count==1 then
-			return true
-		end
-	
-		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
-			return true
-		end
-		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
-			return true
-		end	
-		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
-			return true
-		end			
-		
-		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
-			return true
-		end
-
-		if  buff.name:lower():find("morganae") and ss and buff.count==1 then
-			return true
-		end
-		
-		if (buff.name:lower():find("fioraw") or buff.name:lower():find("pantheone")) and buff.count==1 then
-			return true
-		end
-		
-		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
-			return true
-		end	
-	end
-	
-	if HasBuffType(unit, 4) and ss then
-		return true
-	end
-	
-	return false
-end
-
-function Veigar:HasElectrocute(unit)
-    for i = 0, unit.buffCount do
-        local buff = unit:GetBuff(i)
-        if buff and buff.count>0 and buff.name:lower():find("electrocute.lua") then
-			return true
-        end
-    end
-    return false
-end
-
 function Veigar:IsUnitInsideE(unit)
-	for _, e in pairs(self.EData) do
-		if(unit.pos:DistanceTo(e.pos) <= E.Radius) then
-			return true, e
+	if(self.EData) then
+		for _, e in pairs(self.EData) do
+			if(unit.pos:DistanceTo(e.pos) <= E.Radius) then
+				return true, e
+			end
 		end
 	end
+
 	return false
+end
+
+function Veigar:IsUnitInsidePreE(unit)
+	if(self.PreEData) then
+		if(GameTimer() - self.PreEData.age <= E.Delay + 0.1) then
+			if(unit.pos:DistanceTo(self.PreEData.pos) <= E.Radius) then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+function Veigar:HasEverfrost()
+	return HasItem({Item.EternalWinter, Item.Everfrost})
 end
 
 function Veigar:ROverkillCheck(unit)
@@ -1247,11 +1205,13 @@ end
 
 function Veigar:GetRawAbilityDamage(spell)
 	if(spell == "Q") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		local apRatio = ({45, 50, 55, 60, 65})[myHero:GetSpellData(_Q).level] / 100
 		return ({80, 120, 160, 200, 240})[myHero:GetSpellData(_Q).level] + (apRatio * myHero.ap)
 	end
 	
 	if(spell == "W") then
+		if myHero:GetSpellData(_W).level == 0 then return 0 end
 		local apRatio = ({70, 80, 90, 100, 110})[myHero:GetSpellData(_W).level] / 100
 		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_W).level] + (apRatio * myHero.ap)
 	end
@@ -1316,21 +1276,16 @@ function Veigar:GetTotalDamage(unit)
 		totalDmg = totalDmg + igniteDmg
 	end
 	
-	if self:HasElectrocute(myHero) then
-		local baseDmg = 30+(150/(17*(myHero.levelData.lvl)))
-		local bonusDmg = (myHero.ap * 0.25)+(myHero.bonusDamage*0.4)
-		local value = baseDmg + bonusDmg 
-		local ElecDmg=_G.SDK.Damage:CalculateDamage(myHero, unit, _G.SDK.DAMAGE_TYPE_MAGICAL , value )
-		totalDmg= totalDmg + ElecDmg
+	if HasElectrocute() then
+		local elecDmg = GetElectrocuteDamage()
+		elecDmg = CalcMagicalDamage(myHero, unit, elecDmg)
+		totalDmg = totalDmg + elecDmg
 	end
 	
-	--6655 = Ludens
-	local ludensCheck, ludensIsUp = CheckDmgItems(6655)
-	if(ludensCheck and ludensIsUp) then
-		local ludensDmg = 100 + (myHero.ap * 0.1)
-		local ludensCalcDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
-		
-		totalDmg = totalDmg + ludensCalcDmg
+	if(HasItem(Item.LudensTempest)) then
+		local ludensDmg = GetItemDamage(Item.LudensTempest)
+		ludensDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
+		totalDmg = totalDmg + ludensDmg
 	end
 	
 	return totalDmg
@@ -1351,13 +1306,17 @@ function Veigar:GetTotalComboDamage(unit)
 		totalDmg = totalDmg + WDmg
 	end
 	
-	--6655 = Ludens
-	local ludensCheck, ludensIsUp = CheckDmgItems(6655)
-	if(ludensCheck and ludensIsUp) then
-		local ludensDmg = 100 + (myHero.ap * 0.1)
-		local ludensCalcDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
+	if(HasItem(Item.LudensTempest)) then
+		local ludensDmg = GetItemDamage(Item.LudensTempest)
+		ludensDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
+		totalDmg = totalDmg + ludensDmg
+	end
+
+	if(self:HasEverfrost()) then
+		local everfrostDmg = GetItemDamage(Item.Everfrost)
+		everfrostDmg = CalcMagicalDamage(myHero, unit, everfrostDmg)
 		
-		totalDmg = totalDmg + ludensCalcDmg
+		totalDmg = totalDmg + everfrostDmg
 	end
 	
 	if(Ready(_R)) then
@@ -1374,6 +1333,11 @@ end
 local alphaLerp = 0
 function Veigar:Draw()
 	if myHero.dead then return end
+
+	local tar = GetTarget(1200)
+	if(IsValid(tar)) then
+		print(self:IsInCone(tar.pos, everfrostData.Range, everfrostData.Angle))
+	end
 	
 	if(self.Menu.Drawings.DrawQW:Value()) then
 		DrawCircle(myHero, Q.Range, 1, DrawColor(50, 80, 215, 255)) --(Alpha, R, G, B)
