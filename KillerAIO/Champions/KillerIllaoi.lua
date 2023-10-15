@@ -2,11 +2,10 @@ require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
-require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.15
+scriptVersion = 1.17
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Illaoi will exit.")
@@ -25,16 +24,6 @@ class "Illaoi"
 
 local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/ChampionIcons/illaoi.png"
 
---[[
-ILLAOI Item IDS
-
-3057 = SHEEN
-6662 = ICEBORN GAUNTLET
---]]
-
-local ITEM_SHEEN = 3057
-local ITEM_ICEBORN = 6662
-
 local gameTick = GameTimer()
 Illaoi.AutoLevelCheck = false
 
@@ -52,8 +41,14 @@ Illaoi.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 
 function Illaoi:__init()
 	self:LoadMenu()
-	Callback.Add("Tick", function() self:Tick() end)
-	Callback.Add("Draw", function() self:Draw() end)
+
+	table.insert(_G.SDK.OnTick, function()
+		self:Tick()
+	end)
+
+	table.insert(_G.SDK.OnDraw, function()
+		self:Draw()
+	end)
 
 	--Custom Callbacks
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Illaoi:OnPreAttack(...) end)
@@ -290,19 +285,15 @@ function Illaoi:HasRActive()
 	return HasBuff(myHero, "IllaoiR")
 end
 
-function Illaoi:GetSpellbladeDamage()
-	for _, item in pairs({ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}) do
-	   local id = myHero:GetItemData(item).itemID
-	   if(id == ITEM_SHEEN or id == ITEM_ICEBORN) then --Spellblade Procs
-		   if(myHero:GetSpellData(item).currentCd == 0) then
-				return myHero.baseDamage	   
-		   end
-	   end
+function Illaoi:GetSpellbladeDamage(target)
+   local hasItem, slot = HasItem({Item.Sheen, Item.IcebornGauntlet, Item.DivineSunderer})
+   if(hasItem) then
+	   return GetItemDamage(myHero:GetItemData(slot).itemID, target)
    end
+
    return 0
 end
 
---RESUME HERE FOR TOMORROW
 local canEScan = true
 local eTar = nil
 function Illaoi:ScanESpirit()
@@ -386,17 +377,7 @@ function Illaoi:Combo()
 	if(self.Menu.Combo.RSettings.UltraR:Value() and self.Menu.Combo.RSettings.UseR:Value()) then
 		if(Ready(_R)) then
 			local flashRange = 400			
-			local flashSlot = nil
-			local canFlash = false
-			
-			--Flash Check
-			if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" and Ready(SUMMONER_1) then
-				canFlash = true
-				flashSlot = HK_SUMMONER_1
-			elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" and Ready(SUMMONER_2) then
-				canFlash = true
-				flashSlot = HK_SUMMONER_2
-			end
+			local canFlash, flashSlot = CanFlash()
 
 			if(canFlash) then
 				local tar = GetTarget(R.Radius + flashRange + 1000)
@@ -769,7 +750,7 @@ function Illaoi:SemiManualE()
 
 	--E
 	if(Ready(_E)) then
-		local tar = GetTarget(Q.Range + 25)
+		local tar = GetTarget(E.Range - 15)
 		if(IsValid(tar) and tar.toScreen.onScreen) then	
 			CastPredictedSpell({Hotkey = HK_E, Target = tar, SpellData = E, maxCollision = 1})
 		end
@@ -783,17 +764,7 @@ function Illaoi:SemiManualUltraR()
 	if(self.Menu.Combo.RSettings.UltraR:Value()) then
 		if(Ready(_R)) then
 			local flashRange = 400			
-			local flashSlot = nil
-			local canFlash = false
-			
-			--Flash Check
-			if myHero:GetSpellData(SUMMONER_1).name == "SummonerFlash" and Ready(SUMMONER_1) then
-				canFlash = true
-				flashSlot = HK_SUMMONER_1
-			elseif myHero:GetSpellData(SUMMONER_2).name == "SummonerFlash" and Ready(SUMMONER_2) then
-				canFlash = true
-				flashSlot = HK_SUMMONER_2
-			end
+			local canFlash, flashSlot = CanFlash()
 
 			if(canFlash) then
 				local tar = GetTarget(R.Radius + flashRange + 1000)
@@ -953,20 +924,23 @@ end
 
 function Illaoi:GetRawAbilityDamage(spell, target)
 	if(spell == "Q") then
+		if myHero:GetSpellData(_Q).level == 0 then return 0 end
 		local QMultiplier = ({1.1, 1.15, 1.2, 1.25, 1.3})[myHero:GetSpellData(_Q).level]
 		return QMultiplier * ((myHero.levelData.lvl*10) + (1.2 * myHero.totalDamage) + (0.4 * myHero.ap))
 	end
 	
 	if(spell == "W") then
+		if myHero:GetSpellData(_W).level == 0 then return 0 end
 		if(target and IsValid(target)) then
 			local bonusADPercent = myHero.totalDamage * 0.04 + ({3, 3.5, 4, 4.5, 5})[myHero:GetSpellData(_W).level]
-			return target.maxHealth * (bonusADPercent / 100) + myHero.totalDamage + self:GetSpellbladeDamage() + 1
+			return target.maxHealth * (bonusADPercent / 100) + myHero.totalDamage + self:GetSpellbladeDamage(target) + 1
 		else
 			return 0
 		end
 	end
 
 	if(spell == "R") then
+		if myHero:GetSpellData(_R).level == 0 then return 0 end
 		return ({150, 250, 350})[myHero:GetSpellData(_R).level] + (myHero.bonusDamage * 0.5)
 	end
 	
