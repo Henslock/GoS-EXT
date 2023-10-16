@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.19
+scriptVersion = 1.20
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -902,7 +902,7 @@ function Veigar:EverfrostLogic()
 					local check = true
 					for _, enemy in ipairs(enemies) do
 						if(IsValid(enemy)) then
-							if not IsInCone(enemy.pos, everfrostData.Range-50, everfrostData.Angle) then
+							if not IsInCone(enemy, bestPos, everfrostData.Range, everfrostData.Angle) then
 								check = false
 							end
 						end
