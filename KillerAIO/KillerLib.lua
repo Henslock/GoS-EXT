@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.57
+local kLibVersion = 2.58
 
 -- [ AutoUpdate ]
 do
@@ -2244,8 +2244,10 @@ function CastPredictedSpell(args)
 
 		if Vector(position):To2D().onScreen then
 			if (ignoreUnkillable or ignoreSS or ignoreAA) == false or (CantKill(target, ignoreUnkillable, ignoreSS, ignoreAA) == false) then
-				Control.CastSpell(hotkey, position)
-				return true
+				if _G.SDK.Cursor.Step == 0 then
+					_G.Control.CastSpell(hotkey, position)
+					return true
+				end
 			end
 		else
 			local distances = {700, 500, 300}
@@ -2254,8 +2256,10 @@ function CastPredictedSpell(args)
 					for _, distance in ipairs(distances) do
 						local extendedPosition = myHero.pos:Extended(position, distance)
 						if extendedPosition:ToScreen().onScreen then
-							Control.CastSpell(hotkey, extendedPosition)      
-							return true
+							if _G.SDK.Cursor.Step == 0 then
+								_G.Control.CastSpell(hotkey, extendedPosition)      
+								return true
+							end
 						end
 					end
 				end
