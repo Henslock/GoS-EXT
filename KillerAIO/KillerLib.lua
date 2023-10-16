@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.55
+local kLibVersion = 2.56
 
 -- [ AutoUpdate ]
 do
@@ -1776,20 +1776,18 @@ function IsPointLeftOfLine(a, b, c)
 	return d < 0
 end
 
-function IsInCone(castPos, range, angle)
-	local vec = (castPos - myHero.pos):Normalized()
-	local vec1 = vec:Rotated(0, math.rad(angle), 0):Normalized()
-	local vec2 = vec:Rotated(0, math.rad(-angle), 0):Normalized()
+function GetAngle(v1, v2)
+	local vec1 = v1:Len()
+	local vec2 = v2:Len()
+	local Angle = math.abs(math.deg(math.acos((v1*v2)/(vec1*vec2))))
+	return Angle
+end
 
-	local point, isOnSegment = ClosestPointOnLineSegment(castPos, myHero.pos, myHero.pos + vec*range)
-	if(isOnSegment) then
-		local point, isOnSegment = ClosestPointOnLineSegment(castPos, myHero.pos, myHero.pos + vec1*range)
-		if(isOnSegment) and IsPointLeftOfLine(myHero.pos,  myHero.pos + vec1*range, castPos) == false then
-			local point, isOnSegment = ClosestPointOnLineSegment(castPos, myHero.pos, myHero.pos + vec2*range)
-			if(isOnSegment) and IsPointLeftOfLine(myHero.pos,  myHero.pos + vec2*range, castPos) then
-				return true
-			end
-		end
+function IsInCone(enemy, castPos, distance, angle)
+	local vec1 = castPos - myHero.pos
+	local vec2 = enemy.pos - myHero.pos
+	if(GetDistance(myHero, enemy) < distance and GetAngle(vec1, vec2) <= angle) then
+		return true
 	end
 
 	return false
