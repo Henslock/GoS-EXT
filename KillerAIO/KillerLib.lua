@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.56
+local kLibVersion = 2.57
 
 -- [ AutoUpdate ]
 do
@@ -1106,6 +1106,20 @@ function GetClosestFriendlyTurret()
 	local closestTurret = nil
 	local closestDist = math.huge
 	for _, turret in pairs(FriendlyTurrets) do
+		if(turret and IsValid(turret) and not turret.dead) then
+			local checkDist = myHero.pos:DistanceTo(turret.pos)
+			if(checkDist <= closestDist) then
+				closestDist = checkDist
+				closestTurret = turret
+			end
+		end
+	end
+	return closestTurret
+end
+function GetClosestEnemyTurret()
+	local closestTurret = nil
+	local closestDist = math.huge
+	for _, turret in pairs(Turrets) do
 		if(turret and IsValid(turret) and not turret.dead) then
 			local checkDist = myHero.pos:DistanceTo(turret.pos)
 			if(checkDist <= closestDist) then
