@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.20
+scriptVersion = 1.21
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -547,7 +547,7 @@ function Veigar:Combo()
 						local ECurrCD = myHero:GetSpellData(_E).currentCd
 						local WTotalCD = myHero:GetSpellData(_W).cd
 						if(ECurrCD > WTotalCD) then --Only use W if your E is on CD
-							CastPredictedSpell({Hotkey = HK_W, Target = target, SpellData = W, ExtendedCheck = true, GGPred = true, KillerPred = true})
+							CastPredictedSpell({Hotkey = HK_W, Target = target, SpellData = W, ExtendedCheck = true, GGPred = true, KillerPred = false})
 							return
 						end
 					end
@@ -1333,11 +1333,6 @@ end
 local alphaLerp = 0
 function Veigar:Draw()
 	if myHero.dead then return end
-
-	local tar = GetTarget(1200)
-	if(IsValid(tar)) then
-		print(self:IsInCone(tar.pos, everfrostData.Range, everfrostData.Angle))
-	end
 	
 	if(self.Menu.Drawings.DrawQW:Value()) then
 		DrawCircle(myHero, Q.Range, 1, DrawColor(50, 80, 215, 255)) --(Alpha, R, G, B)
