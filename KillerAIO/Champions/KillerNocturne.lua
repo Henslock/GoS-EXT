@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Nocturne will exit.")
@@ -215,8 +215,6 @@ function Nocturne:Tick()
 		self:Combo()
 	elseif(mode == "Flee") then
 		self:Flee()
-	elseif(mode == "Harass") then
-		self:Harass()
 	elseif(mode == "LastHit") then
 		self:LastHit()
 	elseif(mode == "LaneClear") then
@@ -743,10 +741,10 @@ function Nocturne:GetTotalDamage(unit)
 		prowlersDmg = CalcPhysicalDamage(myHero, unit, prowlersDmg)
 		totalDmg = totalDmg + prowlersDmg
 	end
-	
+
 	totalDmg = totalDmg + (CalcPhysicalDamage(myHero, unit, myHero.totalDamage)*3)
 
-	if(self:HasDuskblade()) then
+	if(HasItem(Item.DuskbladeofDraktharr)) then
 		totalDmg = totalDmg * GetItemDamage(Item.DuskbladeofDraktharr, unit)
 	end
 
