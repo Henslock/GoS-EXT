@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.58
+local kLibVersion = 2.59
 
 -- [ AutoUpdate ]
 do
@@ -2225,6 +2225,7 @@ function CastPredictedSpell(args)
 	local SpellData = args.SpellData
 	local extendedCheck = args.ExtendedCheck or false
 	local maxCollision = args.maxCollision or 0
+	local useHeroCollision = args.UseHeroCollision or false
 	local collisionRadiusOverride = args.collisionRadiusOverride or SpellData.Radius or 0
 	local ignoreUnkillable = args.IgnoreUnkillable ~= false
 	local ignoreSS = args.IgnoreSpellshields or false
@@ -2274,6 +2275,9 @@ function CastPredictedSpell(args)
 	SpellData.Delay = SpellData.Delay or 0
 
 	local collisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_YASUOWALL}
+	if(useHeroCollision) then
+		collisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_ENEMYHERO, GGPrediction.COLLISION_YASUOWALL}
+	end
 
 	local function CheckCollisionAndCastSpell(pos, maxCollision, collisionTypes)
 		if(maxCollision > 0) then
