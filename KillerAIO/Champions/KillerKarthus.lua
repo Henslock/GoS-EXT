@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.16
+scriptVersion = 1.17
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -329,7 +329,7 @@ function Karthus:Combo()
 		
 	-- Disable your E if there are no enemies nearby
 	local EDisableBuffer = 100
-	if HasBuff(myHero, "KarthusDefile") and (GetEnemyCount(E.Radius + EDisableBuffer, myHero) == 0) then 
+	if HasBuff(myHero, "KarthusDefile") and not self:IsPassiveDead() and (GetEnemyCount(E.Radius + EDisableBuffer, myHero) == 0) then 
 		Control.CastSpell(HK_E)
 		return
 	end
@@ -653,9 +653,14 @@ function Karthus:Clear()
 
 end
 
+function Karthus:IsPassiveDead()
+	return HasBuff(myHero, PassiveBuff)
+end
+
+
 function Karthus:AutoRCheck()
 	-- Zombie check
-	if (self.Menu.AutoR.AutoRDead:Value() and HasBuff(myHero, PassiveBuff) and Ready(_R)) then
+	if (self.Menu.AutoR.AutoRDead:Value() and self:IsPassiveDead() and Ready(_R)) then
 		for k, v in pairs(Enemies) do
 			if (v and v.valid and v.alive) then
 				local ultableChamp = UltableChamps[v.name]
