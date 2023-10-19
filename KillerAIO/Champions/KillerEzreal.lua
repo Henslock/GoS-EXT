@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.02
+scriptVersion = 1.03
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -101,6 +101,10 @@ function Ezreal:LoadMenu()
 	-- Jungle Clear
 	self.Menu.Clear.Jungle:MenuElement({id = "UseQ", name = "Use Q", value = true})
 	self.Menu.Clear.Jungle:MenuElement({id = "UseW", name = "Use W on Epic Monsters", value = true})
+
+	-- Killsteal
+	self.Menu:MenuElement({id = "KillSteal", name = "Kill Steal", type = MENU})
+	self.Menu.KillSteal:MenuElement({id = "UseQ", name = "Use Q", value = true})
 
 	-- E
 	self.Menu:MenuElement({id = "ESettings", name = "E Settings", type = MENU})
@@ -1051,6 +1055,29 @@ function Ezreal:IsUnitInFront(unit1, unit2)
 end
 
 function Ezreal:KillSteal()
+	--Q
+	if(self.Menu.KillSteal.UseQ:Value()) then
+		if(Ready(_Q)) then
+			local enemies = GetEnemyHeroes(Q.Range)
+			if(#enemies > 0) then
+				for _, enemy in pairs (enemies) do
+					if(enemy and IsValid(enemy)) then
+						if((CantKill(enemy, true, true, false)==false)) then
+							local QDmg = self:GetRawAbilityDamage("Q")
+							QDmg = CalcPhysicalDamage(myHero, enemy, QDmg)
+							if(enemy.health - QDmg < 0) then
+								local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = enemy, SpellData = Q, maxCollision = 1, KillerPred = false, GGPred = true, UseHeroCollision = true})
+								if(didCast) then
+									self.RShootBuffer = GameTimer() + Q.Delay + (GetDistance(myHero, enemy)/Q.Speed)
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
 end
 
 function Ezreal:GetWTarget(enemies)
