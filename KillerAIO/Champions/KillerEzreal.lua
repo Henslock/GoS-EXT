@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.03
+scriptVersion = 1.04
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -27,8 +27,8 @@ local ChampIcon = "https://raw.githubusercontent.com/Henslock/GoS-EXT/main/Champ
 local gameTick = GameTimer()
 
 -- GG PRED
-local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 60, Speed = 1950}
-local W = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 80, Speed = 1600}
+local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 60, Speed = 2000}
+local W = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 80, Speed = 1800}
 local R = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 1, Range = 20000, Radius = 160, Speed = 2000}
 
 --Main Menu
@@ -315,14 +315,14 @@ function Ezreal:OnPostAttack(args)
 				end
 	
 				if(shouldCastNormal) then
-					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = true, KillerPred = true})
+					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
 					local qDmg = self:GetRawAbilityDamage("Q")
 					qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
 					if(tar.health - qDmg < 0) and check then
 						self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
 					end
 				else
-					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = true, KillerPred = true})
+					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
 					local qDmg = self:GetRawAbilityDamage("Q")
 					qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
 					if(tar.health - qDmg < 0) and check then
@@ -375,7 +375,7 @@ function Ezreal:Combo()
 			local tar = GetTarget(W.Range)
 			if(IsValid(tar)) then
 				if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
-					local check = CastPredictedSpell({Hotkey = HK_W, Target = tar, SpellData = W, maxCollision = 1, collisionRadiusOverride = Q.Radius, GGPred = true, KillerPred = false})
+					local check = CastPredictedSpell({Hotkey = HK_W, Target = tar, SpellData = W, maxCollision = 1, collisionRadiusOverride = Q.Radius, GGPred = false, KillerPred = true})
 					if(check) then
 						self.WTarget = {hero = tar, time = GameTimer() + 0.75}
 					end
@@ -407,14 +407,14 @@ function Ezreal:Combo()
 				end
 
 				if(shouldCastNormal) then
-					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = true, KillerPred = false})
+					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
 					local qDmg = self:GetRawAbilityDamage("Q")
 					qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
 					if(tar.health - qDmg < 0) and check then
 						self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
 					end
 				else
-					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = true, KillerPred = false})
+					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
 					local qDmg = self:GetRawAbilityDamage("Q")
 					qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
 					if(tar.health - qDmg < 0) and check then
@@ -924,7 +924,7 @@ function Ezreal:RLogic()
 				if(IsValid(enemy) and Vector(enemy.pos):To2D().onScreen) then
 					local RDmg = self:GetRawAbilityDamage("R")
 					RDmg = CalcMagicalDamage(myHero, enemy, RDmg)
-					if(enemy.health - RDmg < 0) and (GameTimer() > self.RShootBuffer) then
+					if(enemy.health - RDmg < 0) and enemy.health > 5 and (GameTimer() > self.RShootBuffer) then
 						if _G.SDK.Cursor.Step == 0 then
 							CastPredictedSpell({Hotkey = HK_R, Target = enemy, SpellData = R, GGPred = true, KillerPred = false})
 						end
