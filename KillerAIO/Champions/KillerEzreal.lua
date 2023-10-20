@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.04
+scriptVersion = 1.05
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -28,7 +28,7 @@ local gameTick = GameTimer()
 
 -- GG PRED
 local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 60, Speed = 2000}
-local W = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 80, Speed = 1800}
+local W = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 80, Speed = 1900}
 local R = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 1, Range = 20000, Radius = 160, Speed = 2000}
 
 --Main Menu
@@ -378,6 +378,7 @@ function Ezreal:Combo()
 					local check = CastPredictedSpell({Hotkey = HK_W, Target = tar, SpellData = W, maxCollision = 1, collisionRadiusOverride = Q.Radius, GGPred = false, KillerPred = true})
 					if(check) then
 						self.WTarget = {hero = tar, time = GameTimer() + 0.75}
+						return
 					end
 				end
 			end
@@ -412,6 +413,7 @@ function Ezreal:Combo()
 					qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
 					if(tar.health - qDmg < 0) and check then
 						self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+						return
 					end
 				else
 					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
@@ -419,6 +421,7 @@ function Ezreal:Combo()
 					qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
 					if(tar.health - qDmg < 0) and check then
 						self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+						return
 					end			
 				end
 			end
@@ -926,7 +929,7 @@ function Ezreal:RLogic()
 					RDmg = CalcMagicalDamage(myHero, enemy, RDmg)
 					if(enemy.health - RDmg < 0) and enemy.health > 5 and (GameTimer() > self.RShootBuffer) then
 						if _G.SDK.Cursor.Step == 0 then
-							CastPredictedSpell({Hotkey = HK_R, Target = enemy, SpellData = R, GGPred = true, KillerPred = false})
+							CastPredictedSpell({Hotkey = HK_R, Target = enemy, SpellData = R, GGPred = false, KillerPred = true})
 						end
 					end
 				end
@@ -946,7 +949,7 @@ function Ezreal:SemiRLogic()
 	local tar = GetTarget(searchRange)
 	if(IsValid(tar) and tar == _G.SDK.TargetSelector.Selected) then
 		if _G.SDK.Cursor.Step == 0 then
-			CastPredictedSpell({Hotkey = HK_R, Target = tar, SpellData = R, GGPred = true, KillerPred = false})
+			CastPredictedSpell({Hotkey = HK_R, Target = tar, SpellData = R, GGPred = false, KillerPred = true})
 		end
 	end
 	
@@ -1039,7 +1042,7 @@ function Ezreal:AutoQHighHitchance()
 				return
 			end
 			
-			local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, maxCollision = 1, KillerPred = false, GGPred = true})
+			local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, maxCollision = 1, KillerPred = true, GGPred = false})
 			if(didCast) then
 				self.RShootBuffer = GameTimer() + Q.Delay + (GetDistance(myHero, target)/Q.Speed)
 			end
