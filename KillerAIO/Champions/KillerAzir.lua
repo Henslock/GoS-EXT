@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.08
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -163,6 +163,8 @@ function Azir:LoadMenu()
 	self.Menu.UltPrio:MenuElement({id = "Prio3",name = "3. Towards Team Cluster", value = true})
 	self.Menu.UltPrio:MenuElement({id = "Prio4",name = "4. Towards Healthiest/Tankiest Ally", value = true})
 	self.Menu.UltPrio:MenuElement({name = "5. Towards Engage Position", type = SPACE})
+	self.Menu.UltPrio:MenuElement({id = "Prio6",name = "6. Away From Me", value = true})
+
 	-- Combo
 	self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
 	self.Menu.Combo:MenuElement({id = "Killsteal", name = "Combo Killsteal Settings", type = MENU})
@@ -434,12 +436,10 @@ function Azir:Combo()
 
 						totalDmg = CalcMagicalDamage(myHero, tar, totalDmg)
 
-						local ludensCheck, ludensIsUp = CheckDmgItems(6655)
-						if(ludensCheck and ludensIsUp) then
-							local ludensDmg = 100 + (myHero.ap * 0.1)
-							local ludensCalcDmg = CalcMagicalDamage(myHero, tar, ludensDmg)
-							
-							totalDmg = totalDmg + ludensCalcDmg
+						if(HasItem(Item.LudensTempest)) then
+							local ludensDmg = GetItemDamage(Item.LudensTempest)
+							ludensDmg = CalcMagicalDamage(myHero, tar, ludensDmg)
+							totalDmg = totalDmg + ludensDmg
 						end
 
 						if(tar.health - totalDmg <= 0) then
@@ -457,6 +457,7 @@ function Azir:Combo()
 									local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(soldier.pos, myHero.pos, 3000, 0, myHero.boundingRadius, {GGPrediction.COLLISION_ENEMYHERO})
 									if(collisionCount <= 1) then
 										Control.CastSpell(HK_E, soldier)
+										--print("E Gapcloser")
 									end
 								end
 							end
@@ -584,7 +585,7 @@ function Azir:Combo()
 			local enemies = GetEnemyHeroes(375)
 			if(#enemies > 0) then
 				for _, enemy in pairs(enemies) do
-					if(IsValid(enemy) and enemy.range <= 250 and GetDistance(myHero, enemy) <= 200) then
+					if(IsValid(enemy) and enemy.range <= 250 and GetDistance(myHero, enemy) <= 250) then
 						if(self.Menu.Combo.RMeleePeel[enemy.charName]) then
 							if(self.Menu.Combo.RMeleePeel[enemy.charName]:Value()) then
 								-- We can cast
@@ -593,7 +594,11 @@ function Azir:Combo()
 									local dir = (ultCastPos - myHero.pos):Normalized()
 									ultCastPos = myHero.pos + (dir*400)
 									Control.CastSpell(HK_R, ultCastPos)
-									print("Azir Ult Melee Peel!")
+									--print("Azir Ult Melee Peel!")
+								else
+									local dir = (enemy.pos - myHero.pos):Normalized()
+									ultCastPos = myHero.pos + (dir*400)
+									Control.CastSpell(HK_R, ultCastPos)
 								end
 							end
 						end
@@ -1150,6 +1155,7 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 		3. Towards Team Cluster
 		4. Towards Healthiest/Tankiest Ally
 		5. Towards Engage Direction
+		6. Away From Me
 	]]
 
 	-- #1
@@ -1266,6 +1272,22 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 	if(self.EngagePosition) then
 		--print("Casting at engage")
 		return self.EngagePosition
+	end
+
+	-- #6
+	if(self.Menu.UltPrio.Prio6:Value()) then
+		local enemies = GetEnemyHeroes(600)
+		local vEnemies = {}
+		for _, enemy in ipairs(enemies) do
+			if(IsValid(enemy)) then
+				table.insert(vEnemies, enemy)
+			end
+		end
+		if(#vEnemies >= 1) then
+			local bestPos, count = CalculateBestCirclePosition(enemies, 450, false)
+			bestPos = bestPos or vEnemies[1].pos
+			return bestPos
+		end
 	end
 
 	return nil
@@ -2195,11 +2217,9 @@ function Azir:GetTotalDamage(unit)
 	end
 
 	--Ludens
-	local ludensCheck, ludensIsUp = CheckDmgItems(6655)
-	if(ludensCheck and ludensIsUp) then
-		local ludensDmg = 100 + (myHero.ap * 0.1)
+	if(HasItem(Item.LudensTempest)) then
+		local ludensDmg = GetItemDamage(Item.LudensTempest)
 		ludensDmg = CalcMagicalDamage(myHero, unit, ludensDmg)
-		
 		totalDmg = totalDmg + ludensDmg
 	end
 
