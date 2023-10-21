@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.21
+scriptVersion = 1.22
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Veigar will exit.")
@@ -576,7 +576,7 @@ function Veigar:Combo()
 		if(Ready(_R)) then
 			local target = GetTarget(R.Range)
 			if(target and IsValid(target) and target.toScreen.onScreen) then
-				if(self:IsKillable(target) and (CantKill(target, true, true, false))==false) then
+				if(self:IsKillable(target) and (CantKill(target, true, true, false, true))==false) then
 					if(self.Menu.Combo.OverkillRProtection:Value()) then
 						if(self:ROverkillCheck(target) == false) then --Use R if it's not an overkill
 							Control.CastSpell(HK_R, target)
@@ -993,7 +993,7 @@ function Veigar:EverfrostLogic()
 
 			if #enemies > 0 then
 				for _, enemy in ipairs(enemies) do
-					if(IsValid(enemy) and CantKill(enemy, true, true, false)==false) then
+					if(IsValid(enemy) and CantKill(enemy, true, true, false, true)==false) then
 						local pred = GGPrediction:SpellPrediction(everfrostData)
 						pred:GetPrediction(enemy, myHero)
 						if pred.CastPosition and GetDistance(myHero, pred.CastPosition) < Q.Range - 25 then
@@ -1038,7 +1038,7 @@ function Veigar:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
-						if(self:IsKillable(enemy) and (CantKill(enemy, true, true, false)==false)) then
+						if(self:IsKillable(enemy) and (CantKill(enemy, true, true, false, true)==false)) then
 							local isOverkill = false
 							if(self.Menu.KillSteal.OverkillRProtection:Value()) then
 								isOverkill = self:ROverkillCheck(enemy)
