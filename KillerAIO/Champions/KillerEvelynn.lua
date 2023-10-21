@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.07
+scriptVersion = 1.08
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Evelynn will exit.")
@@ -277,7 +277,7 @@ function Evelynn:Combo()
 	if(self.Menu.Combo.UseR:Value()) then
 		if(Ready(_R)) then
 			local tar = GetTarget(R.Radius - 50)
-			if(IsValid(tar) and GetDistance(tar, myHero) <= R.Radius and (CantKill(tar, true, false, false)==false)) then
+			if(IsValid(tar) and GetDistance(tar, myHero) <= R.Radius and (CantKill(tar, true, false, false, true)==false)) then
 				local dmg = self:GetRawAbilityDamage("R")
 				if(tar.health/tar.maxHealth <= 0.3) then
 					dmg = self:GetRawAbilityDamage("RExecute")
@@ -720,7 +720,7 @@ function Evelynn:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs(enemies) do
 					if(enemy and IsValid(enemy)) then
-						if((CantKill(enemy, true, false, false)==false)) then
+						if((CantKill(enemy, true, false, false, true)==false)) then
 							local dmg = self:GetRawAbilityDamage("R")
 							if(enemy.health/enemy.maxHealth <= 0.3) then
 								dmg = self:GetRawAbilityDamage("RExecute")
