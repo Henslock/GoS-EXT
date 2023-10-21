@@ -6,7 +6,7 @@ require "PremiumPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.17
+scriptVersion = 1.18
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Syndra will exit.")
@@ -559,7 +559,7 @@ function Syndra:Combo()
 	if(Ready(_R) and self.Menu.Combo.UseR:Value()) then		
 		local target = GetTarget(R.Range)
 		if(target ~= nil and IsValid(target)) then
-			if(self:IsKillable(target) and (self:CantKill(target, true, true, false))==false) then
+			if(self:IsKillable(target) and (CantKill(target, true, true, false, true))==false) then
 				Control.CastSpell(HK_R, target)
 			end
 		end
@@ -1021,7 +1021,7 @@ function Syndra:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy.valid and IsValid(enemy)) then
-						if(self:IsKillable(enemy) and (self:CantKill(enemy, true, true, false))==false) then
+						if(self:IsKillable(enemy) and (CantKill(enemy, true, true, false, true))==false) then
 							if(#enemies == 1) then --We can KS on solo targets
 								if(myHero.pos:DistanceTo(enemy.pos) < R.Range) then
 									Control.CastSpell(HK_R, enemy)
@@ -1053,7 +1053,7 @@ function Syndra:KillSteal()
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy) and enemy.toScreen.onScreen) then
-						if(self:CantKill(enemy, true, true, false)==false) then
+						if(CantKill(enemy, true, true, false)==false) then
 							local eDmg = self:GetRawAbilityDamage("E")
 							eDmg = CalcMagicalDamage(myHero, enemy, eDmg)
 
@@ -1256,60 +1256,6 @@ function Syndra:ManualSpells()
 			Control.CastSpell(HK_R)
 		end
 	end
-end
-
-function Syndra:CantKill(unit, kill, ss, aa)
-	--set kill to true if you dont want to waste on undying/revive targets
-	--set ss to true if you dont want to cast on spellshield
-	--set aa to true if ability applies onhit (yone q, ez q etc)
-	
-	for i = 0, unit.buffCount do
-	
-		local buff = unit:GetBuff(i)
-		if buff.name:lower():find("kayler") and buff.count==1 then
-			return true
-		end
-	
-		if buff.name:lower():find("undyingrage") and (unit.health<100 or kill) and buff.count==1 then
-			return true
-		end
-		if buff.name:lower():find("kindredrnodeathbuff") and (kill or (unit.health / unit.maxHealth)<0.11) and buff.count==1  then
-			return true
-		end	
-		if buff.name:lower():find("chronoshift") and kill and buff.count==1 then
-			return true
-		end			
-		
-		if  buff.name:lower():find("willrevive") and (unit.health / unit.maxHealth) >= 0.5 and kill and buff.count==1 then
-			return true
-		end
-
-		if  buff.name:lower():find("morganae") and ss and buff.count==1 then
-			return true
-		end
-		
-		if (buff.name:lower():find("fioraw") or buff.name:lower():find("pantheone")) and buff.count==1 then
-			return true
-		end
-		
-		if  buff.name:lower():find("jaxcounterstrike") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("nilahw") and aa and buff.count==1  then
-			return true
-		end
-		
-		if  buff.name:lower():find("shenwbuff") and aa and buff.count==1  then
-			return true
-		end	
-	end
-	
-	if HasBuffType(unit, 4) and ss then
-		return true
-	end
-	
-	return false
 end
 
 local dataTick = GameTimer()
