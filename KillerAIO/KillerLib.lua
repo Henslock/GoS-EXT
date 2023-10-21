@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.59
+local kLibVersion = 2.60
 
 -- [ AutoUpdate ]
 do
@@ -2022,8 +2022,9 @@ function HasBuffType(unit, type)
     return false
 end
 
-function CantKill(unit, kill, ss, aa)
+function CantKill(unit, kill, ss, aa, sionCheck)
     -- Define conditions for each buff
+	sionCheck = sionCheck or false
     local buffConditions = {
         kayler = function() return true end,
         undyingrage = function() return unit.health < 100 or kill end,
@@ -2045,6 +2046,12 @@ function CantKill(unit, kill, ss, aa)
     for _, buff in ipairs(buffs) do
         if buff.count > 0 then
             local buffName = buff.name:lower()
+
+			if(sionCheck) then
+				if buffName == "sionpassivezombie" then
+					return true
+				end
+			end
 
             -- Check conditions for each buff in table
             for buffKey, buffCondition in pairs(buffConditions) do
