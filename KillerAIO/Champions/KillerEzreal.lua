@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.05
+scriptVersion = 1.06
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -928,8 +928,10 @@ function Ezreal:RLogic()
 					local RDmg = self:GetRawAbilityDamage("R")
 					RDmg = CalcMagicalDamage(myHero, enemy, RDmg)
 					if(enemy.health - RDmg < 0) and enemy.health > 5 and (GameTimer() > self.RShootBuffer) then
-						if _G.SDK.Cursor.Step == 0 then
-							CastPredictedSpell({Hotkey = HK_R, Target = enemy, SpellData = R, GGPred = false, KillerPred = true})
+						if((CantKill(enemy, true, true, false, true)==false)) then
+							if _G.SDK.Cursor.Step == 0 then
+								CastPredictedSpell({Hotkey = HK_R, Target = enemy, SpellData = R, GGPred = false, KillerPred = true})
+							end
 						end
 					end
 				end
@@ -949,7 +951,9 @@ function Ezreal:SemiRLogic()
 	local tar = GetTarget(searchRange)
 	if(IsValid(tar) and tar == _G.SDK.TargetSelector.Selected) then
 		if _G.SDK.Cursor.Step == 0 then
-			CastPredictedSpell({Hotkey = HK_R, Target = tar, SpellData = R, GGPred = false, KillerPred = true})
+			if((CantKill(tar, true, true, false)==false)) then
+				CastPredictedSpell({Hotkey = HK_R, Target = tar, SpellData = R, GGPred = false, KillerPred = true})
+			end
 		end
 	end
 	
