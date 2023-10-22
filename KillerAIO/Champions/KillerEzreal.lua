@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.07
+scriptVersion = 1.08
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -657,8 +657,10 @@ function Ezreal:JungleClear(minions)
 				local qPred = GGPrediction:SpellPrediction(Q)
 				qPred:GetPrediction(minion, myHero)
 				if qPred.CastPosition and qPred:CanHit(HITCHANCE_NORMAL) then
-					Control.CastSpell(HK_Q, qPred.CastPosition)
-					break
+					if Vector(qPred.CastPosition):To2D().onScreen then
+						Control.CastSpell(HK_Q, qPred.CastPosition)
+						break
+					end
 				end	
 			end
 		end
@@ -670,8 +672,10 @@ function Ezreal:JungleClear(minions)
 				local wPred = GGPrediction:SpellPrediction(W)
 				wPred:GetPrediction(minion, myHero)
 				if wPred.CastPosition and wPred:CanHit(HITCHANCE_NORMAL) then
-					Control.CastSpell(HK_W, wPred.CastPosition)
-					break
+					if Vector(wPred.CastPosition):To2D().onScreen then
+						Control.CastSpell(HK_W, wPred.CastPosition)
+						break
+					end
 				end	
 			end
 		end
@@ -716,8 +720,8 @@ function Ezreal:LaneClear(minions)
 			if(canonMinion.health - self:GetRawAbilityDamage("Q") < 0 and hp > 0) then
 				local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, canonMinion.pos, Q.Speed, Q.Delay, Q.Radius, {GGPrediction.COLLISION_MINION},  canonMinion.networkID)
 				if(collisionCount == 0) then
-					if _G.SDK.Cursor.Step == 0 then
-						Control.CastSpell(HK_Q, canonMinion)
+					if _G.SDK.Cursor.Step == 0 and canonMinion.pos:To2D().onScreen then
+						Control.CastSpell(HK_Q, canonMinion.pos)
 						return
 					end
 				end
@@ -745,14 +749,14 @@ function Ezreal:LaneClear(minions)
 
 						--Check if its under a tower:
 						if(IsUnderTurret(minion) or IsUnderFriendlyTurret(minion)) then
-							if _G.SDK.Cursor.Step == 0 then
-								Control.CastSpell(HK_Q, minion)
+							if _G.SDK.Cursor.Step == 0 and minion.pos:To2D().onScreen then
+								Control.CastSpell(HK_Q, minion.pos)
 								return
 							end
 						else
 							if not earlyManaConservationCheck then
-								if _G.SDK.Cursor.Step == 0 then
-									Control.CastSpell(HK_Q, minion)
+								if _G.SDK.Cursor.Step == 0 and minion.pos:To2D().onScreen then
+									Control.CastSpell(HK_Q, minion.pos)
 									return
 								end
 							end
@@ -765,13 +769,13 @@ function Ezreal:LaneClear(minions)
 							local castPos = self:AngleQPos(minion, collisionObjects[1], Q.Radius*0.75)
 							--Check if its under a tower:
 							if(IsUnderTurret(minion) or IsUnderFriendlyTurret(minion)) then
-								if _G.SDK.Cursor.Step == 0 then
+								if _G.SDK.Cursor.Step == 0 and castPos:To2D().onScreen then
 									Control.CastSpell(HK_Q, castPos)
 									return
 								end
 							else
 								if not earlyManaConservationCheck then
-									if _G.SDK.Cursor.Step == 0 then
+									if _G.SDK.Cursor.Step == 0 and castPos:To2D().onScreen then
 										Control.CastSpell(HK_Q, castPos)
 										return
 									end
