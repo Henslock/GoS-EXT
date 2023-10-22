@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.06
+scriptVersion = 1.07
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -309,7 +309,7 @@ function Ezreal:OnPostAttack(args)
 				local shouldCastNormal = true
 				local dist = GetDistance(myHero, tar)
 				if(self.Menu.Combo.UseQObstructing:Value()) then
-					if(myHero.levelData.lvl >= 11 and myHero:GetSpellData(_Q).cd < 2.5) then
+					if(myHero.levelData.lvl >= 11 and myHero:GetSpellData(_Q).cd < 2.75) then
 						shouldCastNormal = false
 					end
 				end
@@ -373,6 +373,7 @@ function Ezreal:Combo()
 
 		if(canCast) then
 			local tar = GetTarget(W.Range)
+			
 			if(IsValid(tar)) then
 				if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
 					local check = CastPredictedSpell({Hotkey = HK_W, Target = tar, SpellData = W, maxCollision = 1, collisionRadiusOverride = Q.Radius, GGPred = false, KillerPred = true})
@@ -386,43 +387,45 @@ function Ezreal:Combo()
 	end
 
 	if(self.Menu.Combo.UseQ:Value() and Ready(_Q)) then
-		local tar = GetTarget(Q.Range)
+		local targets = GetTargets(Q.Range)
 		local wTars = GetEnemyHeroes(Q.Range)
 
 		if(#wTars > 1) then
 			local wTar = self:GetWTarget(wTars)
 
-			if(wTar) then
-				tar = wTar
+			if(wTar and targets and targets[1]) then
+				targets[1] = wTar
 			end
 		end
 
-		if(IsValid(tar)) then
-			if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
-				local shouldCastNormal = true
-				local dist = GetDistance(myHero, tar)
-				if(self.Menu.Combo.UseQObstructing:Value()) then
-					if(myHero.levelData.lvl >= 11 and myHero:GetSpellData(_Q).cd < 2.5) then
-						shouldCastNormal = false
+		for _, tar in ipairs(targets) do
+			if(IsValid(tar)) then
+				if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
+					local shouldCastNormal = true
+					local dist = GetDistance(myHero, tar)
+					if(self.Menu.Combo.UseQObstructing:Value()) then
+						if(myHero.levelData.lvl >= 11 and myHero:GetSpellData(_Q).cd < 2.5) then
+							shouldCastNormal = false
+						end
 					end
-				end
 
-				if(shouldCastNormal) then
-					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
-					local qDmg = self:GetRawAbilityDamage("Q")
-					qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
-					if(tar.health - qDmg < 0) and check then
-						self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
-						return
+					if(shouldCastNormal) then
+						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
+						local qDmg = self:GetRawAbilityDamage("Q")
+						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+						if(tar.health - qDmg < 0) and check then
+							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+							return
+						end
+					else
+						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
+						local qDmg = self:GetRawAbilityDamage("Q")
+						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+						if(tar.health - qDmg < 0) and check then
+							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+							return
+						end			
 					end
-				else
-					local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
-					local qDmg = self:GetRawAbilityDamage("Q")
-					qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
-					if(tar.health - qDmg < 0) and check then
-						self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
-						return
-					end			
 				end
 			end
 		end
@@ -1039,16 +1042,20 @@ function Ezreal:AutoQHighHitchance()
 	end
 
 	if(Ready(_Q) and not IsUnderTurret(myHero)) then
-		local target = GetTarget(Q.Range)
-		if(IsValid(target)) then
-			
-			if(GetMode() == "Combo" and GetDistance(myHero, target) <= _G.SDK.Data:GetAutoAttackRange(myHero, target)) then
-				return
-			end
-			
-			local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, maxCollision = 1, KillerPred = true, GGPred = false})
-			if(didCast) then
-				self.RShootBuffer = GameTimer() + Q.Delay + (GetDistance(myHero, target)/Q.Speed)
+		local targets = GetTargets(Q.Range)
+		if(targets) then
+			for _, target in ipairs(targets) do
+				if(IsValid(target)) then
+					
+					if(GetMode() == "Combo" and GetDistance(myHero, target) <= _G.SDK.Data:GetAutoAttackRange(myHero, target)) then
+						return
+					end
+
+					local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = target, SpellData = Q, maxCollision = 1, KillerPred = true, GGPred = false})
+					if(didCast) then
+						self.RShootBuffer = GameTimer() + Q.Delay + (GetDistance(myHero, target)/Q.Speed)
+					end
+				end
 			end
 		end
 	end
