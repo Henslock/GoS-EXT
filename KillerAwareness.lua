@@ -2,7 +2,7 @@ require "2DGeometry"
 require "MapPositionGOS"
 require "KillerAIO\\KillerLib"
 
-local scriptVersion = 1.35
+local scriptVersion = 1.36
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -404,6 +404,7 @@ function KillerAwareness:LoadMenu()
 
 	--Cached Extra Units
 	self.Menu:MenuElement({id = "CacheExtraMinions", name = "Cache Extra Minions", type = MENU})
+	self.Menu.CacheExtraMinions:MenuElement({name = "[[ TEMPORARILY DISABLED ]]", type = SPACE})
 	self.Menu.CacheExtraMinions:MenuElement({name = "Allows GGOrbwalker to hit stuff like:", type = SPACE})
 	self.Menu.CacheExtraMinions:MenuElement({name = "Zyra Plants, Heimer turrets, GP Barrels, etc...", type = SPACE})
 	self.Menu.CacheExtraMinions:MenuElement({name = "==================================", type = SPACE})
@@ -424,7 +425,7 @@ end
 
 function KillerAwareness:Tick()
 	if(self.Menu.CacheExtraMinions.Enabled:Value()) then
-		self:CacheChampionMinions()
+		--self:CacheChampionMinions()
 	end
 end
 
