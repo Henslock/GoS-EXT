@@ -2,7 +2,7 @@ require "2DGeometry"
 require "MapPositionGOS"
 require "KillerAIO\\KillerLib"
 
-local scriptVersion = 1.33
+local scriptVersion = 1.35
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -426,7 +426,6 @@ function KillerAwareness:Tick()
 	if(self.Menu.CacheExtraMinions.Enabled:Value()) then
 		self:CacheChampionMinions()
 	end
-
 end
 
 function KillerAwareness:CreateSprites()
@@ -499,8 +498,8 @@ function KillerAwareness:CacheChampionMinions()
 
 	local hov = Game.GetUnderMouseObject()
 	if(hov) then
-		if(hov.valid) then
-			if(mNames[hov.charName] and hov.isEnemy) then
+		if(hov.valid and not hov.dead) then
+			if(mNames[hov.charName] == 1 and hov.isEnemy) then
 				_G.SDK.Cached:AddCachedMinion(hov)
 			end
 		end
@@ -511,8 +510,10 @@ function KillerAwareness:CacheChampionMinions()
 
 		for i = 500, 2000 do
 			local obj = Game.Object(i)
-			if(mNames[obj.charName] and obj.isEnemy) then
-				_G.SDK.Cached:AddCachedMinion(obj)
+			if(obj and obj.valid and not obj.dead) then
+				if(mNames[obj.charName] == 1 and obj.isEnemy) then
+					_G.SDK.Cached:AddCachedMinion(obj)
+				end
 			end
 		end
 
