@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.60
+local kLibVersion = 2.61
 
 -- [ AutoUpdate ]
 do
@@ -792,6 +792,8 @@ ItemDamage = {
 	[Item.Stridebreaker] = function() return 1.75 * myHero.baseDamage end,
 	[Item.IronspikeWhip] = function() return myHero.baseDamage end,
 	[Item.DuskbladeofDraktharr] = function(args) return (1 + math.min(((1 - (args.health / args.maxHealth)) / 7) * 1.6, 0.16)) end,
+	[Item.NavoriQuickblades] = function() return (1 + (myHero.critChance / 5)) end,
+	[Item.LordDominiksRegards] = function(args) return (1 + ((math.max(args.maxHealth - myHero.maxHealth, 0))/100 * 0.88)/100) end,
 }
 
 function HasItem(itemID)
@@ -921,15 +923,6 @@ function LoadUnits()
 end
 
 
-local TargetSelector
-function GetTarget(unit)
-	return TargetSelector:GetTarget(unit, 1)
-
-end
-
-TargetSelector = _G.SDK.TargetSelector
-
-
 function CheckWall(from, to, distance)
     local pos1 = to + (to - from):Normalized() * 50
     local pos2 = pos1 + (to - from):Normalized() * (distance - 50)
@@ -1028,9 +1021,24 @@ function GetTarget(range)
 		else
 			return _G.SDK.TargetSelector:GetTarget(range, _G.SDK.DAMAGE_TYPE_PHYSICAL);
 		end
-	elseif _G.PremiumOrbwalker then
-		return _G.PremiumOrbwalker:GetTarget(range)
 	end
+end
+
+--Returns a sorted list of GGOrbwalker Targets
+
+-- UwU
+function GetTargets(range) 
+
+	if _G.SDK then
+
+		if myHero.ap > myHero.totalDamage then
+			return _G.SDK.TargetSelector:GetTargets(range, _G.SDK.DAMAGE_TYPE_MAGICAL);
+		else
+			return _G.SDK.TargetSelector:GetTargets(range, _G.SDK.DAMAGE_TYPE_PHYSICAL);
+		end
+
+	end
+
 end
 
 function GetMode()   
@@ -1797,9 +1805,14 @@ function GetAngle(v1, v2)
 	return Angle
 end
 
-function IsInCone(enemy, castPos, distance, angle)
-	local vec1 = castPos - myHero.pos
-	local vec2 = enemy.pos - myHero.pos
+function IsInCone(enemy, castPos, distance, angle, optionalStartOffset)
+	optionalStartOffset = optionalStartOffset or 0
+	local refPos = myHero.pos
+	if(optionalStartOffset > 0) then
+		refPos = castPos:Extended(myHero.pos, GetDistance(myHero.pos, castPos) + optionalStartOffset)
+	end
+	local vec1 = Vector(castPos - refPos):Normalized()
+	local vec2 = Vector(enemy.pos - refPos):Normalized()
 	if(GetDistance(myHero, enemy) < distance and GetAngle(vec1, vec2) <= angle) then
 		return true
 	end
