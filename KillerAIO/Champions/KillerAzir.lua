@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.09
+scriptVersion = 1.10
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -340,7 +340,7 @@ function Azir:Tick()
 	if(mode == "Combo") then
 		self:Combo()
 	elseif(mode == "Flee") then
-		--self:Flee()
+		self:Flee()
 	elseif(mode == "Harass") then
 		self:Harass()
 	elseif(mode == "LastHit") then
@@ -354,6 +354,21 @@ function Azir:Tick()
 	self:UpdateComboDamage()
 	self:CheckAzirTurret()
 	self:HoverAzirTurretCheck()
+
+
+	if(self.Menu.Combo.Revenant:Value()) then
+		self:RevenantCombo()
+	else
+		--Reset revenant vars
+		self.RevenantEngagePos = nil
+		self.RevenantTarSoldier = nil
+		self.RevenantQFollowup = false
+	end
+
+	if(self.Menu.Combo.RPull:Value()) then
+		self:RPullCombo()
+	end
+
 
 	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
@@ -737,7 +752,7 @@ function Azir:Combo()
 end
 
 function Azir:Flee()
-	if not (myHero.valid or IsValid(myHero)) then return end
+	if not (IsValid(myHero)) then return end
 
 	if(self.Menu.Flee.InsecFlee:Value()) then
 		self:SmartFlee()
@@ -2247,27 +2262,6 @@ function Azir:Draw()
 		if(self.PassiveTurret and not self.PassiveTurret.dead and IsValid(myHero)) then
 			DrawCircle(self.PassiveTurret, (self.PassiveTurret.boundingRadius + 750 + myHero.boundingRadius / 2), 3, DrawColor(125, 255, 228, 56))
 		end
-	end
-
-	--This combo logic is put in draw intentionally to make use of the higher tick rate. I realize this is a bad practice usually.
-	if(not Game.IsChatOpen()) then
-		if(self.Menu.Combo.Revenant:Value()) then
-			self:RevenantCombo()
-		else
-			--Reset revenant vars
-			self.RevenantEngagePos = nil
-			self.RevenantTarSoldier = nil
-			self.RevenantQFollowup = false
-		end
-
-		if(self.Menu.Combo.RPull:Value()) then
-			self:RPullCombo()
-		end
-	end
-
-	local mode = GetMode()
-	if(mode == "Flee") then
-		self:Flee()
 	end
 
 	if(self.Menu.Drawings.DrawSoldiers:Value()) then
