@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.61
+local kLibVersion = 2.62
 
 -- [ AutoUpdate ]
 do
@@ -902,7 +902,7 @@ function HasFirstStrike()
 	return false
 end
 function GetFirstStrikeBonus()
-	return 1.08
+	return 1.07
 end
 
 
