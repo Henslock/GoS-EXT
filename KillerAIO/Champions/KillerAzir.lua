@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.10
+scriptVersion = 1.11
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -355,7 +355,6 @@ function Azir:Tick()
 	self:CheckAzirTurret()
 	self:HoverAzirTurretCheck()
 
-
 	if(self.Menu.Combo.Revenant:Value()) then
 		self:RevenantCombo()
 	else
@@ -419,6 +418,7 @@ function Azir:Combo()
 				if(self.Menu.Combo.SmartRSettings.AvoidTower:Value()) then
 					if(IsUnderTurret(myHero)) then return end
 				end
+
 				--Use on killable target either solo or group
 				if(self.Menu.Combo.SmartRSettings.UseSmartRSolo:Value() or self.Menu.Combo.SmartRSettings.UseSmartRKillableInGroup:Value()) then
 					local tar = GetTarget(MaxEngageRange)
@@ -565,6 +565,7 @@ function Azir:Combo()
 					if not ultCastPos then return end
 					local dir = (ultCastPos - myHero.pos):Normalized()
 					ultCastPos = myHero.pos + (dir*400)
+				
 					local canUltHit = true
 					if(#enemies > 0) then
 						for _, enemy in pairs (enemies) do
@@ -1185,7 +1186,6 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 	if(self.Menu.UltPrio.Prio2:Value()) then
 		local function FetchClosestTurret()
 			local azirTurr, friendlyTurr = nil, nil
-
 			local function FetchAzirTurret()
 				-- #2 (Azir Turret)
 				if(self.PassiveTurret and not self.PassiveTurret.dead) then
@@ -1194,7 +1194,7 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 						--We're comfortable ulting towards the tower if there's a clear line of sight from us towards it.
 						--We're also comfortable ulting towards the tower if it will knock enemies under it across walls.
 						local intersectCheck = MapPosition:getIntersectionPoint3D(checkFromPos, self.PassiveTurret.pos)
-						if GetDistance(intersectCheck, self.PassiveTurret.pos) <= 400 or not intersectCheck then
+						if not intersectCheck or GetDistance(intersectCheck, self.PassiveTurret.pos) <= 400 then
 							return self.PassiveTurret
 						end
 
@@ -1210,6 +1210,7 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 
 			local function FetchFriendlyTurret()
 				-- #2
+
 				local closestTurret = GetClosestFriendlyTurret()
 				if(closestTurret) then
 					if(GetDistance(closestTurret, checkFromPos) <= 3000) then
@@ -1217,7 +1218,7 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 						--We're comfortable ulting towards the tower if there's a clear line of sight from us towards it.
 						--We're also comfortable ulting towards the tower if it will knock enemies under it across walls.
 						local intersectCheck = MapPosition:getIntersectionPoint3D(checkFromPos, closestTurret.pos)
-						if GetDistance(intersectCheck, closestTurret.pos) <= 400 or not intersectCheck then
+						if not intersectCheck or GetDistance(intersectCheck, closestTurret.pos) <= 400 then
 							return closestTurret
 						end
 
@@ -1229,6 +1230,7 @@ function Azir:GenerateRPriorityPosition(checkFromPos)
 						end
 					end
 				end
+
 			end
 
 			azirTurr = FetchAzirTurret()
