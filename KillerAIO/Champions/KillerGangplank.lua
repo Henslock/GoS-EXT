@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.17
+scriptVersion = 1.18
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -1973,13 +1973,13 @@ function Gangplank:LastHit()
 	if(myHero.activeSpell.name:find("GangplankBasicAttack") or myHero.activeSpell.name:find("GangplankCritAttack")) then
 		avoidQMinionHandle = myHero.activeSpell.target
 	end
-	
+
 	if(self.Menu.LastHit.SmartQ:Value() and Ready(_Q)) then
 		local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.Range) --Just do 1 check for optimization
 		local canonMinion = GetCanonMinion(minions)
 		
 		--Prioritize the canon minion if its low
-		if(canonMinion ~= nil) and IsValid(canonMinion) then
+		if(IsValid(canonMinion)) then
 			local QDam = self:GetQDamage()
 			local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay + (GetDistance(myHero, canonMinion)/Q.Speed))
 			
@@ -1989,15 +1989,18 @@ function Gangplank:LastHit()
 				return
 			end
 		end
-		
+
 		if(myHero.mana / myHero.maxMana) >= (self.Menu.LastHit.MinimumMana:Value() / 100) then
 			for i = 1, #minions do
 				local minion = minions[i]
-				if(minion and IsValid(minion)) then
+				if(IsValid(minion)) then
 					local check = true
 					if(avoidQMinionHandle == minion.handle) then
-						if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
-							check = false
+						local lhtar = _G.SDK.HealthPrediction:GetLastHitTarget()
+						if(IsValid(lhtar)) then
+							if lhtar.handle == minion.handle then
+								check = false
+							end
 						end
 					end
 					if(GetDistance(myHero, minion) <= Q.Range and GetDistance(myHero, minion) >= (self.AARange + 75) and check) then
@@ -2110,8 +2113,11 @@ function Gangplank:Clear()
 						else
 							local check = true
 							if(avoidQMinionHandle == minion.handle) then
-								if _G.SDK.HealthPrediction:GetLastHitTarget().handle == minion.handle then
-									check = false
+								local lhtar = _G.SDK.HealthPrediction:GetLastHitTarget()
+								if(IsValid(lhtar)) then
+									if lhtar.handle == minion.handle then
+										check = false
+									end
 								end
 							end
 							if(check) then
