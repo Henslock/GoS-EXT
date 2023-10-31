@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.09
+scriptVersion = 1.10
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Teemo will exit.")
@@ -363,9 +363,11 @@ function Teemo:Harass()
 
 	if(self.Menu.Combo.UseQ:Value() and Ready(_Q) and (myHero.mana / myHero.maxMana) >= (self.Menu.Harass.QMana:Value() / 100)) then
 		local target = GetTarget(Q.Range)
-		if(myHero.pos:DistanceTo(target.pos) < Q.Range) then
-			Control.CastSpell(HK_Q, target)
-			return
+		if(IsValid(target)) then
+			if(myHero.pos:DistanceTo(target.pos) < Q.Range) then
+				Control.CastSpell(HK_Q, target)
+				return
+			end
 		end
 	end
 end
