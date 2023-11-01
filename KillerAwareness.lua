@@ -2,7 +2,7 @@ require "2DGeometry"
 require "MapPositionGOS"
 require "KillerAIO\\KillerLib"
 
-local scriptVersion = 1.36
+local scriptVersion = 1.37
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -344,13 +344,8 @@ function KillerAwareness:__init()
 	self:CreateSprites()
 	self:LoadHealthTrackerData()
 
-	table.insert(_G.SDK.OnTick, function()
-		self:Tick()
-	end)
-
-	table.insert(_G.SDK.OnDraw, function()
-		self:Draw()
-	end)
+	Callback.Add("Tick", function() self:Tick() end)
+	Callback.Add("Draw", function() self:Draw() end)
 	
 	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
 		self:OnWndMsg(msg, wParam)
@@ -1482,12 +1477,14 @@ MinimapHack = {
 		self.InitCallback = Callback.Add("Tick", InitMenu)
 
 		--FOW Tracker Support
+		--[[
 		if _G.FOWTRACKER then
 			print("FoW Tracker Loaded!")
 			table.insert(FOWTRACKER.OnFogCampKilledCallback, function(camp) self:ProcessFoWCampKill(camp) end)
 		else
 			print("NAY!")
 		end
+		--]]
 	end,
 
 	InitSprites = function (self)
