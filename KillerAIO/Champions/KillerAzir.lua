@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.11
+scriptVersion = 1.12
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -2151,7 +2151,9 @@ end
 function Azir:GetSoldierObjects()
 	local soldiers = {}
 	if (Game.mapID == SUMMONERS_RIFT) then
-		for i = 0, 7250 do
+		local objCount = Game.ObjectCount()
+		local amnt = math.min(objCount, 7250)
+		for i = 1, amnt do
 			local obj = Game.Object(i)
 			if obj and not obj.dead and obj.name == ("AzirSoldier") then
 				table.insert(soldiers, obj)
