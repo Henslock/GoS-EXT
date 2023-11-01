@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.18
+scriptVersion = 1.19
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -2833,7 +2833,9 @@ end
 function Gangplank:GetBarrelObjects()
 	local barrels = {}
 	if (Game.mapID == SUMMONERS_RIFT) then
-		for i = 0, 7250 do
+		local objCount = Game.ObjectCount()
+		local amnt = math.min(objCount, 7250)
+		for i = 1, amnt do
 			local obj = Game.Object(i)
 			if obj and not obj.dead and obj.charName == ("GangplankBarrel") then
 				table.insert(barrels, obj)
