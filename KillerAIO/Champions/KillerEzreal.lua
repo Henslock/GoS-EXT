@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.08
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -45,6 +45,10 @@ Ezreal.LastChatOpenTimer = 0
 function Ezreal:__init()
 	self:LoadMenu()
 
+	Callback.Add("Tick", function() self:Tick() end)
+	Callback.Add("Draw", function() self:Draw() end)
+	
+	--[[
 	table.insert(_G.SDK.OnTick, function()
 		if not _G.SDK.IsRecalling(myHero) then
 			self:Tick()
@@ -54,6 +58,7 @@ function Ezreal:__init()
 	table.insert(_G.SDK.OnDraw, function()
 		self:Draw()
 	end)
+	--]]
 
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Ezreal:OnPreAttack(...) end)
 	_G.SDK.Orbwalker:OnPostAttack(function(...) Ezreal:OnPostAttack(...) end)
@@ -303,9 +308,43 @@ function Ezreal:OnPostAttack(args)
 					tar = wTar
 				end
 			end
+
+		--If there is a valid W Target
+		if(self.WTarget) then
+			if(self.WTarget.hero and IsValid(self.WTarget.hero)) then
+				local tar = self.WTarget.hero
+				if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
+					local shouldCastNormal = true
+					local dist = GetDistance(myHero, tar)
+					if(self.Menu.Combo.UseQObstructing:Value()) then
+						if(myHero.levelData.lvl >= 11 and myHero:GetSpellData(_Q).cd < 2.5) then
+							shouldCastNormal = false
+						end
+					end
+
+					if(shouldCastNormal) then
+						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
+						local qDmg = self:GetRawAbilityDamage("Q")
+						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+
+						if(tar.health - qDmg < 0) and check then
+							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+						end
+						if check then return end
+					else
+						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
+						local qDmg = self:GetRawAbilityDamage("Q")
+						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+						if(tar.health - qDmg < 0) and check then
+							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+						end		
+						if check then return end
+					end
+				end
+			end
+		end
 	
 			if(IsValid(tar)) then
-	
 				local shouldCastNormal = true
 				local dist = GetDistance(myHero, tar)
 				if(self.Menu.Combo.UseQObstructing:Value()) then
@@ -350,7 +389,7 @@ function Ezreal:FlushWTarget()
 			return
 		end
 
-		if(self.WTarget.time >= GameTimer()) then
+		if(self.WTarget.time < GameTimer()) then
 			self.WTarget = {}
 			return
 		end
@@ -358,7 +397,8 @@ function Ezreal:FlushWTarget()
 end
 
 function Ezreal:Combo()
-	if not (IsValid(myHero)) or myHero.isChanneling then return end
+	if not (IsValid(myHero)) then return end
+	if myHero.isChanneling then return end
 
 	if(Ready(_W)) then
 		local canCast = false
@@ -398,6 +438,41 @@ function Ezreal:Combo()
 			end
 		end
 
+		--If there is a valid W Target
+		if(self.WTarget) then
+			if(self.WTarget.hero and IsValid(self.WTarget.hero)) then
+				local tar = self.WTarget.hero
+				if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
+					local shouldCastNormal = true
+					local dist = GetDistance(myHero, tar)
+					if(self.Menu.Combo.UseQObstructing:Value()) then
+						if(myHero.levelData.lvl >= 11 and myHero:GetSpellData(_Q).cd < 2.5) then
+							shouldCastNormal = false
+						end
+					end
+
+					if(shouldCastNormal) then
+						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
+						local qDmg = self:GetRawAbilityDamage("Q")
+						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+
+						if(tar.health - qDmg < 0) and check then
+							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+						end
+						if check then return end
+					else
+						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
+						local qDmg = self:GetRawAbilityDamage("Q")
+						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+						if(tar.health - qDmg < 0) and check then
+							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+						end		
+						if check then return end
+					end
+				end
+			end
+		end
+	
 		for _, tar in ipairs(targets) do
 			if(IsValid(tar)) then
 				if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
@@ -413,18 +488,21 @@ function Ezreal:Combo()
 						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
 						local qDmg = self:GetRawAbilityDamage("Q")
 						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+
 						if(tar.health - qDmg < 0) and check then
 							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
-							return
 						end
+
+						if check then return end
 					else
 						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
 						local qDmg = self:GetRawAbilityDamage("Q")
 						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
 						if(tar.health - qDmg < 0) and check then
 							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
-							return
-						end			
+						end		
+						
+						if check then return end
 					end
 				end
 			end
@@ -497,8 +575,10 @@ function Ezreal:LastHit()
 				local hp = _G.SDK.HealthPrediction:GetPrediction(canonMinion, Q.Delay + (myHero.pos:DistanceTo(canonMinion.pos)/2000))
 				
 				if ((hp > 0) and (canonMinion.health - QDam <= 0)) then
-					Control.CastSpell(HK_Q, canonMinion)
-					return
+					if(canonMinion.pos:To2D().onScreen) then
+						Control.CastSpell(HK_Q, canonMinion.pos)
+						return
+					end
 				end
 			end
 		end
@@ -527,15 +607,19 @@ function Ezreal:LastHit()
 						if(minion.health - self:GetRawAbilityDamage("Q") < 0 and hp > 0) then
 							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, minion.pos, Q.Speed, Q.Delay, Q.Radius, {GGPrediction.COLLISION_MINION},  minion.networkID)
 							if(collisionCount == 0) then
-								Control.CastSpell(HK_Q, minion)
-								return
+								if(minion.pos:To2D().onScreen) then
+									Control.CastSpell(HK_Q, minion.pos)
+									return
+								end
 							end
 
 							if(collisionCount == 1) then
 								local frontCheck = (self:IsUnitInFront(minion, collisionObjects[1]) > -0.5)
 								if (GetDistance(collisionObjects[1], minion) <= Q.Radius + minion.boundingRadius) and frontCheck then
 									local castPos = self:AngleQPos(minion, collisionObjects[1], Q.Radius*0.85)
-									Control.CastSpell(HK_Q, castPos)
+									if(castPos:To2D().onScreen) then
+										Control.CastSpell(HK_Q, castPos)
+									end
 									return
 								end
 							end
@@ -627,7 +711,7 @@ function Ezreal:Clear()
 	if(self.Menu.Clear.UseWTower:Value()) then
 		if(Ready(_W)) then
 			local t = GetClosestEnemyTurret()
-			if(IsValid(t)) then
+			if(t and IsValid(t)) then
 				if(GetDistance(myHero.pos, t.pos) < _G.SDK.Data:GetAutoAttackRange(myHero)) then
 					Control.CastSpell(HK_W, t.pos)
 				end
@@ -1075,7 +1159,7 @@ end
 function Ezreal:KillSteal()
 	--Q
 	if(self.Menu.KillSteal.UseQ:Value()) then
-		if(Ready(_Q)) then
+		if(Ready(_Q) and not myHero.isChanneling) then
 			local enemies = GetEnemyHeroes(Q.Range)
 			if(#enemies > 0) then
 				for _, enemy in pairs (enemies) do
@@ -1085,8 +1169,10 @@ function Ezreal:KillSteal()
 							QDmg = CalcPhysicalDamage(myHero, enemy, QDmg)
 							if(enemy.health - QDmg < 0) then
 								local didCast = CastPredictedSpell({Hotkey = HK_Q, Target = enemy, SpellData = Q, maxCollision = 1, KillerPred = false, GGPred = true, UseHeroCollision = true})
+
 								if(didCast) then
 									self.RShootBuffer = GameTimer() + Q.Delay + (GetDistance(myHero, enemy)/Q.Speed)
+									return
 								end
 							end
 						end
@@ -1100,8 +1186,10 @@ end
 
 function Ezreal:GetWTarget(enemies)
 	for _, enemy in pairs(enemies) do
-		if(HasBuff(enemy, "ezrealwattach") and IsValid(enemy)) then
-			return enemy
+		if(IsValid(enemy)) then
+			if(HasBuff(enemy, "ezrealwattach")) then
+				return enemy
+			end
 		end
 	end
 
