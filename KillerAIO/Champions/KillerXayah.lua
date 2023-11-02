@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.00
+scriptVersion = 1.01
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Xayah will exit.")
@@ -58,7 +58,10 @@ function Xayah:__init()
 	self:UpdateGoSMenuAutoLevel()
 end
 
-function Xayah:LoadMenu()                  	
+function Xayah:LoadMenu()
+	
+	self.Menu:MenuElement({id = "MasterEToggle", name = "Master Toggle E", key = 20, toggle = true})
+
 	-- Combo
 	self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
 	self.Menu.Combo:MenuElement({id = "UseQ", name = "Use Q", value = true})
@@ -110,6 +113,7 @@ function Xayah:LoadMenu()
 	-- Auto E
 	self.Menu:MenuElement({id = "AutoE", name = "Auto E", type = MENU})
 	self.Menu.AutoE:MenuElement({id = "KillSteal", name = "Kill Steal", value = true})
+	self.Menu.AutoE:MenuElement({id = "KillStealOverkill", name = "Kill Steal Overkill Protection", value = true})
 	self.Menu.AutoE:MenuElement({name = "------------", type = SPACE})
 	self.Menu.AutoE:MenuElement({id = "AutoEOnXFeathers", name = "Use if X Feathers Hit Target", value = true})
 	self.Menu.AutoE:MenuElement({id = "AutoEOnXFeathersCount", name = "Feather Count: ", value = 5, min = 1, max = 8, step = 1, identifier = " Feathers"})
@@ -141,6 +145,7 @@ function Xayah:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "Feathers", name = "Feather Drawings", type = MENU})
 	self.Menu.Drawings:MenuElement({id = "DrawQ", name = "Draw Q Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawERoot", name = "Draw E Root Status", value = true})
+	self.Menu.Drawings:MenuElement({id = "DrawMasterEStatus", name = "Draw Master E Status", value = true})
 
 
 	--Feathers
@@ -443,28 +448,30 @@ function Xayah:Combo()
 	end
 
 	if(self.Menu.Combo.UseERoot:Value() and Ready(_E)) then
-		local tar = GetTarget(Q.Range + 100)
-		if(IsValid(tar)) then
+		if(self.Menu.MasterEToggle:Value()) then
+			local tar = GetTarget(Q.Range + 100)
+			if(IsValid(tar)) then
 
-			local useMeleeSpacing = false 
-			if(self.Menu.Combo.UseERootMelee:Value()) then
-				if(tar.range <= 200) then
-					useMeleeSpacing = true
+				local useMeleeSpacing = false 
+				if(self.Menu.Combo.UseERootMelee:Value()) then
+					if(tar.range <= 200) then
+						useMeleeSpacing = true
+					end
 				end
-			end
 
-			if(not useMeleeSpacing) then
-				local hits = self:GetTotalFeathersHit(tar)
-				if(hits >= 3) then
-					Control.CastSpell(HK_E)
-					return
-				end
-			else
-				local hits = self:GetTotalFeathersHit(tar)
-				if(hits >= 3) then
-					if(GetDistance(tar, myHero) <= tar.range + myHero.boundingRadius + 100) or self:IsUnitFleeing(tar) or GetDistance(tar, myHero) >= _G.SDK.Data:GetAutoAttackRange(myHero) + 100 then
+				if(not useMeleeSpacing) then
+					local hits = self:GetTotalFeathersHit(tar)
+					if(hits >= 3) then
 						Control.CastSpell(HK_E)
 						return
+					end
+				else
+					local hits = self:GetTotalFeathersHit(tar)
+					if(hits >= 3) then
+						if(GetDistance(tar, myHero) <= tar.range + myHero.boundingRadius + 100) or self:IsUnitFleeing(tar) or GetDistance(tar, myHero) >= _G.SDK.Data:GetAutoAttackRange(myHero) + 100 then
+							Control.CastSpell(HK_E)
+							return
+						end
 					end
 				end
 			end
@@ -544,11 +551,13 @@ function Xayah:Harass()
 	end
 
 	if(self.Menu.Harass.UseERoot:Value() and Ready(_E)) then
-		local tar = GetTarget(Q.Range)
-		if(IsValid(tar)) then
-			local hits = self:GetTotalFeathersHit(tar)
-			if(hits >= 3) then
-				Control.CastSpell(HK_E)
+		if(self.Menu.MasterEToggle:Value()) then
+			local tar = GetTarget(Q.Range)
+			if(IsValid(tar)) then
+				local hits = self:GetTotalFeathersHit(tar)
+				if(hits >= 3) then
+					Control.CastSpell(HK_E)
+				end
 			end
 		end
 	end
@@ -651,32 +660,34 @@ function Xayah:JungleClear(minions)
 	end
 
 	if(self.Menu.Clear.Jungle.UseE:Value() and Ready(_E)) then
-		for _, minion in pairs(minions) do
+		if(self.Menu.MasterEToggle:Value()) then
+			for _, minion in pairs(minions) do
 
-			local shouldKS = false
-			if (self.Menu.Clear.Jungle.UseESteal:Value()) then
-				if(jungleWMonsters[minion.charName]==1) then
-					shouldKS = true
+				local shouldKS = false
+				if (self.Menu.Clear.Jungle.UseESteal:Value()) then
+					if(jungleWMonsters[minion.charName]==1) then
+						shouldKS = true
+					end
 				end
-			end
-			if not shouldKS then
-				local EDmg = self:CalculateEDamage(minion)
-				local AADmg = myHero.totalDamage
-				EDmg = CalcPhysicalDamage(myHero, minion, EDmg)
-				AADmg = CalcPhysicalDamage(myHero, minion, AADmg)
-				if(minion.health - EDmg - AADmg < 0 or ((EDmg+AADmg)/minion.maxHealth >= 0.4 and self:HasNavori())) then
-					Control.CastSpell(HK_E)
-				end
-			else
-				local EDmg, Hits = self:CalculateEDamage(minion)
-				EDmg = CalcPhysicalDamage(myHero, minion, EDmg)
+				if not shouldKS then
+					local EDmg = self:CalculateEDamage(minion)
+					local AADmg = myHero.totalDamage
+					EDmg = CalcPhysicalDamage(myHero, minion, EDmg)
+					AADmg = CalcPhysicalDamage(myHero, minion, AADmg)
+					if(minion.health - EDmg - AADmg < 0 or ((EDmg+AADmg)/minion.maxHealth >= 0.4 and self:HasNavori())) then
+						Control.CastSpell(HK_E)
+					end
+				else
+					local EDmg, Hits = self:CalculateEDamage(minion)
+					EDmg = CalcPhysicalDamage(myHero, minion, EDmg)
 
-				if(minion.charName ~= "SRU_Baron" or minion.charName ~= "SRU_RiftHerald") then
-					EDmg = EDmg * (1 - self:CalculateDragonMitigation())
-				end
+					if(minion.charName ~= "SRU_Baron" or minion.charName ~= "SRU_RiftHerald") then
+						EDmg = EDmg * (1 - self:CalculateDragonMitigation())
+					end
 
-				if(minion.health - EDmg < 0) or (minion.health/minion.maxHealth>= 0.6 and Hits >= 5) then
-					Control.CastSpell(HK_E)
+					if(minion.health - EDmg < 0) or (minion.health/minion.maxHealth>= 0.6 and Hits >= 5) then
+						Control.CastSpell(HK_E)
+					end
 				end
 			end
 		end
@@ -709,37 +720,41 @@ function Xayah:LaneClear(minions)
 	if(shouldUseClearSkills == false) then return end
 
 	if(self.Menu.Clear.Lane.UseEClusters:Value()) then
-		if(Ready(_E) and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.Lane.EMana:Value() / 100)) then
-			local killCount = 0
-			local requiredKillCount = self.Menu.Clear.Lane.UseEClusters:Value()
-			if(#minions >= requiredKillCount) then
-				for _, minion in ipairs(minions) do
-					local EDmg = self:CalculateEDamage(minion)
-					EDmg = EDmg * 0.5
-					if(minion.health - EDmg < 0) then
-						killCount = killCount + 1
+		if(self.Menu.MasterEToggle:Value()) then
+			if(Ready(_E) and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.Lane.EMana:Value() / 100)) then
+				local killCount = 0
+				local requiredKillCount = self.Menu.Clear.Lane.UseEClusters:Value()
+				if(#minions >= requiredKillCount) then
+					for _, minion in ipairs(minions) do
+						local EDmg = self:CalculateEDamage(minion)
+						EDmg = EDmg * 0.5
+						if(minion.health - EDmg < 0) then
+							killCount = killCount + 1
+						end
 					end
-				end
 
-				if killCount >= requiredKillCount then
-					Control.CastSpell(HK_E)
-					return
+					if killCount >= requiredKillCount then
+						Control.CastSpell(HK_E)
+						return
+					end
 				end
 			end
 		end
 	end
 
 	if(self.Menu.Clear.Lane.UseECanon:Value()) then
-		if (Ready(_E) and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.Lane.EMana:Value() / 100)) then
-			local canonMinion = GetCanonMinion(minions)
-			
-			if(canonMinion) and IsValid(canonMinion) then
-				local EDmg = self:CalculateEDamage(canonMinion)
-				EDmg = EDmg * 0.5
+		if(self.Menu.MasterEToggle:Value()) then
+			if (Ready(_E) and (myHero.mana / myHero.maxMana) >= (self.Menu.Clear.Lane.EMana:Value() / 100)) then
+				local canonMinion = GetCanonMinion(minions)
 				
-				if canonMinion.health + 30 - EDmg <= 0 then
-					Control.CastSpell(HK_E)
-					return
+				if(canonMinion) and IsValid(canonMinion) then
+					local EDmg = self:CalculateEDamage(canonMinion)
+					EDmg = EDmg * 0.5
+					
+					if canonMinion.health + 30 - EDmg <= 0 then
+						Control.CastSpell(HK_E)
+						return
+					end
 				end
 			end
 		end
@@ -801,7 +816,7 @@ function Xayah:IsUnitFleeing(unit)
 end
 
 function Xayah:AutoE()
-
+	if(self.Menu.MasterEToggle:Value() == false) then return end
 	local function Killsteal()
 		if(Ready(_E)) then
 			local enemies = GetEnemyHeroes(1600)
@@ -809,17 +824,47 @@ function Xayah:AutoE()
 				for _, enemy in pairs (enemies) do
 					if(enemy and IsValid(enemy)) then
 						if((CantKill(enemy, true, true, false)==false)) then
-							local EDmg = self:CalculateEDamage(enemy)
+							local EDmg, Hits = self:CalculateEDamage(enemy)
 							local AADmg = myHero.totalDamage
 							EDmg = CalcPhysicalDamage(myHero, enemy, EDmg)
 							AADmg = CalcPhysicalDamage(myHero, enemy, AADmg)
-							if(enemy.health - EDmg < 0) then
-								Control.CastSpell(HK_E)
-							else
-								if(GetDistance(myHero, enemy) < _G.SDK.Data:GetAutoAttackRange(myHero, enemy)) then
-									if(enemy.health - EDmg - AADmg < 0) then
-										Control.CastSpell(HK_E)
-										return
+
+							local shouldUseE = true
+
+							if(self.Menu.AutoE.KillStealOverkill:Value()) then
+								if(#enemies > 1) then
+									if(GetDistance(myHero, enemy) < _G.SDK.Data:GetAutoAttackRange(myHero, enemy)) then
+										--Dont waste E if we can just AA
+										if(enemy.health - AADmg < 0) then
+											shouldUseE = false
+										end
+
+										--Dont waste on low feather hits
+										if Hits <= 2 then
+											shouldUseE = false
+										end
+									end
+
+									if(#enemies >= 3) then
+										-- Only KS distant targets if at least 3 feathers hit
+										if(GetDistance(myHero, enemy) > _G.SDK.Data:GetAutoAttackRange(myHero, enemy) + 75) then
+											if Hits < 3 then
+												shouldUseE = false
+											end	
+										end
+									end
+								end
+							end
+
+							if(shouldUseE) then
+								if(enemy.health - EDmg < 0) then
+									Control.CastSpell(HK_E)
+								else
+									if(GetDistance(myHero, enemy) < _G.SDK.Data:GetAutoAttackRange(myHero, enemy)) then
+										if(enemy.health - EDmg - AADmg < 0) then
+											Control.CastSpell(HK_E)
+											return
+										end
 									end
 								end
 							end
@@ -1150,6 +1195,16 @@ function Xayah:Draw()
 			DrawText("[E Rooting Enabled]", fontSize, Vector(pos), DrawColor(255, 80, 255, 80))
 		else
 			DrawText("[E Rooting Disabled]", fontSize, Vector(pos), DrawColor(155, 255, 80, 80))
+		end
+	end
+
+	if(self.Menu.Drawings.DrawMasterEStatus:Value()) then
+		local fontSize = 17
+		local pos = {x = myHero.pos:To2D().x - fontSize - 20, y = myHero.pos:To2D().y + 95}
+		if(self.Menu.MasterEToggle:Value()) then
+			DrawText("[E Enabled]", fontSize, Vector(pos), DrawColor(255, 80, 235, 140))
+		else
+			DrawText("[E Disabled]", fontSize, Vector(pos), DrawColor(155, 255, 80, 80))
 		end
 	end
 
