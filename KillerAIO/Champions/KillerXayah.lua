@@ -14,7 +14,7 @@ end
 
 -- [ AutoUpdate ]
 
---UpdateMyHeroScript()
+UpdateMyHeroScript()
 
 ----------------------------------------------------
 --|                Champion               		|--
