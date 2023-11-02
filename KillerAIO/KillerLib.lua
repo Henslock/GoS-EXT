@@ -4,7 +4,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.62
+local kLibVersion = 2.63
 
 -- [ AutoUpdate ]
 do
@@ -2237,6 +2237,59 @@ function GetPredictionPrecise(target, spell_speed, casting_delay, spell_radius, 
 	return Vector(adjustPosition(interception_point, t)), interception_point
 end
 
+
+-- A variant of CastSpell that checks if spells are on screen
+function CastSpell(key, a, b, c)
+
+	local function GetControlPos(a, b, c)
+		local pos
+		if a and b and c then
+			pos = { x = a, y = b, z = c }
+		elseif a and b then
+			pos = { x = a, y = b }
+		elseif a then
+			pos = a.pos or a
+		end
+		return pos
+	end
+
+	local function CastKey(key)
+		if key == MOUSEEVENTF_RIGHTDOWN then
+			Control.KeyDown(HK_TCO)
+			Control.mouse_event(MOUSEEVENTF_RIGHTDOWN)
+			Control.mouse_event(MOUSEEVENTF_RIGHTUP)
+		else
+		Control.KeyDown(HK_TCO)
+			Control.KeyDown(key)
+			Control.KeyUp(key)
+	
+		end
+	end
+
+	local pos = GetControlPos(a, b, c)
+	if pos then
+		if _G.SDK.Cursor.Step > 0 then
+			return false
+		end
+
+		--Off-screen casting fix
+		if not (Vector(pos):To2D().onScreen) then return false end
+		
+		if not b and a.pos then
+			_G.SDK.Cursor:Add(key, a)
+		else
+			_G.SDK.Cursor:Add(key, pos)
+		end
+		return true
+	end
+
+	if not a then
+		CastKey(key)
+		return true
+	end
+
+	return false
+end
 
 function CastPredictedSpell(args)
 
