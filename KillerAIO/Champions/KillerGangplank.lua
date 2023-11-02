@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.19
+scriptVersion = 1.20
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Gangplank will exit.")
@@ -222,6 +222,8 @@ Gangplank.Ping = 0
 Gangplank.BaseAS = 0.658
 Gangplank.ASRatio = 0.69
 
+Gangplank.PreviewRRangeTimeBuffer = GameTimer()
+
 function Gangplank:__init()
 	self:LoadMenu()
 
@@ -312,6 +314,12 @@ function Gangplank:LoadMenu()
 	self.Menu:MenuElement({id = "AutoRMenu", name = "Auto R", type = MENU})
 	self.Menu.AutoRMenu:MenuElement({id = "UseR", name = "Use R", value = true})
 	self.Menu.AutoRMenu:MenuElement({id = "OnScreenCheck", name = "Require Target to be On Screen", value = true})
+	self.Menu.AutoRMenu:MenuElement({id = "MaxOffscreenDist", name = "Max Offscreen Distance to Cast", value = 3000, min = 1000, max = 10000, step = 100, 
+	callback = function ()
+		if(self.Menu.AutoRMenu.MaxOffscreenDist) then
+			self.PreviewRRangeTimeBuffer = GameTimer() + 0.5
+		end
+	end})
 	self.Menu.AutoRMenu:MenuElement({id = "RExecute", name = "Use R to Execute (Collectors Support)", value = true})
 	self.Menu.AutoRMenu:MenuElement({id = "RTeamFights", name = "Use R in Team Fights", value = true, tooltip = "At least 3 enemies, with 1 ally near you!"})
 	
@@ -1071,7 +1079,7 @@ function Gangplank:QBarrelTick()
 
 	if(self.barrelQTarget and self:IsChannelingQ() == false) then
 		Control.KeyUp(self.ComboKey)
-		Control.CastSpell(HK_Q, self.barrelQTarget)
+		CastSpell(HK_Q, self.barrelQTarget)
 		Control.KeyDown(self.ComboKey)
 	else
 		Control.KeyDown(self.ComboKey)
@@ -1514,7 +1522,7 @@ function Gangplank:Combo()
 									forwardVec = Vector(forwardVec.x, forwardVec.y, forwardVec.z - 275)
 								end
 								
-								Control.CastSpell(HK_E, forwardVec)
+								CastSpell(HK_E, forwardVec)
 								return
 							end
 						end
@@ -1540,7 +1548,7 @@ function Gangplank:Combo()
 					end
 					if(#proximityBarrels == 0 and #nearbyBarrels == 0) and myHero.levelData.lvl >= 13 then --This is best used at level 13 with faster barrels
 						if(GetDistance(myHero, bestPos) < Q.Range + 150) then 
-							Control.CastSpell(HK_E, bestPos)
+							CastSpell(HK_E, bestPos)
 						end
 					end
 				end
@@ -1557,7 +1565,7 @@ function Gangplank:Combo()
 						local EPrediction, isExtended = GetExtendedSpellPrediction(tar, E)
 						if EPrediction:CanHit(HITCHANCE_NORMAL) then
 							local castVec = Vector(EPrediction.CastPosition.x, myHero.pos.y, EPrediction.CastPosition.z)
-							Control.CastSpell(HK_E, castVec)
+							CastSpell(HK_E, castVec)
 							return
 						end
 					end
@@ -1586,7 +1594,7 @@ function Gangplank:Combo()
 						if(#proximityBarrels == 0) and isOverlapping == false then
 							local wallCheck = CheckWall(myHero.pos, tar.pos, 1000)
 							if(wallCheck == false) then
-								Control.CastSpell(HK_E, maxRange)
+								CastSpell(HK_E, maxRange)
 								gameTick = GameTimer() + 0.2
 								return
 							end
@@ -1640,14 +1648,14 @@ function Gangplank:Combo()
 									local placementVec = barrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
 									local safeRadius = self.Menu.InnerRingPred:Value()/100
 									if(GetDistance(placementVec, myHero) <= E.Range -10) and (GetDistance(placementVec, castPos) <= E.Radius*safeRadius) then
-										Control.CastSpell(HK_E, placementVec)
+										CastSpell(HK_E, placementVec)
 										return
 									else
 										--Try a closer range in case our extended one goes too far
 										distanceToPlacement = math.min(distCheck, (E.Radius - 7.5)*2)
 										placementVec = barrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
 										if(GetDistance(placementVec, myHero) <= E.Range -10) and (GetDistance(placementVec, castPos) <= E.Radius*safeRadius) then
-											Control.CastSpell(HK_E, placementVec)
+											CastSpell(HK_E, placementVec)
 											return
 										end
 									end
@@ -1699,7 +1707,7 @@ function Gangplank:Combo()
 									local placementVec = barrel.barrelObj.pos:Extended(castPos, distanceToPlacement)
 									local safeRadius = self.Menu.InnerRingPred:Value()/100
 									if(GetDistance(placementVec, myHero) <= E.Range -10) and (GetDistance(placementVec, castPos) <= E.Radius*safeRadius) then
-										Control.CastSpell(HK_E, placementVec)
+										CastSpell(HK_E, placementVec)
 										return
 									end
 								end
@@ -1775,7 +1783,7 @@ function Gangplank:Combo()
 		end
 	end
 	
-	if(self.Menu.Combo.UseQ:Value() and Ready(_Q) and holdingQ == false) then
+	if(self.Menu.Combo.UseQ:Value() and Ready(_Q) and holdingQ == false) and not myHero.isChanneling then
 		if(tarQRange and IsValid(tarQRange)) then
 			local passiveCheck = true
 			if(self:HasPassive() and GetDistance(myHero, tarQRange) <= self.AARange + 75) then
@@ -1783,7 +1791,7 @@ function Gangplank:Combo()
 			end
 			
 			if(GetDistance(myHero, tarQRange) <= Q.Range -15) and passiveCheck and CantKill(tarQRange, false, false, true) == false then
-				Control.CastSpell(HK_Q, tarQRange)
+				CastSpell(HK_Q, tarQRange)
 				return
 			end
 		end
@@ -1794,6 +1802,7 @@ end
 function Gangplank:AutoR()
 	if(gameTick > GameTimer()) then return end
 	if not (myHero.valid or IsValid(myHero)) then return end
+	if myHero.isChanneling then return end
 	
 	if(Ready(_R)) then
 		for _, enemy in pairs (Enemies) do
@@ -1827,24 +1836,29 @@ function Gangplank:AutoR()
 					end
 					
 					if(shouldCast) then
+						
 						local RWaveDmg = self:GetRDamagePerWave()
 						local RDmg = CalcMagicalDamage(myHero, enemy, RWaveDmg) * 3
 						if(self:HasCollector()) then
-							if(enemy.health - RWaveDmg <= 0) then
+							if(enemy.health - RDmg <= enemy.maxHealth*0.05) then
 								if(self.Menu.AutoRMenu.OnScreenCheck:Value()) then
 									Control.CastSpell(HK_R, enemy)
 								else
-									local enemyPos = enemy.pos:ToMM()
-									Control.CastSpell(HK_R, enemyPos.x, enemyPos.y)
+									if(GetDistance(myHero, enemy) <= self.Menu.AutoRMenu.MaxOffscreenDist:Value()) then
+										local enemyPos = enemy.pos:ToMM()
+										Control.CastSpell(HK_R, enemyPos.x, enemyPos.y)
+									end
 								end
 							end
 						else
-							if(enemy.health - RWaveDmg <= enemy.maxHealth*0.05) then
+							if(enemy.health - RDmg <= 0) then
 								if(self.Menu.AutoRMenu.OnScreenCheck:Value()) then
 									Control.CastSpell(HK_R, enemy)
 								else
-									local enemyPos = enemy.pos:ToMM()
-									Control.CastSpell(HK_R, enemyPos.x, enemyPos.y)
+									if(GetDistance(myHero, enemy) <= self.Menu.AutoRMenu.MaxOffscreenDist:Value()) then
+										local enemyPos = enemy.pos:ToMM()
+										Control.CastSpell(HK_R, enemyPos.x, enemyPos.y)
+									end
 								end
 							end			
 						end
@@ -2618,6 +2632,7 @@ end
 
 function Gangplank:KillSteal()
 	if(gameTick > GameTimer()) then return end
+	if(myHero.isChanneling) then return end
 
 	if(self.Menu.KillSteal.UseQIgnite:Value()) then
 		if(Ready(_Q) and HasIgnite()) then
@@ -2969,6 +2984,10 @@ function Gangplank:Draw()
 				DrawText(barrel.networkID, 18, barrel.pos:To2D() + Vector(0, 20, 0))
 			end
 		end
+	end
+
+	if(self.PreviewRRangeTimeBuffer > GameTimer()) then
+		Draw.CircleMinimap(myHero.pos, self.Menu.AutoRMenu.MaxOffscreenDist:Value(), 3)
 	end
 end
 
