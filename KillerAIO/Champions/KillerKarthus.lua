@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.18
+scriptVersion = 1.19
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -44,13 +44,8 @@ function Karthus:__init()
 	self:LoadMenu()
 	self:LoadUltTrackerData()
 
-	table.insert(_G.SDK.OnTick, function()
-		self:Tick()
-	end)
-
-	table.insert(_G.SDK.OnDraw, function()
-		self:Draw()
-	end)
+	Callback.Add("Tick", function() self:Tick() end)
+	Callback.Add("Draw", function() self:Draw() end)
 
 	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
 		self:OnWndMsg(msg, wParam)
