@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.20
+scriptVersion = 1.21
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
