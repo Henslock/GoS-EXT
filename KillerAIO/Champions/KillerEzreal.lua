@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.10
+scriptVersion = 1.11
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -47,18 +47,6 @@ function Ezreal:__init()
 
 	Callback.Add("Tick", function() self:Tick() end)
 	Callback.Add("Draw", function() self:Draw() end)
-	
-	--[[
-	table.insert(_G.SDK.OnTick, function()
-		if not _G.SDK.IsRecalling(myHero) then
-			self:Tick()
-		end
-	end)
-
-	table.insert(_G.SDK.OnDraw, function()
-		self:Draw()
-	end)
-	--]]
 
 	_G.SDK.Orbwalker:OnPreAttack(function(...) Ezreal:OnPreAttack(...) end)
 	_G.SDK.Orbwalker:OnPostAttack(function(...) Ezreal:OnPostAttack(...) end)
@@ -88,7 +76,7 @@ function Ezreal:LoadMenu()
 	self.Menu.LastHit:MenuElement({id = "UseQRange", name = "Use Q to Hit Out of Range", value = true})
 	self.Menu.LastHit:MenuElement({id = "UseQTower", name = "Use Q to Kill Under Tower", value = true})
 	self.Menu.LastHit:MenuElement({id = "UseQLastHit", name = "Use Q to Last Hit in AA Range", value = true})
-	self.Menu.LastHit:MenuElement({id = "MinimumManaQ", name = "Minimum Mana to Q", value = 20, min = 0, max = 100, step = 5, identifier = "%"})
+	self.Menu.LastHit:MenuElement({id = "MinimumManaQ", name = "Minimum Mana to Q", value = 35, min = 0, max = 100, step = 5, identifier = "%"})
 
 	-- Clear
 	self.Menu:MenuElement({id = "Clear", name = "Clear", type = MENU})
@@ -100,8 +88,9 @@ function Ezreal:LoadMenu()
 	self.Menu.Clear.Lane:MenuElement({id = "UseQCanon", name = "Use Q on Cannon", value = true})
 	self.Menu.Clear.Lane:MenuElement({id = "UseQClear", name = "Use Q to Clear", value = true})
 	self.Menu.Clear.Lane:MenuElement({id = "SpamQSupers", name = "Spam Q on Super Minions", value = true})
+	self.Menu.Clear.Lane:MenuElement({id = "SpamQLateGame", name = "Spam Q After Level: ", value = 14, min = 1, max = 18, step = 1})
 	self.Menu.Clear.Lane:MenuElement({id = "ManaConservation", name = "Early-Game Mana Conservation", value = true})
-	self.Menu.Clear.Lane:MenuElement({id = "MinimumManaQ", name = "Minimum Mana to Q", value = 25, min = 0, max = 100, step = 5, identifier = "%"})
+	self.Menu.Clear.Lane:MenuElement({id = "MinimumManaQ", name = "Minimum Mana to Q", value = 35, min = 0, max = 100, step = 5, identifier = "%"})
 
 	-- Jungle Clear
 	self.Menu.Clear.Jungle:MenuElement({id = "UseQ", name = "Use Q", value = true})
@@ -585,7 +574,7 @@ function Ezreal:LastHit()
 	end
 
 	if(self.Menu.LastHit.UseQLastHit:Value() and Ready(_Q)) then
-		local canLastHit = myHero.levelData.lvl >= 6 or self:HasManaItem() or (myHero.mana/myHero.maxMana >= 0.5)
+		local canLastHit = myHero.levelData.lvl >= 8 or (self:HasManaItem() and (myHero.mana/myHero.maxMana >= 0.5)) or (myHero.mana/myHero.maxMana >= 0.8)
 		if(canLastHit) then
 			for _, minion in pairs(minions) do
 				if(minion and IsValid(minion)) then
@@ -608,7 +597,7 @@ function Ezreal:LastHit()
 							local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, minion.pos, Q.Speed, Q.Delay, Q.Radius, {GGPrediction.COLLISION_MINION},  minion.networkID)
 							if(collisionCount == 0) then
 								if(minion.pos:To2D().onScreen) then
-									Control.CastSpell(HK_Q, minion.pos)
+									CastSpell(HK_Q, minion.pos)
 									return
 								end
 							end
@@ -618,9 +607,9 @@ function Ezreal:LastHit()
 								if (GetDistance(collisionObjects[1], minion) <= Q.Radius + minion.boundingRadius) and frontCheck then
 									local castPos = self:AngleQPos(minion, collisionObjects[1], Q.Radius*0.85)
 									if(castPos:To2D().onScreen) then
-										Control.CastSpell(HK_Q, castPos)
+										CastSpell(HK_Q, castPos)
+										return
 									end
-									return
 								end
 							end
 						end
@@ -742,7 +731,7 @@ function Ezreal:JungleClear(minions)
 				qPred:GetPrediction(minion, myHero)
 				if qPred.CastPosition and qPred:CanHit(HITCHANCE_NORMAL) then
 					if Vector(qPred.CastPosition):To2D().onScreen then
-						Control.CastSpell(HK_Q, qPred.CastPosition)
+						CastSpell(HK_Q, qPred.CastPosition)
 						break
 					end
 				end	
@@ -757,7 +746,7 @@ function Ezreal:JungleClear(minions)
 				wPred:GetPrediction(minion, myHero)
 				if wPred.CastPosition and wPred:CanHit(HITCHANCE_NORMAL) then
 					if Vector(wPred.CastPosition):To2D().onScreen then
-						Control.CastSpell(HK_W, wPred.CastPosition)
+						CastSpell(HK_W, wPred.CastPosition)
 						break
 					end
 				end	
@@ -785,7 +774,7 @@ function Ezreal:LaneClear(minions)
 			It's also fine to start using Q once we have a mana item like tear.
 			We also will want to use Q to clear minions that we can't reach under the enemy tower.
 		]]
-		if(self:HasManaItem() == false) then
+		if not (self:HasManaItem()) then
 			earlyManaConservationCheck = true
 		end
 
@@ -805,7 +794,7 @@ function Ezreal:LaneClear(minions)
 				local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, canonMinion.pos, Q.Speed, Q.Delay, Q.Radius, {GGPrediction.COLLISION_MINION},  canonMinion.networkID)
 				if(collisionCount == 0) then
 					if _G.SDK.Cursor.Step == 0 and canonMinion.pos:To2D().onScreen then
-						Control.CastSpell(HK_Q, canonMinion.pos)
+						CastSpell(HK_Q, canonMinion.pos)
 						return
 					end
 				end
@@ -834,13 +823,13 @@ function Ezreal:LaneClear(minions)
 						--Check if its under a tower:
 						if(IsUnderTurret(minion) or IsUnderFriendlyTurret(minion)) then
 							if _G.SDK.Cursor.Step == 0 and minion.pos:To2D().onScreen then
-								Control.CastSpell(HK_Q, minion.pos)
+								CastSpell(HK_Q, minion.pos)
 								return
 							end
 						else
 							if not earlyManaConservationCheck then
 								if _G.SDK.Cursor.Step == 0 and minion.pos:To2D().onScreen then
-									Control.CastSpell(HK_Q, minion.pos)
+									CastSpell(HK_Q, minion.pos)
 									return
 								end
 							end
@@ -854,13 +843,13 @@ function Ezreal:LaneClear(minions)
 							--Check if its under a tower:
 							if(IsUnderTurret(minion) or IsUnderFriendlyTurret(minion)) then
 								if _G.SDK.Cursor.Step == 0 and castPos:To2D().onScreen then
-									Control.CastSpell(HK_Q, castPos)
+									CastSpell(HK_Q, castPos)
 									return
 								end
 							else
 								if not earlyManaConservationCheck then
 									if _G.SDK.Cursor.Step == 0 and castPos:To2D().onScreen then
-										Control.CastSpell(HK_Q, castPos)
+										CastSpell(HK_Q, castPos)
 										return
 									end
 								end
@@ -881,13 +870,13 @@ function Ezreal:LaneClear(minions)
 						--Check if its under a tower:
 						if(IsUnderTurret(minion) or IsUnderFriendlyTurret(minion)) then
 							if _G.SDK.Cursor.Step == 0 then
-								Control.CastSpell(HK_Q, minion)
+								CastSpell(HK_Q, minion)
 								return
 							end
 						else
 							if not earlyManaConservationCheck then
 								if _G.SDK.Cursor.Step == 0 then
-									Control.CastSpell(HK_Q, minion)
+									CastSpell(HK_Q, minion)
 									return
 								end
 							end
@@ -897,6 +886,18 @@ function Ezreal:LaneClear(minions)
 			end
 		end
 	end
+
+	if(self.Menu.Clear.Lane.SpamQLateGame:Value() and Ready(_Q)) then
+		if(myHero.levelData.lvl >= self.Menu.Clear.Lane.SpamQLateGame:Value()) then
+			for _, minion in pairs(minions) do
+				if(GetDistance(myHero, minion) <= (Q.Range - 50)) then
+					CastSpell(HK_Q, minion.pos)
+					return
+				end
+			end
+		end
+	end
+
 end
 
 Ezreal.ShouldUseE = false
