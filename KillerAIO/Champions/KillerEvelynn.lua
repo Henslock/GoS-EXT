@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.08
+scriptVersion = 1.09
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Evelynn will exit.")
@@ -54,13 +54,8 @@ Evelynn.Menu:MenuElement({name = " ", drop = {"Version: " .. scriptVersion}})
 function Evelynn:__init()
 	self:LoadMenu()
 
-	table.insert(_G.SDK.OnTick, function()
-		self:Tick()
-	end)
-
-	table.insert(_G.SDK.OnDraw, function()
-		self:Draw()
-	end)
+	Callback.Add("Tick", function() self:Tick() end)
+	Callback.Add("Draw", function() self:Draw() end)
 
 	table.insert(_G.SDK.OnWndMsg, function(msg, wParam)
 		self:OnWndMsg(msg, wParam)
@@ -836,7 +831,7 @@ function Evelynn:DnBKillsteal()
 
 	if(monster) then
 		local isDragon = false
-		if(monster.charName == "SRU_Baron" or monster.charName == "SRU_RiftHerald") then
+		if(monster.charName ~= "SRU_Baron" or monster.charName ~= "SRU_RiftHerald") then
 			isDragon = true
 		end
 		local monsterExecuteHP = monster.maxHealth*0.3
