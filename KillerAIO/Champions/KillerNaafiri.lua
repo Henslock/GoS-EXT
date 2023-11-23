@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.12
+scriptVersion = 1.13
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Naafiri will exit.")
@@ -1234,12 +1234,12 @@ function Naafiri:GetRawAbilityDamage(spell)
 
 	if(spell == "E") then
 		if myHero:GetSpellData(_E).level == 0 then return 0 end
-		return ({100, 150, 200, 250, 300})[myHero:GetSpellData(_E).level] + (1.3 * myHero.bonusDamage)
+		return ({95, 140, 185, 230, 275})[myHero:GetSpellData(_E).level] + (1.3 * myHero.bonusDamage)
 	end
 
 	if(spell == "EFlurry") then
 		if myHero:GetSpellData(_E).level == 0 then return 0 end
-		return ({65, 100, 135, 170, 205})[myHero:GetSpellData(_E).level] + (0.8 * myHero.bonusDamage)
+		return ({60, 90, 120, 150, 180})[myHero:GetSpellData(_E).level] + (0.8 * myHero.bonusDamage)
 	end
 
 	return 0
