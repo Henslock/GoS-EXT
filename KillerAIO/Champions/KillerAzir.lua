@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.13
+scriptVersion = 1.14
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Azir will exit.")
@@ -1850,11 +1850,11 @@ local azirWBaseDamage = {
 	[11] = 7,
 	[12] = 12,
 	[13] = 17,
-	[14] = 32,
-	[15] = 47,
-	[16] = 62,
-	[17] = 77,
-	[18] = 92,
+	[14] = 29,
+	[15] = 41,
+	[16] = 53,
+	[17] = 65,
+	[18] = 77,
 }
 
 function Azir:GetRawAbilityDamage(spell)
@@ -1865,7 +1865,7 @@ function Azir:GetRawAbilityDamage(spell)
 	
 	if(spell == "W") then
 		if myHero:GetSpellData(_W).level == 0 then return 0 end
-		return ({50, 67, 84, 101, 118})[myHero:GetSpellData(_W).level] + (0.6 * myHero.ap) + azirWBaseDamage[myHero.levelData.lvl]
+		return ({50, 65, 80, 95, 110})[myHero:GetSpellData(_W).level] + (0.5 * myHero.ap) + azirWBaseDamage[myHero.levelData.lvl]
 	end
 
 	if(spell == "E") then
