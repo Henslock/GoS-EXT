@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.11
+scriptVersion = 1.13
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -28,8 +28,8 @@ local gameTick = GameTimer()
 
 -- GG PRED
 local Q = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 60, Speed = 2000}
-local W = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 80, Speed = 1900}
-local R = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 1, Range = 20000, Radius = 160, Speed = 2000}
+local W = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Range = 1100, Radius = 70, Speed = 2000}
+local R = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 1, Range = 20000, Radius = 155, Speed = 2000}
 
 --Main Menu
 Ezreal.Menu = MenuElement({type = MENU, id = "KillerEzreal", name = "Killer Ezreal", leftIcon=ChampIcon})
@@ -69,6 +69,7 @@ function Ezreal:LoadMenu()
 	-- Harass
 	self.Menu:MenuElement({id = "Harass", name = "Harass", type = MENU})
 	self.Menu.Harass:MenuElement({id = "UseQ", name = "Use Q", value = true})
+	self.Menu.Harass:MenuElement({id = "PrioW", name = "Prioritize W Target", value = true})
 
 	-- Last Hit
 	self.Menu:MenuElement({id = "LastHit", name = "Last Hit", type = MENU})
@@ -206,7 +207,7 @@ function Ezreal:Tick()
 	end
 
 	if(self.Menu.DisableInFountain:Value()) then
-		if(IsInFountain() or not myHero.alive) then
+		if(IsInFountain() or myHero.dead) then
 			_G.SDK.Orbwalker:SetMovement(false)
 		else
 			_G.SDK.Orbwalker:SetMovement(true)
@@ -416,8 +417,9 @@ function Ezreal:Combo()
 	end
 
 	if(self.Menu.Combo.UseQ:Value() and Ready(_Q)) then
-		local targets = GetTargets(Q.Range)
-		local wTars = GetEnemyHeroes(Q.Range)
+		local tar = GetTarget(_G.SDK.Data:GetAutoAttackRange(myHero))
+		local targets = GetTargets(Q.Range - 35)
+		local wTars = GetEnemyHeroes(Q.Range - 35)
 
 		if(#wTars > 1) then
 			local wTar = self:GetWTarget(wTars)
@@ -461,41 +463,50 @@ function Ezreal:Combo()
 				end
 			end
 		end
-	
-		for _, tar in ipairs(targets) do
-			if(IsValid(tar)) then
-				if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
-					local shouldCastNormal = true
-					local dist = GetDistance(myHero, tar)
-					if(self.Menu.Combo.UseQObstructing:Value()) then
-						if(myHero.levelData.lvl >= 11 and myHero:GetSpellData(_Q).cd < 2.5) then
-							shouldCastNormal = false
-						end
-					end
 
-					if(shouldCastNormal) then
-						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
-						local qDmg = self:GetRawAbilityDamage("Q")
-						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+		--We should not use Q on a distant target if there is a nearby target that is at lethal HP
+		local inAARangeCheck = false
+		if(IsValid(tar)) then
+			inAARangeCheck = true
+		end
 
-						if(tar.health - qDmg < 0) and check then
-							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+		if(not inAARangeCheck) then
+			for _, tar in ipairs(targets) do
+				if(IsValid(tar)) then
+					if(GetDistance(myHero, tar) > _G.SDK.Data:GetAutoAttackRange(myHero, tar)) then
+						local shouldCastNormal = true
+						local dist = GetDistance(myHero, tar)
+						if(self.Menu.Combo.UseQObstructing:Value()) then
+							if(myHero.levelData.lvl >= 11 and myHero:GetSpellData(_Q).cd < 2.5) then
+								shouldCastNormal = false
+							end
 						end
 
-						if check then return end
-					else
-						local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
-						local qDmg = self:GetRawAbilityDamage("Q")
-						qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
-						if(tar.health - qDmg < 0) and check then
-							self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
-						end		
-						
-						if check then return end
+						if(shouldCastNormal) then
+							local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 1, GGPred = false, KillerPred = true})
+							local qDmg = self:GetRawAbilityDamage("Q")
+							qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+
+							if(tar.health - qDmg < 0) and check then
+								self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+							end
+
+							if check then return end
+						else
+							local check = CastPredictedSpell({Hotkey = HK_Q, Target = tar, SpellData = Q, maxCollision = 2, GGPred = false, KillerPred = true})
+							local qDmg = self:GetRawAbilityDamage("Q")
+							qDmg = CalcPhysicalDamage(myHero, tar, qDmg)
+							if(tar.health - qDmg < 0) and check then
+								self.RShootBuffer = GameTimer() + Q.Delay + (dist/Q.Speed)
+							end		
+							
+							if check then return end
+						end
 					end
 				end
 			end
 		end
+
 	end
 end
 function Ezreal:Harass()
@@ -510,6 +521,13 @@ function Ezreal:Harass()
 			local wTar = self:GetWTarget(wTars)
 			if(wTar) then
 				tar = wTar
+			end
+		end
+
+		--If there is a valid W Target
+		if(self.WTarget) then
+			if(self.WTarget.hero and IsValid(self.WTarget.hero)) then
+				tar = self.WTarget.hero
 			end
 		end
 
@@ -1019,6 +1037,7 @@ function Ezreal:RLogic()
 				if(IsValid(enemy) and Vector(enemy.pos):To2D().onScreen) then
 					local RDmg = self:GetRawAbilityDamage("R")
 					RDmg = CalcMagicalDamage(myHero, enemy, RDmg)
+					--
 					if(enemy.health - RDmg < 0) and enemy.health > 5 and (GameTimer() > self.RShootBuffer) then
 						if((CantKill(enemy, true, true, false, true)==false)) then
 							if _G.SDK.Cursor.Step == 0 then
@@ -1131,7 +1150,24 @@ function Ezreal:AutoQHighHitchance()
 	end
 
 	if(Ready(_Q) and not IsUnderTurret(myHero)) then
-		local targets = GetTargets(Q.Range)
+		local targets = GetTargets(Q.Range-35)
+		local wTars = GetEnemyHeroes(Q.Range - 35)
+
+		if(#wTars > 1) then
+			local wTar = self:GetWTarget(wTars)
+
+			if(wTar and targets and targets[1]) then
+				targets[1] = wTar
+			end
+		end
+
+		--If there is a valid W Target
+		if(self.WTarget) then
+			if(self.WTarget.hero and IsValid(self.WTarget.hero)) then
+				targets[1] = self.WTarget.hero
+			end
+		end
+
 		if(targets) then
 			for _, target in ipairs(targets) do
 				if(IsValid(target)) then
