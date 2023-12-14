@@ -1,10 +1,10 @@
-require "DamageLib"
+--require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.63
+local kLibVersion = 2.64
 
 -- [ AutoUpdate ]
 do
@@ -909,11 +909,24 @@ end
 -- UTILITY FUNCTIONS --
 
 function LoadUnits()
+	--[[
 	for i = 1, GameHeroCount() do
 		local unit = GameHero(i); Units[i] = {unit = unit, spell = nil}
 		if unit.team ~= myHero.team then TableInsert(Enemies, unit)
 		elseif unit.team == myHero.team and unit ~= myHero then TableInsert(Allies, unit) end
 	end
+	--]]
+
+	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
+		local hero = args.unit
+		TableInsert(Enemies, hero)
+	end)
+
+	_G.SDK.ObjectManager:OnAllyHeroLoad(function(args)
+		local hero = args.unit
+		TableInsert(Allies, hero)
+	end)
+
 	for i = 1, Game.TurretCount() do
 		local turret = Game.Turret(i)
 		if turret and turret.isEnemy then TableInsert(Turrets, turret) end
@@ -948,7 +961,7 @@ end
 
 
 function IsValid(unit)
-    if (unit and unit.valid and unit.isTargetable and unit.alive and unit.visible and unit.networkID and unit.pathing and unit.health > 0) then
+    if (unit and unit.valid and unit.isTargetable and not unit.dead and unit.visible and unit.networkID and unit.pathing and unit.health > 0) then
         return true;
     end
     return false;
@@ -1001,6 +1014,9 @@ end
 function GetClosestUnitToCursor(units)
 	local closestUnit = nil
 	local closestDist = math.huge
+
+	if #units == 1 then return units[1] end
+
 	for i = 1, #units do
 		if(IsValid(units[i])) then
 			local point = units[i].pos
@@ -2298,6 +2314,8 @@ function CastPredictedSpell(args)
 	local SpellData = args.SpellData
 	local extendedCheck = args.ExtendedCheck or false
 	local maxCollision = args.maxCollision or 0
+	local splashCollision = args.CheckSplashCollision or false
+	local splashCollisionRadius = args.SplashCollisionRadius or 0
 	local useHeroCollision = args.UseHeroCollision or false
 	local collisionRadiusOverride = args.collisionRadiusOverride or SpellData.Radius or 0
 	local ignoreUnkillable = args.IgnoreUnkillable ~= false
@@ -2357,6 +2375,21 @@ function CastPredictedSpell(args)
 			local isWall, collisionObjects, collisionCount = GGPrediction:GetCollision(myHero.pos, pos, SpellData.Speed, SpellData.Delay, collisionRadiusOverride, collisionTypes, target.networkID)
 			if(collisionCount < maxCollision) then
 				return CastSpell(hotkey, pos)
+			else
+				if(splashCollision) then
+					local shouldSplash = true
+					for _, obj in ipairs(collisionObjects) do
+						local boundingRadiusCheck = obj.pos:Extended(myHero.pos, obj.boundingRadius)
+						if(GetDistance(pos, boundingRadiusCheck) > splashCollisionRadius) then
+							shouldSplash = false
+							break
+						end
+					end
+
+					if shouldSplash then
+						return CastSpell(hotkey, pos)
+					end
+				end
 			end
 		else    
 			return CastSpell(hotkey, pos)
