@@ -1,11 +1,10 @@
-require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.13
+scriptVersion = 1.14
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Ezreal will exit.")
@@ -921,6 +920,10 @@ end
 Ezreal.ShouldUseE = false
 function Ezreal:ELogic()
 	local timer = GetTickCount()
+
+	if myHero.dead then self.ShouldUseE = false; return end
+	if IsInFountain() then self.ShouldUseE = false; return end
+
 	if self.LastE and timer < self.LastE + 1000 then
 		return
 	end
