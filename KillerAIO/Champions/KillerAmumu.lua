@@ -1,11 +1,10 @@
-require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.06
+scriptVersion = 1.08
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Amumu will exit.")
@@ -112,9 +111,65 @@ function Amumu:LoadMenu()
 	self.Menu.Drawings:MenuElement({id = "DrawQ", name = "Draw Q Range", value = true})
 	self.Menu.Drawings:MenuElement({id = "DrawR", name = "Draw R Range", value = true})
 		
-	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Level Skills (E - Q - W)", value = false})
+	--AutoLeveler	
+	self.Menu:MenuElement({id = "AutoLevel", name = "Auto Leveler", type = MENU})
+	self.Menu.AutoLevel:MenuElement({id = "Enabled", name = "Enabled", value = true})
+	self.Menu.AutoLevel:MenuElement({id = "StartingLevel", name = "Start Using At Level:", value = 3, min = 2, max = 18, step = 1})
+	self.Menu.AutoLevel:MenuElement({id = "FirstSkill", name = "First Skill Priority", drop = {"Q", "W", "E"}, value = 3, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.SecondSkill:Value() == 3) then
+					self.Menu.AutoLevel.SecondSkill:Value(1)
+				else
+					self.Menu.AutoLevel.SecondSkill:Value(self.Menu.AutoLevel.FirstSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+
+	self.Menu.AutoLevel:MenuElement({id = "SecondSkill", name = "Second Skill Priority", drop = {"Q", "W", "E"}, value = 1, callback = 
+	function ()
+		DelayEvent(function()
+			if(self.Menu.AutoLevel.FirstSkill:Value() == self.Menu.AutoLevel.SecondSkill:Value()) then
+				if(self.Menu.AutoLevel.FirstSkill:Value() == 3) then
+					self.Menu.AutoLevel.FirstSkill:Value(1)
+				else
+					self.Menu.AutoLevel.FirstSkill:Value(self.Menu.AutoLevel.SecondSkill:Value() + 1)
+				end
+			end
+			self:UpdateGoSMenuAutoLevel()
+		end, 0.15)
+	end})
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " "})
 	self.Menu:MenuElement({id = "DisableInFountain", name = "Disable Orbwalker while in Fountain", value = true})
 	
+end
+
+function Amumu:UpdateGoSMenuAutoLevel()
+	self.Menu.AutoLevel.InfoText:Remove()
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	local thirdSkill = 0
+	local enumTable = {1, 2, 3}
+	enumTable[firstSkill] = nil
+	enumTable[secondSkill] = nil
+	for k, v in pairs(enumTable) do
+		thirdSkill = v
+	end
+
+	local finalString = "Skill Priority:    " .. FetchQWEByValue(firstSkill) .. " -> " .. FetchQWEByValue(secondSkill) .. " -> " .. FetchQWEByValue(thirdSkill)
+	self.Menu.AutoLevel:MenuElement({id = "InfoText", name = " ", drop = {finalString}})
+end
+
+function Amumu:AutoLevel()
+	
+	local firstSkill = self.Menu.AutoLevel.FirstSkill:Value()
+	local secondSkill = self.Menu.AutoLevel.SecondSkill:Value()
+	skillPriority = GenerateSkillPriority(firstSkill, secondSkill)
+
+	AutoLeveler(skillPriority)
 end
 
 function Amumu:Tick()
@@ -133,8 +188,6 @@ function Amumu:Tick()
 	local mode = GetMode()
 	if(mode == "Combo") then
 		self:Combo()
-	elseif(mode == "Harass") then
-		self:Harass()
 	elseif(mode == "LastHit") then
 		self:LastHit()
 	elseif(mode == "LaneClear") then
@@ -149,7 +202,7 @@ function Amumu:Tick()
 		self:SemiManualQ()
 	end
 
-	if Game.IsOnTop() and self.Menu.AutoLevel:Value() then
+	if Game.IsOnTop() and self.Menu.AutoLevel.Enabled:Value() and myHero.levelData.lvl >= self.Menu.AutoLevel.StartingLevel:Value() then
 		self:AutoLevel()
 	end	
 end
