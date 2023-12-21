@@ -1,10 +1,9 @@
---require "DamageLib"
 require "MapPositionGOS"
 require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.64
+local kLibVersion = 2.66
 
 -- [ AutoUpdate ]
 do
@@ -88,6 +87,7 @@ GameMinion = Game.Minion
 GameTurretCount = Game.TurretCount
 GameTurret = Game.Turret
 GameIsChatOpen = Game.IsChatOpen
+GameResolution = Game.Resolution()
 castSpell = {state = 0, tick = GetTickCount(), casting = GetTickCount() - 1000, mouse = mousePos}
 
 HITCHANCE_IMPOSSIBLE = 0
@@ -1320,16 +1320,24 @@ function GetBuffData(unit, buffname)
 end
 
 function IsRecalling(unit)
-	if(unit.activeSpell.valid) then
-		if(unit.activeSpell.name == "recall") then
-			return true 
+	if(unit.isChanneling) then
+		if(unit.activeSpell.valid) then
+			if(unit.activeSpell.name == "recall") then
+				return true 
+			end
 		end
 	end
+	
+	--[[
 
+	--This wasn't optimal to check.
+	
 	local buff = GetBuffData(unit, "recall")
 	if buff and buff.duration > 0 then
 		return true, GameTimer() - buff.startTime
 	end
+	--]]
+
     return false
 end
 
@@ -1365,7 +1373,7 @@ function IsHardCCd(unit)
         local buff = unit:GetBuff(i)
         if buff and buff.count > 0 then
             local BuffType = buff.type
-            if BuffType == 5 or BuffType == 8 or BuffType == 10 or BuffType == 12 or BuffType == 22 or BuffType == 23 or BuffType == 35 or BuffType == 34 or BuffType == 25 or BuffType == 29 then
+            if BuffType == 5 or BuffType == 8 or BuffType == 10 or BuffType == 12 or BuffType == 22 or BuffType == 23  or BuffType == 35 or BuffType == 34 or BuffType == 25 or BuffType == 29 then
                 local BuffDuration = buff.duration
                 if BuffDuration > MaxDuration then
                     MaxDuration = BuffDuration
@@ -2053,7 +2061,12 @@ end
 
 function CantKill(unit, kill, ss, aa, sionCheck)
     -- Define conditions for each buff
-	sionCheck = sionCheck or false
+	sionCheck = sionCheck ~= false
+
+    if sionCheck and unit.charName == "Sion" and unit:GetSpellData(_Q).name == "SionPassiveSpeed" then
+        return true
+    end
+
     local buffConditions = {
         kayler = function() return true end,
         undyingrage = function() return unit.health < 100 or kill end,
@@ -2063,7 +2076,7 @@ function CantKill(unit, kill, ss, aa, sionCheck)
         morganae = function() return ss end,
         fioraw = true,
         pantheone = true,
-        jaxcounterstrike = function() return aa end,
+        jaxe = function() return aa end,
         nilahw = function() return aa end,
         shenwbuff = function() return aa end
     }
@@ -2184,7 +2197,10 @@ function GetPredictionPrecise(target, spell_speed, casting_delay, spell_radius, 
 	local delta_position = {x = target_position.x - caster_position.x, z = target_position.z - caster_position.z}
   
 	if(target.pathing.hasMovePath and target.pathing.isDashing) then
-		return Vector(target.pathing.endPos), Vector(target.pathing.endPos)
+		--If the time it takes for the target to dash to its end position is LESS than the time it takes for our spell to reach that position, we can cast at the dash end position.
+		if (GetDistance(target.pos,target.pathing.endPos)/target.pathing.dashSpeed) < (GetDistance(caster_position, target.pathing.endPos)/spell_speed + casting_delay) then
+			return Vector(target.pathing.endPos), Vector(target.pathing.endPos)
+		end
 	end
 
 	local function adjustPosition(position, t)
@@ -2307,6 +2323,40 @@ function CastSpell(key, a, b, c)
 	return false
 end
 
+function OffsetInWallPosition(pos, spell_radius, weight)
+	if(MapPosition:inWall(pos) == nil) then
+		local radius = spell_radius
+		local accuracy = 8
+
+		local tbl = {}
+		for i = 1, accuracy do
+			local vec = Vector(0, 0, 1):Rotated(0, math.rad((360/accuracy) * i), 0) * radius
+			local intersectionPoint = MapPosition:getIntersectionPoint3D(pos, pos + vec)
+			if(intersectionPoint) then
+				local closestPt = ClosestPointOnLineSegment(intersectionPoint, pos, pos + vec)
+				closestPt = Vector(closestPt.x, intersectionPoint.y, closestPt.z)
+				if((closestPt - (pos+vec)) ~= Vector(0,0,0)) then
+					table.insert(tbl, (closestPt - (pos+vec)):Normalized() * GetDistance(pos + vec, closestPt)*weight)
+				end
+			end
+		end
+
+		if #tbl > 0 then
+			local finalVec = Vector(0, 0, 0)
+			for _, data in ipairs(tbl) do
+				finalVec = finalVec + data
+			end
+			finalVec = finalVec/#tbl
+
+			if(finalVec) then
+				return pos + finalVec
+			end
+		end
+	end
+
+	return pos
+end
+
 function CastPredictedSpell(args)
 
 	local hotkey = args.Hotkey
@@ -2317,6 +2367,8 @@ function CastPredictedSpell(args)
 	local splashCollision = args.CheckSplashCollision or false
 	local splashCollisionRadius = args.SplashCollisionRadius or 0
 	local useHeroCollision = args.UseHeroCollision or false
+	local checkTerrain = args.CheckTerrain or false
+	local terrainOffsetWeight = args.TerrainCorrectionWeight or 0.8
 	local collisionRadiusOverride = args.collisionRadiusOverride or SpellData.Radius or 0
 	local ignoreUnkillable = args.IgnoreUnkillable ~= false
 	local ignoreSS = args.IgnoreSpellshields or false
@@ -2330,6 +2382,19 @@ function CastPredictedSpell(args)
 	local returnpos = args.ReturnPos or false
 
 	local function CastSpell(hotkey, position)
+
+		if(checkTerrain) then
+			local inWallCheck = (MapPosition:inWall(position) == 1)
+			if(inWallCheck) then
+				return false
+			end
+			
+			local correctedPosition = OffsetInWallPosition(position, collisionRadiusOverride, terrainOffsetWeight)
+			if(correctedPosition and GetDistance(correctedPosition, myHero.pos) <= SpellData.Range) then
+				position = correctedPosition
+			end
+		end
+
 		if returnpos then
 			return position
 		end
@@ -2360,7 +2425,7 @@ function CastPredictedSpell(args)
 	end
 
 	if(IsValid(target) == false) then return end
-	if(SpellData.Range == nil) then return end
+	if(SpellData.Range == false) then return end
 
 	SpellData.Speed = SpellData.Speed or math.huge
 	SpellData.Delay = SpellData.Delay or 0
