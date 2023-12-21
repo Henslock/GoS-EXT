@@ -5,7 +5,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.21
+scriptVersion = 1.22
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Karthus will exit.")
@@ -60,7 +60,7 @@ end
 function Karthus:LoadUltTrackerData()
 
 	_G.SDK.ObjectManager:OnEnemyHeroLoad(function(args)
-		UltableChamps[args.name] = {champ = args.charName, ultdmg = 0, timelastspotted = 0, killable = false, mia = false}
+		UltableChamps[args.unit.name] = {champ = args.charName, ultdmg = 0, timelastspotted = 0, killable = false, mia = false}
 	end)
 	print("KILLER Karthus: Loaded Ult Tracker Data")
 end
@@ -225,6 +225,7 @@ function Karthus:Tick()
 	self:AutoRCheck()
 	self:AutoWCheck()
 	self:AutoQCheck()
+
 
 	if(self.Menu.Combo.SemiW:Value()) then
 		self:SemiManualW()
