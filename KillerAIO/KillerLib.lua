@@ -3,7 +3,7 @@ require "2DGeometry"
 require "GGPrediction"
 require "PremiumPrediction"
 
-local kLibVersion = 2.66
+local kLibVersion = 2.67
 
 -- [ AutoUpdate ]
 do
@@ -1203,7 +1203,7 @@ end
 function GetAllyHeroes(range, bbox)
 	local result = {}
 	for _, unit in ipairs(Allies) do
-		if(IsValid(unit)) then
+		if(IsValid(unit) and unit.networkID ~= myHero.networkID) then
 			local extrarange = bbox and unit.boundingRadius or 0
 			if unit.distance < range + extrarange then
 				table.insert(result, unit)
@@ -2269,6 +2269,25 @@ function GetPredictionPrecise(target, spell_speed, casting_delay, spell_radius, 
 	return Vector(adjustPosition(interception_point, t)), interception_point
 end
 
+function GetPredictedPathPosition(target, delay)
+	local target_position = target.pos
+	local direction_vector = target.dir
+	local movement_speed = target.ms
+
+	if target.pathing.hasMovePath ==false then
+	movement_speed=0.1
+	end
+
+	if(target.pathing.hasMovePath) then
+		direction_vector = (target.pathing.endPos - target.pos):Normalized()
+	end
+
+	local magnitude = math.sqrt(direction_vector.x^2 + direction_vector.z^2)
+	local normalized_direction_vector = {x = direction_vector.x / magnitude, z = direction_vector.z / magnitude}
+	local target_velocity = {x = normalized_direction_vector.x * movement_speed, z = normalized_direction_vector.z * movement_speed}
+
+	return Vector({x = target_position.x + target_velocity.x * delay, y=target_position.y, z = target_position.z + target_velocity.z * delay})
+end
 
 -- A variant of CastSpell that checks if spells are on screen
 function CastSpell(key, a, b, c)
