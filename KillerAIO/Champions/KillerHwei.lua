@@ -4,7 +4,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.00
+scriptVersion = 1.01
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Hwei will exit.")
@@ -560,7 +560,7 @@ function Hwei:GetCastingState()
 	return 0
 end
 
-function Hwei:SetCastingState(state)
+function Hwei:SetCastingState(state, optionalPos)
 	if(self:GetCastingState() == state) then return true end
 	if(self.CastingStateBuffer > GameTimer()) then return false end
 
@@ -571,18 +571,36 @@ function Hwei:SetCastingState(state)
 		[3] = HK_E,
 	}
 	if(myHero:GetSpellData(_Q).name == "HweiQ") then
+		--[[
 		Control.KeyDown(hk_states[state])
 		Control.KeyUp(hk_states[state])
+		--]]
 
+		if optionalPos then
+			Control.CastSpell(hk_states[state], optionalPos)
+		else
+			Control.CastSpell(hk_states[state])
+		end
 		self.CastingStateBuffer = GameTimer() + 0.1
 		return true
 	end
 
 	if(myHero:GetSpellData(_Q).name ~= "HweiQ") then
+		--[[
 		Control.KeyDown(hk_states[0])
 		Control.KeyUp(hk_states[0])
 		Control.KeyDown(hk_states[state])
 		Control.KeyUp(hk_states[state])
+		--]]
+
+		if optionalPos then
+			Control.CastSpell(hk_states[0])
+			Control.CastSpell(hk_states[state], optionalPos)
+		else
+			Control.CastSpell(hk_states[0])
+			Control.CastSpell(hk_states[state])
+		end
+
 		self.CastingStateBuffer = GameTimer() + 0.1
 		return true
 	end
@@ -601,7 +619,7 @@ function Hwei:CastSpell(state, spell_slot, pos)
 	
 	pos = pos or nil 
 	if(pos) then
-		self:SetCastingState(state)
+		self:SetCastingState(state, pos)
 		Control.CastSpell(spell_slot, pos)
 		return true
 	else
@@ -620,7 +638,7 @@ function Hwei:CastPredictedSpell(state, spell_slot, args)
 	args.ReturnPos = true
 	local didCastPos = CastPredictedSpell(args)
 	if(didCastPos ~= nil and didCastPos ~= false) then
-		self:SetCastingState(state)
+		self:SetCastingState(state, didCastPos)
 		Control.CastSpell(spell_slot, didCastPos)
 		return true
 	end
@@ -669,12 +687,12 @@ function Hwei:CastBestEPos(args)
 				end
 			end
 
-			self:SetCastingState(3)
+			self:SetCastingState(3, closetPos)
 			Control.CastSpell(HK_E, closetPos)
 			return true
 		else
 			if(GetDistance(myHero, args.Target) <= EE.Range + EE.Radius*0.5) then
-				self:SetCastingState(3)
+				self:SetCastingState(3, didCastPos)
 				Control.CastSpell(HK_E, didCastPos)
 				return true
 			else
@@ -711,7 +729,7 @@ function Hwei:Combo()
 
 			if(self.Menu.Combo.RSettings.RCCCheck:Value()) then
 				if(IsValid(tar)) then
-					if(IsImmobile(tar) > 0.5 or GetDistance(tar, myHero) < _G.SDK.Data:GetAutoAttackRange(myHero)) then
+					if(IsImmobile(tar) > 0.5 or GetDistance(tar, myHero) < _G.SDK.Data:GetAutoAttackRange(myHero)+75) then
 						safetyCheck = true
 					else
 						safetyCheck = false
@@ -720,7 +738,6 @@ function Hwei:Combo()
 			end
 
 			if(IsValid(tar) and CantKill(tar, true, false, false, true) == false and GetDistance(myHero, tar) <= R.Range-100) and safetyCheck then
-
 				local hasHorizon = 	self:HasHorizonFocus()
 				-- R Cast at a range
 				local totalDMG = 0
@@ -748,7 +765,7 @@ function Hwei:Combo()
 				if(hasHorizon) then
 					totalDMG = totalDMG * 1.1
 				end
-
+				
 				if(tar.health - totalDMG <= 0) then
 
 					if(shouldCheck) then
@@ -877,7 +894,7 @@ function Hwei:Combo()
 				local shouldCheck = self.Menu.Combo.RSettings.ROverkillProtection:Value()
 				for _, enemy in ipairs(enemies) do
 					if(IsValid(enemy) and enemy.pos:To2D().onScreen and CantKill(enemy, true, false, false) == false) then
-						if(IsHardCCd(enemy) > 0.75) then
+						if(IsHardCCd(enemy) > 0.5) then
 							if(shouldCheck) then
 								local isOverkill = self:IsROverkill(tar, totalDMG)
 								if not isOverkill then
