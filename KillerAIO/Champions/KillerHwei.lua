@@ -4,7 +4,7 @@ require "GGPrediction"
 require "KillerAIO\\KillerLib"
 require "KillerAIO\\KillerChampUpdater"
 
-scriptVersion = 1.01
+scriptVersion = 1.02
 
 if not _G.SDK then
     print("GGOrbwalker is not enabled. Killer Hwei will exit.")
@@ -576,11 +576,13 @@ function Hwei:SetCastingState(state, optionalPos)
 		Control.KeyUp(hk_states[state])
 		--]]
 
+
 		if optionalPos then
 			Control.CastSpell(hk_states[state], optionalPos)
 		else
 			Control.CastSpell(hk_states[state])
 		end
+
 		self.CastingStateBuffer = GameTimer() + 0.1
 		return true
 	end
@@ -592,7 +594,7 @@ function Hwei:SetCastingState(state, optionalPos)
 		Control.KeyDown(hk_states[state])
 		Control.KeyUp(hk_states[state])
 		--]]
-
+		
 		if optionalPos then
 			Control.CastSpell(hk_states[0])
 			Control.CastSpell(hk_states[state], optionalPos)
@@ -619,7 +621,7 @@ function Hwei:CastSpell(state, spell_slot, pos)
 	
 	pos = pos or nil 
 	if(pos) then
-		self:SetCastingState(state, pos)
+		self:SetCastingState(state)
 		Control.CastSpell(spell_slot, pos)
 		return true
 	else
@@ -2068,8 +2070,8 @@ function Hwei:AutoCast()
 		for i = 1, #enemies do
 			local enemy = enemies[i]
 			if(IsValid(enemy)) then
-				self:CastEQ({Target = meleeTarget, SpellData = EQ})
-				SendDebugMsg("Anti-Melee EQ on " .. meleeTarget.charName)
+				self:CastEQ({Target = enemy, SpellData = EQ})
+				SendDebugMsg("Anti-Melee EQ on " .. enemy.charName)
 				return
 			end
 		end
