@@ -2,7 +2,7 @@ require "2DGeometry"
 require "MapPositionGOS"
 require "KillerAIO\\KillerLib"
 
-local scriptVersion = 1.37
+local scriptVersion = 1.39
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -212,7 +212,7 @@ function math.clamp(val, minval, maxval)
 end
 
 local function IsValid(unit)
-    if (unit and unit.valid and unit.isTargetable and unit.alive and unit.visible and unit.networkID and unit.pathing and unit.health > 0) then
+    if (unit and unit.valid and unit.isTargetable and not unit.dead and unit.visible and unit.networkID and unit.pathing and unit.health > 0) then
         return true;
     end
     return false;
@@ -419,8 +419,18 @@ function KillerAwareness:LoadMenu()
 end
 
 function KillerAwareness:Tick()
+
+	--[[
+	local hoverTar = Game.GetUnderMouseObject()
+	if(hoverTar) then
+		if(hoverTar.team == TEAM_JUNGLE and hoverTar.type == "AIMinionClient") then
+			print(hoverTar.name)
+		end
+	end
+	--]]
+
 	if(self.Menu.CacheExtraMinions.Enabled:Value()) then
-		--self:CacheChampionMinions()
+		self:CacheChampionMinions()
 	end
 end
 
@@ -607,7 +617,7 @@ function KillerAwareness:DrawTurretAwareness()
 	
 	if(self.Menu.TurretAwareness.DrawAllies:Value()) then
 		for _, turret in pairs(FriendlyTurrets) do
-			if(turret.valid and myHero.alive) then
+			if(turret.valid and not myHero.dead) then
 				if(IsTurret(turret)) then
 					local turretRange = (turret.boundingRadius + 750 + myHero.boundingRadius / 2)
 					local totalRange = drawRange + turretRange
@@ -662,7 +672,7 @@ function KillerAwareness:DrawTurretAwareness()
 	
 	if(self.Menu.TurretAwareness.DrawEnemies:Value()) then
 		for _, turret in pairs(EnemyTurrets) do
-			if(turret.valid and myHero.alive) then
+			if(turret.valid and not myHero.dead) then
 				if(IsTurret(turret)) then
 					local turretRange = (turret.boundingRadius + 750 + myHero.boundingRadius / 2)
 					local totalRange = drawRange + turretRange
@@ -707,7 +717,7 @@ function KillerAwareness:DrawHealthTracker()
 		end
 		
 		--HealthBarDraws
-		if(not miaCheck and v.alive) then
+		if(not miaCheck and not v.dead) then
 			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth, 8, TrackerColors.Black)
 			Draw.Rect(self.Window.x + barOffset, self.Window.y + 39 + yOffset, barWidth * hpRatio -1, 8, IsValid(v) and TrackerColors.Green or TrackerColors.GreenFaded)
 		else
@@ -720,7 +730,7 @@ function KillerAwareness:DrawHealthTracker()
 			name = "Dummy"
 		end
 
-		if(not miaCheck and v.alive) then
+		if(not miaCheck and not v.dead) then
 			Draw.Text(name, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, TrackerColors.Green)
 		else
 			Draw.Text(name, 17, self.Window.x + 10, self.Window.y + 35 + yOffset, TrackerColors.GreyFaded)
@@ -1476,15 +1486,6 @@ MinimapHack = {
 		end
 		self.InitCallback = Callback.Add("Tick", InitMenu)
 
-		--FOW Tracker Support
-		--[[
-		if _G.FOWTRACKER then
-			print("FoW Tracker Loaded!")
-			table.insert(FOWTRACKER.OnFogCampKilledCallback, function(camp) self:ProcessFoWCampKill(camp) end)
-		else
-			print("NAY!")
-		end
-		--]]
 	end,
 
 	InitSprites = function (self)
@@ -1753,6 +1754,7 @@ SmiteManager = {
 
 	MarkTable = {
 		["SRU_Baron"]= "MarkBaron",
+		["SRU_Horde"]= "MarkHorde",
 		["SRU_RiftHerald"]= "MarkHerald",
 		["SRU_Dragon_Elder"]= "MarkDragon",
 		["SRU_Dragon_Water"]= "MarkDragon",
@@ -1773,6 +1775,7 @@ SmiteManager = {
 
 	SmiteTable = {
 		["SRU_Baron"]= "SmiteBaron",
+		["SRU_Horde"]= "SmiteHorde",
 		["SRU_RiftHerald"]= "SmiteHerald",
 		["SRU_Dragon_Elder"]= "SmiteDragon",
 		["SRU_Dragon_Water"]= "SmiteDragon",
@@ -1793,22 +1796,23 @@ SmiteManager = {
 
 	Camps = {
 		["monsterCamp_1"] = { names={["SRU_Blue"]=1}, obj = nil},
-		["monsterCamp_2"] = { names={["SRU_Murkwolf"]=1}, obj = nil},
-		["monsterCamp_3"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
+		["monsterCamp_2"] = { names={["SRU_Blue"]=1}, obj = nil},
+		["monsterCamp_3"] = { names={["SRU_Red"]=1}, obj = nil},
 		["monsterCamp_4"] = { names={["SRU_Red"]=1}, obj = nil},
-		["monsterCamp_5"] = { names={["SRU_Krug"]=1}, obj = nil},
-		["monsterCamp_6"] = { names={["SRU_Dragon_Elder"]=1, ["SRU_Dragon_Water"]=1, ["SRU_Dragon_Fire"]=1, ["SRU_Dragon_Earth"]=1, ["SRU_Dragon_Air"]=1, ["SRU_Dragon_Ruined"]=1, ["SRU_Dragon_Chemtech"]=1, ["SRU_Dragon_Hextech"]=1}, obj = nil},
-		["monsterCamp_7"] = { names={["SRU_Blue"]=1}, obj = nil},
+		["monsterCamp_5"] = { names={["SRU_Dragon_Elder"]=1, ["SRU_Dragon_Water"]=1, ["SRU_Dragon_Fire"]=1, ["SRU_Dragon_Earth"]=1, ["SRU_Dragon_Air"]=1, ["SRU_Dragon_Ruined"]=1, ["SRU_Dragon_Chemtech"]=1, ["SRU_Dragon_Hextech"]=1}, obj = nil},
+		["monsterCamp_6"] = { names={["SRU_Gromp"]=1}, obj = nil},
+		["monsterCamp_7"] = { names={["SRU_Gromp"]=1}, obj = nil},
 		["monsterCamp_8"] = { names={["SRU_Murkwolf"]=1}, obj = nil},
-		["monsterCamp_9"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
-		["monsterCamp_10"] = { names={["SRU_Red"]=1}, obj = nil},
-		["monsterCamp_11"] = { names={["SRU_Krug"]=1}, obj = nil},
-		["monsterCamp_12"] = { names={["SRU_Baron"]=1}, obj = nil},
-		["monsterCamp_13"] = { names={["SRU_Gromp"]=1}, obj = nil},
-		["monsterCamp_14"] = { names={["SRU_Gromp"]=1}, obj = nil},
-		["monsterCamp_15"] = { names={["Sru_Crab"]=1}, obj = nil},
-		["monsterCamp_16"] = { names={["Sru_Crab"]=1}, obj = nil},
-		["monsterCamp_17"] = { names={["SRU_RiftHerald"]=1}, obj = nil},
+		["monsterCamp_9"] = { names={["SRU_Murkwolf"]=1}, obj = nil},
+		["monsterCamp_10"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
+		["monsterCamp_11"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
+		["monsterCamp_12"] = { names={["SRU_Krug"]=1}, obj = nil},
+		["monsterCamp_13"] = { names={["SRU_Krug"]=1}, obj = nil},
+		["monsterCamp_14"] = { names={["SRU_RiftHerald"]=1}, obj = nil},
+		["monsterCamp_15"] = { names={["SRU_Baron"]=1}, obj = nil},
+		["monsterCamp_16"] = { names={["SRU_Horde"]=1}, obj = nil},
+		["monsterCamp_17"] = { names={["Sru_Crab"]=1}, obj = nil},
+		["monsterCamp_18"] = { names={["Sru_Crab"]=1}, obj = nil},
 	},
 
 	SmiteNames = {
@@ -1858,6 +1862,7 @@ SmiteManager = {
 
 				--Auto Smite
 				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteBaron", name = "Smite Baron", value = true, leftIcon = "http://puu.sh/rPuVv/933a78e350.png"})
+				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteHorde", name = "Smite Voidgrubs", value = true, leftIcon = "http://puu.sh/rQs4A/47c27fa9ea.png"})
 				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteHerald", name = "Smite Herald", value = true, leftIcon = "http://puu.sh/rQs4A/47c27fa9ea.png"})
 				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteDragon", name = "Smite Dragon", value = true, leftIcon = "http://puu.sh/rPvdF/a00d754b30.png"})
 				KillerAwareness.Menu.SmiteManager.AutoSmiteTargets:MenuElement({id = "SmiteBlue", name = "Smite Blue Buff", value = true, leftIcon = "http://puu.sh/rPvNd/f5c6cfb97c.png"})
@@ -1870,6 +1875,7 @@ SmiteManager = {
 
 				--Smite Marker Targets
 				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkBaron", name = "Mark Baron", value = true, leftIcon = "http://puu.sh/rPuVv/933a78e350.png"})
+				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkHorde", name = "Mark Voidgrubs", value = true, leftIcon = "http://puu.sh/rQs4A/47c27fa9ea.png"})
 				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkHerald", name = "Mark Herald", value = true, leftIcon = "http://puu.sh/rQs4A/47c27fa9ea.png"})
 				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkDragon", name = "Mark Dragon", value = true, leftIcon = "http://puu.sh/rPvdF/a00d754b30.png"})
 				KillerAwareness.Menu.SmiteManager.MarkerTargets:MenuElement({id = "MarkBlue", name = "Mark Blue Buff", value = true, leftIcon = "http://puu.sh/rPvNd/f5c6cfb97c.png"})
@@ -1917,6 +1923,9 @@ SmiteManager = {
 		else return 0 end
 	end,
 
+	FetchMonsterStringName = function(self, name)
+	end,
+
 	UpdateData = function (self)
 		local function FlushJungle()
 			for k, v in pairs(self.Camps) do
@@ -1949,11 +1958,14 @@ SmiteManager = {
 
 						if(#jgMonsters == 0 or scanSuccess == false) then
 							--Search through fog as a fallback.
-							for i = 0, Game.ObjectCount() do
-								local m = Game.Object(i)
-								if(v.names[m.charName] == 1 and GetDistance(m.pos, camp.pos) <= 1200) then
-									v.obj = m
-									break
+							local count = Game.ObjectCount()
+							if(count > 0) then 
+								for i = 1, count do
+									local m = Game.Object(i)
+									if(v.names[m.charName] == 1 and GetDistance(m.pos, camp.pos) <= 1200) then
+										v.obj = m
+										break
+									end
 								end
 							end
 							self.ParseTick = GameTimer() + 0.5
@@ -1971,7 +1983,6 @@ SmiteManager = {
 		if(Ready(self.SmiteSlot) and not myHero.dead) then
 			for k, v in pairs(self.Camps) do
 				if(v.obj and not v.obj.dead and v.obj.visible and GetDistance(v.obj.pos, myHero.pos) <= self.SmiteRange) then
-
 					--Check to see if we should smite this.
 					local canSmite = false
 					local key = self.SmiteTable[v.obj.charName]
@@ -2041,7 +2052,6 @@ SmiteManager = {
 				end
 			end
 		end
-
 	end,
 
 	DrawEnabledUI = function(self)
