@@ -2,7 +2,7 @@ require "2DGeometry"
 require "MapPositionGOS"
 require "KillerAIO\\KillerLib"
 
-local scriptVersion = 1.39
+local scriptVersion = 1.41
 ----------------------------------------------------
 --|                    AUTO UPDATE               |--
 ----------------------------------------------------
@@ -1799,20 +1799,20 @@ SmiteManager = {
 		["monsterCamp_2"] = { names={["SRU_Blue"]=1}, obj = nil},
 		["monsterCamp_3"] = { names={["SRU_Red"]=1}, obj = nil},
 		["monsterCamp_4"] = { names={["SRU_Red"]=1}, obj = nil},
-		["monsterCamp_5"] = { names={["SRU_Dragon_Elder"]=1, ["SRU_Dragon_Water"]=1, ["SRU_Dragon_Fire"]=1, ["SRU_Dragon_Earth"]=1, ["SRU_Dragon_Air"]=1, ["SRU_Dragon_Ruined"]=1, ["SRU_Dragon_Chemtech"]=1, ["SRU_Dragon_Hextech"]=1}, obj = nil},
+		["monsterCamp_17"] = { names={["SRU_Dragon_Elder"]=1, ["SRU_Dragon_Water"]=1, ["SRU_Dragon_Fire"]=1, ["SRU_Dragon_Earth"]=1, ["SRU_Dragon_Air"]=1, ["SRU_Dragon_Ruined"]=1, ["SRU_Dragon_Chemtech"]=1, ["SRU_Dragon_Hextech"]=1}, obj = nil},
+		["monsterCamp_5"] = { names={["SRU_Gromp"]=1}, obj = nil},
 		["monsterCamp_6"] = { names={["SRU_Gromp"]=1}, obj = nil},
-		["monsterCamp_7"] = { names={["SRU_Gromp"]=1}, obj = nil},
+		["monsterCamp_7"] = { names={["SRU_Murkwolf"]=1}, obj = nil},
 		["monsterCamp_8"] = { names={["SRU_Murkwolf"]=1}, obj = nil},
-		["monsterCamp_9"] = { names={["SRU_Murkwolf"]=1}, obj = nil},
+		["monsterCamp_9"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
 		["monsterCamp_10"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
-		["monsterCamp_11"] = { names={["SRU_Razorbeak"]=1}, obj = nil},
+		["monsterCamp_11"] = { names={["SRU_Krug"]=1}, obj = nil},
 		["monsterCamp_12"] = { names={["SRU_Krug"]=1}, obj = nil},
-		["monsterCamp_13"] = { names={["SRU_Krug"]=1}, obj = nil},
-		["monsterCamp_14"] = { names={["SRU_RiftHerald"]=1}, obj = nil},
-		["monsterCamp_15"] = { names={["SRU_Baron"]=1}, obj = nil},
-		["monsterCamp_16"] = { names={["SRU_Horde"]=1}, obj = nil},
-		["monsterCamp_17"] = { names={["Sru_Crab"]=1}, obj = nil},
-		["monsterCamp_18"] = { names={["Sru_Crab"]=1}, obj = nil},
+		["monsterCamp_13"] = { names={["SRU_RiftHerald"]=1}, obj = nil},
+		["monsterCamp_18"] = { names={["SRU_Baron"]=1}, obj = nil},
+		["monsterCamp_14"] = { names={["SRU_Horde"]=1}, obj = nil},
+		["monsterCamp_15"] = { names={["Sru_Crab"]=1}, obj = nil},
+		["monsterCamp_16"] = { names={["Sru_Crab"]=1}, obj = nil},
 	},
 
 	SmiteNames = {
@@ -1853,6 +1853,7 @@ SmiteManager = {
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "SmiteMarkers", name = "Draw Smite Markers", value = true})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "MarkerTargets", name = "Smite Marker Targets", type = MENU})
 				KillerAwareness.Menu.SmiteManager:MenuElement({id = "AutoSmiteUI", name = "Auto Smite UI", type = MENU})
+				KillerAwareness.Menu.SmiteManager:MenuElement({id = "DebugCampIDs", name = "Debug: Draw Camp IDs", value = false})
 
 
 				KillerAwareness.Menu.SmiteManager.AutoSmiteUI:MenuElement({id = "DrawEnabledStatus", name = "Enabled", value = true})
@@ -1987,7 +1988,6 @@ SmiteManager = {
 					local canSmite = false
 					local key = self.SmiteTable[v.obj.charName]
 					canSmite = (self.SmiteMenu.AutoSmiteTargets[key]:Value())
-
 					if(canSmite) then
 						local smiteDmg = self:GetSmiteDamage(v.obj)
 						if(v.obj.health - smiteDmg <= 0) then
@@ -2031,12 +2031,19 @@ SmiteManager = {
 			self:DrawEnabledUI()
 		end
 
+		if(self.SmiteMenu.DebugCampIDs:Value()) then
+			for i = 1, 18 do
+				local c = Game.Camp(i)
+				DrawCircle(c.pos, 50, 1)
+				DrawText(i, 24, c.pos:To2D())
+			end
+		end
+
 
 		if(self.SmiteMenu.SmiteMarkers:Value()) then
 			if(Ready(self.SmiteSlot) and IsValid(myHero)) then
 				for k, v in pairs(self.Camps) do
 					if(v.obj and not v.obj.dead and v.obj.visible and GetDistance(v.obj.pos, myHero.pos) <= 1000) then
-
 						--Check to see if we should draw this.
 						local canDraw = false
 						local key = self.MarkTable[v.obj.charName]
